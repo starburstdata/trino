@@ -663,7 +663,7 @@ public class TestRoles
         }
         finally {
             onPrestoAlice().executeQuery("DROP TABLE hive.default.test_table_alice");
-            onPrestoAlice().executeQuery("DROP TABLE hive.default.test_table_bob");
+            onPrestoBob().executeQuery("DROP TABLE hive.default.test_table_bob");
             onPresto().executeQuery("REVOKE admin FROM alice");
         }
     }
