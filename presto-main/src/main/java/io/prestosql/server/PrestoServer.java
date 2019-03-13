@@ -43,6 +43,7 @@ import io.prestosql.metadata.CatalogManager;
 import io.prestosql.metadata.StaticCatalogStore;
 import io.prestosql.security.AccessControlManager;
 import io.prestosql.security.AccessControlModule;
+import io.prestosql.security.StatementAccessControlManager;
 import io.prestosql.server.security.PasswordAuthenticatorManager;
 import io.prestosql.server.security.ServerSecurityModule;
 import io.prestosql.sql.parser.SqlParserOptions;
@@ -133,6 +134,7 @@ public class PrestoServer
             injector.getInstance(AccessControlManager.class).loadSystemAccessControl();
             injector.getInstance(PasswordAuthenticatorManager.class).loadPasswordAuthenticator();
             injector.getInstance(EventListenerManager.class).loadConfiguredEventListener();
+            injector.getInstance(StatementAccessControlManager.class).loadConfiguredStatementAccessControl();
 
             injector.getInstance(Announcer.class).start();
 

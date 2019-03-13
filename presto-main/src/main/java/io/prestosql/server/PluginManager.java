@@ -25,6 +25,7 @@ import io.prestosql.eventlistener.EventListenerManager;
 import io.prestosql.execution.resourceGroups.ResourceGroupManager;
 import io.prestosql.metadata.Metadata;
 import io.prestosql.security.AccessControlManager;
+import io.prestosql.security.StatementAccessControlManager;
 import io.prestosql.server.security.PasswordAuthenticatorManager;
 import io.prestosql.spi.Plugin;
 import io.prestosql.spi.block.BlockEncoding;
@@ -33,6 +34,7 @@ import io.prestosql.spi.connector.ConnectorFactory;
 import io.prestosql.spi.eventlistener.EventListenerFactory;
 import io.prestosql.spi.resourcegroups.ResourceGroupConfigurationManagerFactory;
 import io.prestosql.spi.security.PasswordAuthenticatorFactory;
+import io.prestosql.spi.security.StatementAccessControlFactory;
 import io.prestosql.spi.security.SystemAccessControlFactory;
 import io.prestosql.spi.session.SessionPropertyConfigurationManagerFactory;
 import io.prestosql.spi.type.ParametricType;
@@ -79,6 +81,7 @@ public class PluginManager
     private final AccessControlManager accessControlManager;
     private final PasswordAuthenticatorManager passwordAuthenticatorManager;
     private final EventListenerManager eventListenerManager;
+    private final StatementAccessControlManager statementAccessControlManager;
     private final BlockEncodingManager blockEncodingManager;
     private final SessionPropertyDefaults sessionPropertyDefaults;
     private final TypeRegistry typeRegistry;
@@ -98,6 +101,7 @@ public class PluginManager
             AccessControlManager accessControlManager,
             PasswordAuthenticatorManager passwordAuthenticatorManager,
             EventListenerManager eventListenerManager,
+            StatementAccessControlManager statementAccessControlManager,
             BlockEncodingManager blockEncodingManager,
             SessionPropertyDefaults sessionPropertyDefaults,
             TypeRegistry typeRegistry)
@@ -120,6 +124,7 @@ public class PluginManager
         this.accessControlManager = requireNonNull(accessControlManager, "accessControlManager is null");
         this.passwordAuthenticatorManager = requireNonNull(passwordAuthenticatorManager, "passwordAuthenticatorManager is null");
         this.eventListenerManager = requireNonNull(eventListenerManager, "eventListenerManager is null");
+        this.statementAccessControlManager = requireNonNull(statementAccessControlManager, "statementAccessControlManager is null");
         this.blockEncodingManager = requireNonNull(blockEncodingManager, "blockEncodingManager is null");
         this.sessionPropertyDefaults = requireNonNull(sessionPropertyDefaults, "sessionPropertyDefaults is null");
         this.typeRegistry = requireNonNull(typeRegistry, "typeRegistry is null");
@@ -223,6 +228,11 @@ public class PluginManager
         for (EventListenerFactory eventListenerFactory : plugin.getEventListenerFactories()) {
             log.info("Registering event listener %s", eventListenerFactory.getName());
             eventListenerManager.addEventListenerFactory(eventListenerFactory);
+        }
+
+        for (StatementAccessControlFactory statementAccessControlFactory : plugin.getStatementAccessControlFactories()) {
+            log.info("Registering statement access control %s", statementAccessControlFactory.getName());
+            statementAccessControlManager.addStatementAccessControlFactory(statementAccessControlFactory);
         }
     }
 

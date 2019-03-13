@@ -18,6 +18,7 @@ import io.prestosql.spi.connector.ConnectorFactory;
 import io.prestosql.spi.eventlistener.EventListenerFactory;
 import io.prestosql.spi.resourcegroups.ResourceGroupConfigurationManagerFactory;
 import io.prestosql.spi.security.PasswordAuthenticatorFactory;
+import io.prestosql.spi.security.StatementAccessControlFactory;
 import io.prestosql.spi.security.SystemAccessControlFactory;
 import io.prestosql.spi.session.SessionPropertyConfigurationManagerFactory;
 import io.prestosql.spi.type.ParametricType;
@@ -66,6 +67,11 @@ public interface Plugin
     }
 
     default Iterable<EventListenerFactory> getEventListenerFactories()
+    {
+        return emptyList();
+    }
+
+    default Iterable<StatementAccessControlFactory> getStatementAccessControlFactories()
     {
         return emptyList();
     }

@@ -97,6 +97,7 @@ import io.prestosql.operator.PagesIndex;
 import io.prestosql.operator.StageExecutionDescriptor;
 import io.prestosql.operator.TaskContext;
 import io.prestosql.operator.index.IndexJoinLookupStats;
+import io.prestosql.security.StatementAccessControlManager;
 import io.prestosql.server.PluginManager;
 import io.prestosql.server.PluginManagerConfig;
 import io.prestosql.server.SessionPropertyDefaults;
@@ -361,6 +362,7 @@ public class LocalQueryRunner
                 accessControl,
                 new PasswordAuthenticatorManager(),
                 new EventListenerManager(),
+                new StatementAccessControlManager(),
                 blockEncodingManager,
                 new SessionPropertyDefaults(nodeInfo),
                 typeRegistry);
@@ -796,7 +798,7 @@ public class LocalQueryRunner
 
     public Plan createPlan(Session session, @Language("SQL") String sql, LogicalPlanner.Stage stage, boolean forceSingleNode, WarningCollector warningCollector)
     {
-        PreparedQuery preparedQuery = new QueryPreparer(sqlParser).prepareQuery(session, sql);
+        PreparedQuery preparedQuery = new QueryPreparer(sqlParser, Optional.of(new StatementAccessControlManager())).prepareQuery(session, sql);
 
         assertFormattedSql(sqlParser, createParsingOptions(session), preparedQuery.getStatement());
 
@@ -828,7 +830,7 @@ public class LocalQueryRunner
 
     public Plan createPlan(Session session, @Language("SQL") String sql, List<PlanOptimizer> optimizers, LogicalPlanner.Stage stage, WarningCollector warningCollector)
     {
-        PreparedQuery preparedQuery = new QueryPreparer(sqlParser).prepareQuery(session, sql);
+        PreparedQuery preparedQuery = new QueryPreparer(sqlParser, Optional.of(new StatementAccessControlManager())).prepareQuery(session, sql);
 
         assertFormattedSql(sqlParser, createParsingOptions(session), preparedQuery.getStatement());
 

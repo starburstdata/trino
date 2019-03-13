@@ -15,12 +15,22 @@ package io.prestosql.execution;
 
 import io.prestosql.Session;
 import io.prestosql.execution.QueryPreparer.PreparedQuery;
+import io.prestosql.metadata.QualifiedObjectName;
+import io.prestosql.security.StatementAccessControlManager;
 import io.prestosql.spi.PrestoException;
+import io.prestosql.spi.StatementRewriteContext;
+import io.prestosql.spi.security.StatementAccessControl;
+import io.prestosql.spi.security.StatementAccessControlFactory;
+import io.prestosql.sql.ParsingUtil;
 import io.prestosql.sql.analyzer.SemanticException;
 import io.prestosql.sql.parser.SqlParser;
 import io.prestosql.sql.tree.AllColumns;
 import io.prestosql.sql.tree.QualifiedName;
+import io.prestosql.testing.TestingStatementAccessControlManager;
 import org.testng.annotations.Test;
+
+import java.util.Map;
+import java.util.Optional;
 
 import static io.prestosql.SessionTestUtils.TEST_SESSION;
 import static io.prestosql.spi.StandardErrorCode.NOT_FOUND;
@@ -35,7 +45,7 @@ import static org.testng.Assert.fail;
 public class TestQueryPreparer
 {
     private static final SqlParser SQL_PARSER = new SqlParser();
-    private static final QueryPreparer QUERY_PREPARER = new QueryPreparer(SQL_PARSER);
+    private static final QueryPreparer QUERY_PREPARER = new QueryPreparer(SQL_PARSER, Optional.empty());
 
     @Test
     public void testSelectStatement()
@@ -54,6 +64,39 @@ public class TestQueryPreparer
         PreparedQuery preparedQuery = QUERY_PREPARER.prepareQuery(session, "EXECUTE my_query");
         assertEquals(preparedQuery.getStatement(),
                 simpleQuery(selectList(new AllColumns()), table(QualifiedName.of("foo"))));
+    }
+
+    @Test
+    public void testModifiedStatement()
+    {
+        StatementAccessControlManager statementAccessControlManager = new TestingStatementAccessControlManager();
+        statementAccessControlManager.addStatementAccessControlFactory(new StatementAccessControlFactory() {
+            public String getName()
+            {
+                return "TestStatementAccessControl";
+            }
+
+            public StatementAccessControl create(Map<String, String> config)
+            {
+                return (StatementRewriteContext statementRewriteContext, String query) ->
+                {
+                    QualifiedObjectName name = new QualifiedObjectName(statementRewriteContext.getCatalog().orElse(""),
+                            statementRewriteContext.getSchema().orElse(""), "foo");
+                    return "SELECT AGE FROM " + name + " WHERE age > 10";
+                };
+            }
+        });
+
+        QueryPreparer queryPreparer = new QueryPreparer(SQL_PARSER, Optional.of(statementAccessControlManager));
+
+        Session session = testSessionBuilder()
+                .addPreparedStatement("my_query", "SELECT * FROM foo")
+                .build();
+        QualifiedObjectName qualifiedTableName = new QualifiedObjectName(session.getCatalog().orElse(""),
+                session.getSchema().orElse(""), "foo");
+        PreparedQuery preparedQuery = queryPreparer.prepareQuery(session, "EXECUTE my_query");
+        assertEquals(preparedQuery.getStatement(),
+                SQL_PARSER.createStatement("SELECT AGE FROM " + qualifiedTableName + " WHERE age > 10", ParsingUtil.createParsingOptions(session)));
     }
 
     @Test

@@ -14,7 +14,9 @@
 package io.prestosql.execution;
 
 import com.google.common.collect.ImmutableList;
+import io.prestosql.FullStatementRewriteContext;
 import io.prestosql.Session;
+import io.prestosql.security.StatementAccessControlManager;
 import io.prestosql.spi.PrestoException;
 import io.prestosql.spi.resourcegroups.QueryType;
 import io.prestosql.sql.analyzer.SemanticException;
@@ -42,24 +44,29 @@ import static java.util.Objects.requireNonNull;
 public class QueryPreparer
 {
     private final SqlParser sqlParser;
+    private final Optional<StatementAccessControlManager> statementAccessControlManager;
 
     @Inject
-    public QueryPreparer(SqlParser sqlParser)
+    public QueryPreparer(SqlParser sqlParser, Optional<StatementAccessControlManager> statementAccessControlManager)
     {
         this.sqlParser = requireNonNull(sqlParser, "sqlParser is null");
+        this.statementAccessControlManager = requireNonNull(statementAccessControlManager, "statementAccessControlManager is null");
     }
 
     public PreparedQuery prepareQuery(Session session, String query)
             throws ParsingException, PrestoException, SemanticException
     {
-        Statement wrappedStatement = sqlParser.createStatement(query, createParsingOptions(session));
+        String modifiedQuery = statementAccessControlManager
+                .map(manager -> manager.getModifiedQuery(new FullStatementRewriteContext(session), query))
+                .orElse(query);
+        Statement wrappedStatement = sqlParser.createStatement(modifiedQuery, createParsingOptions(session));
         return prepareQuery(session, wrappedStatement);
     }
 
     public PreparedQuery prepareQuery(Session session, Statement wrappedStatement)
             throws ParsingException, PrestoException, SemanticException
     {
-        Statement statement = unwrapExecuteStatement(wrappedStatement, sqlParser, session);
+        Statement statement = unwrapExecuteStatement(wrappedStatement, session);
         if (statement instanceof Explain && ((Explain) statement).isAnalyze()) {
             Statement innerStatement = ((Explain) statement).getStatement();
             Optional<QueryType> innerQueryType = StatementUtils.getQueryType(innerStatement.getClass());
@@ -75,14 +82,17 @@ public class QueryPreparer
         return new PreparedQuery(statement, parameters);
     }
 
-    private static Statement unwrapExecuteStatement(Statement statement, SqlParser sqlParser, Session session)
+    private Statement unwrapExecuteStatement(Statement statement, Session session)
     {
         if (!(statement instanceof Execute)) {
             return statement;
         }
 
         String sql = session.getPreparedStatementFromExecute((Execute) statement);
-        return sqlParser.createStatement(sql, createParsingOptions(session));
+        String modifiedSql = statementAccessControlManager
+                .map(manager -> manager.getModifiedQuery(new FullStatementRewriteContext(session), sql))
+                .orElse(sql);
+        return sqlParser.createStatement(modifiedSql, createParsingOptions(session));
     }
 
     private static void validateParameters(Statement node, List<Expression> parameterValues)

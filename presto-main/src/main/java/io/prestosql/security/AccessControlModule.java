@@ -17,6 +17,7 @@ import com.google.inject.Binder;
 import com.google.inject.Module;
 import com.google.inject.Scopes;
 
+import static com.google.inject.multibindings.OptionalBinder.newOptionalBinder;
 import static org.weakref.jmx.guice.ExportBinder.newExporter;
 
 public class AccessControlModule
@@ -27,6 +28,8 @@ public class AccessControlModule
     {
         binder.bind(AccessControlManager.class).in(Scopes.SINGLETON);
         binder.bind(AccessControl.class).to(AccessControlManager.class).in(Scopes.SINGLETON);
+        newOptionalBinder(binder, StatementAccessControlManager.class);
+        binder.bind(StatementAccessControlManager.class).in(Scopes.SINGLETON);
         newExporter(binder).export(AccessControlManager.class).withGeneratedName();
     }
 }
