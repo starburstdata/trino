@@ -1,4 +1,5 @@
 # Presto [![Build Status](https://travis-ci.com/prestosql/presto.svg?branch=master)](https://travis-ci.com/prestosql/presto)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fstarburstdata%2Fpresto.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fstarburstdata%2Fpresto?ref=badge_shield)
 
 Presto is a distributed SQL query engine for big data.
 
@@ -100,3 +101,7 @@ To simplify iteration, you can also run in `watch` mode, which automatically re-
     yarn --cwd presto-main/src/main/resources/webapp/src run watch
 
 To iterate quickly, simply re-build the project in IntelliJ after packaging is complete. Project resources will be hot-reloaded and changes are reflected on browser refresh.
+
+
+## License
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fstarburstdata%2Fpresto.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fstarburstdata%2Fpresto?ref=badge_large)
