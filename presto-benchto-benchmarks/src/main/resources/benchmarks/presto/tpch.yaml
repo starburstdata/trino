@@ -7,7 +7,7 @@ frequency: 7
 database: hive
 tpch_300: tpch_sf300_orc
 tpch_1000: tpch_sf1000_orc
-tpch_3000: tpch_sf3000_orc
+tpch_3000: tpch_sf1000_orc
 prefix: ""
 variables:
 # queries are assigned to groups so they execute within 15-60s each (for an arbitrary benchmark cluster)
