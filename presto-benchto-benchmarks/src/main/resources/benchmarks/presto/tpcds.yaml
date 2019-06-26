@@ -6,12 +6,12 @@ before-execution: sleep-4s, presto/session_set_cbo_flags.sql
 frequency: 7
 database: hive
 tpcds_10: tpcds_sf10_orc
-tpcds_30: tpcds_sf30_orc
+tpcds_30: tpcds_sf100_orc
 tpcds_100: tpcds_sf100_orc
 tpcds_300: tpcds_sf300_orc
 tpcds_1000: tpcds_sf1000_orc
-tpcds_3000: tpcds_sf3000_orc
-tpcds_10000: tpcds_sf10000_orc
+tpcds_3000: tpcds_sf1000_orc
+tpcds_10000: tpcds_sf1000_orc
 variables:
 # queries are assigned to groups so they execute within 15-60s each (for an arbitrary benchmark cluster)
 # groups are sorted by schema size
