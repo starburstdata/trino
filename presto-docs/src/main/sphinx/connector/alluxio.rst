@@ -1,7 +1,20 @@
-**Overview**
+=========================
+Alluxio Data Orchestrator
+=========================
 
-`Alluxio <www.alluxio.io>`_ is a data orchestration  open source distributed virtual file system which provides a block-level read/write caching engine for Presto connecting to a variety of disparate storage systems including S3 and HDFS. Presto can query files stored in Alluxio through the Hive connector. 
+
+.. contents::
+    :local:
+    :backlinks: none
+    :depth: 1
+
+Overview
+--------
+
+`Alluxio <www.alluxio.io>`_ is a data orchestration open source distributed data orchestration layer for the cloud which provides a block-level read/write caching engine for Presto connecting to a variety of disparate storage systems including S3 and HDFS. Presto can query files stored in Alluxio through the Hive connector. 
+
 Basic Configuration
+-------------------
 
 Presto can use the Hive Metastore for the database and table metadata information, as well as the file system location of table data. In order to enable this, create and edit the Presto configuration ``etc/catalog/hive.properties``:
 
@@ -9,8 +22,11 @@ Presto can use the Hive Metastore for the database and table metadata informatio
 ``hive.metastore.uri=thrift://localhost:9083``
 
 Copy Alluxio client jar ``/<ALLUXIO_HOME>/client/alluxio-<VERSION>-client.jar`` into directory ``plugin/hive-hadoop2/`` on all Presto servers.
+
 Additional Alluxio Configuration
-To configure Alluxio client-side properties on Presto, append the conf path (i.e. ``${ALLUXIO_HOME}/conf``) containing ``alluxio-site.properties`` to Presto’s JVM config at ``etc/jvm.config`` under Presto folder. The advantage of this approach is that all the Alluxio properties are set in the single ``alluxio-site.properties`` file.
+--------------------------------
+
+To configure Alluxio client-side properties on Presto, append the conf path (i.e. ``${ALLUXIO_HOME}/conf``) containing ``alluxio-site.properties`` to Presto’s JVM config at ``etc/jvm.config`` under Presto folder. The advantage of this approach is that all the Alluxio properties are set in the single ``alluxio-site.properties`` file. Additional Alluxio Configs can be found __`here <https://docs.alluxio.io/os/user/2.0/en/compute/Presto.html#customize-alluxio-user-properties>`_
 
 
 ``...``
@@ -22,7 +38,9 @@ To configure Alluxio client-side properties on Presto, append the conf path (i.e
 Alternatively, add Alluxio Configuration Properties to the Hadoop conf files (``core-site.xml``, ``hdfs-site.xml``), and use Presto property ``hive.config.resources`` in file ``etc/catalog/hive.properties`` to point to the file’s location for every Presto worker.
 
 ``hive.config.resources=core-site.xml,hdfs-site.xml``
+
 Examples
+---------
 
 The Hive connector supports querying and manipulating Hive tables and schemas (databases). 
 
@@ -95,5 +113,15 @@ Drop the external table ``request_logs``. This only drops the metadata for the t
 .. code-block:: sql
 
   DROP TABLE hive.web.request_logs
+  
+Additional Resources
+--------------------
+- `What is Alluxio? <https://www.alluxio.io/products/>`_
+- `Presto with Alluxio <https://www.alluxio.io/presto/>`_
+- `Performance tuning tips for Presto with Alluxio <https://www.alluxio.io/blog/top-5-performance-tuning-tips-for-running-presto-on-alluxio-1/>`_
+
+
+
+
 
 
