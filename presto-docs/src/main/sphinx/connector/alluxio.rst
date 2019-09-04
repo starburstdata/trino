@@ -116,9 +116,10 @@ Drop the external table ``request_logs``. This only drops the metadata for the t
   
 Additional Resources
 --------------------
-- `What is Alluxio? <https://www.alluxio.io/products/>`_
-- `Presto with Alluxio <https://www.alluxio.io/presto/>`_
-- `Performance tuning tips for Presto with Alluxio <https://www.alluxio.io/blog/top-5-performance-tuning-tips-for-running-presto-on-alluxio-1/>`_
+- `What is Alluxio? <https://www.alluxio.io/?utm_source=starburst&utm_medium=prestodocs>`_
+- `Presto with Alluxio <https://www.alluxio.io/presto/?utm_source=starburst&utm_medium=prestodocs>`_
+- `Performance tuning tips for Presto with Alluxio <https://www.alluxio.io/blog/top-5-performance-tuning-tips-for-running-presto-on-alluxio-1/?utm_source=starburst&utm_medium=prestodocs>`_
+- `Alluxio + Presto AMI Sandbox - Tutorial <https://www.alluxio.io/alluxio-presto-sandbox-aws/>`_
 
 
 
