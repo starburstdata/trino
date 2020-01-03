@@ -88,6 +88,7 @@ public class HdfsEnvironment
     public static class HdfsContext
     {
         private final ConnectorIdentity identity;
+        private final Optional<ConnectorSession> session;
         private final Optional<String> source;
         private final Optional<String> queryId;
         private final Optional<String> schemaName;
@@ -96,6 +97,7 @@ public class HdfsEnvironment
         public HdfsContext(ConnectorIdentity identity)
         {
             this.identity = requireNonNull(identity, "identity is null");
+            this.session = Optional.empty();
             this.source = Optional.empty();
             this.queryId = Optional.empty();
             this.schemaName = Optional.empty();
@@ -107,6 +109,7 @@ public class HdfsEnvironment
             requireNonNull(session, "session is null");
             requireNonNull(schemaName, "schemaName is null");
             this.identity = requireNonNull(session.getIdentity(), "session.getIdentity() is null");
+            this.session = Optional.of(requireNonNull(session, "session is null"));
             this.source = requireNonNull(session.getSource(), "session.getSource()");
             this.queryId = Optional.of(session.getQueryId());
             this.schemaName = Optional.of(schemaName);
@@ -119,6 +122,7 @@ public class HdfsEnvironment
             requireNonNull(schemaName, "schemaName is null");
             requireNonNull(tableName, "tableName is null");
             this.identity = requireNonNull(session.getIdentity(), "session.getIdentity() is null");
+            this.session = Optional.of(requireNonNull(session, "session is null"));
             this.source = requireNonNull(session.getSource(), "session.getSource()");
             this.queryId = Optional.of(session.getQueryId());
             this.schemaName = Optional.of(schemaName);
@@ -128,6 +132,11 @@ public class HdfsEnvironment
         public ConnectorIdentity getIdentity()
         {
             return identity;
+        }
+
+        public Optional<ConnectorSession> getSession()
+        {
+            return session;
         }
 
         public Optional<String> getSource()
@@ -156,6 +165,7 @@ public class HdfsEnvironment
             return toStringHelper(this)
                     .omitNullValues()
                     .add("user", identity)
+                    .add("session", session.orElse(null))
                     .add("source", source.orElse(null))
                     .add("queryId", queryId.orElse(null))
                     .add("schemaName", schemaName.orElse(null))
