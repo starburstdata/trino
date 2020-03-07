@@ -94,8 +94,6 @@ public class QueryRunner
         setupNetworkLogging(builder);
 
         if (kerberosRemoteServiceName.isPresent()) {
-            checkArgument(session.getServer().getScheme().equalsIgnoreCase("https"),
-                    "Authentication using Kerberos requires HTTPS to be enabled");
             setupKerberos(
                     builder,
                     krb5ServicePrincipalPattern.get(),
@@ -158,8 +156,6 @@ public class QueryRunner
             Optional<String> password)
     {
         if (user.isPresent() && password.isPresent()) {
-            checkArgument(session.getServer().getScheme().equalsIgnoreCase("https"),
-                    "Authentication using username/password requires HTTPS to be enabled");
             clientBuilder.addInterceptor(basicAuth(user.get(), password.get()));
         }
     }
@@ -170,8 +166,6 @@ public class QueryRunner
             Optional<String> accessToken)
     {
         if (accessToken.isPresent()) {
-            checkArgument(session.getServer().getScheme().equalsIgnoreCase("https"),
-                    "Authentication using an access token requires HTTPS to be enabled");
             clientBuilder.addInterceptor(tokenAuth(accessToken.get()));
         }
     }

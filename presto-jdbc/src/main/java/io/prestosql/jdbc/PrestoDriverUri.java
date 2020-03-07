@@ -179,9 +179,6 @@ final class PrestoDriverUri
             // TODO: fix Tempto to allow empty passwords
             String password = PASSWORD.getValue(properties).orElse("");
             if (!password.isEmpty() && !password.equals("***empty***")) {
-                if (!useSecureConnection) {
-                    throw new SQLException("Authentication using username/password requires SSL to be enabled");
-                }
                 builder.addInterceptor(basicAuth(getUser(), password));
             }
 
@@ -195,9 +192,6 @@ final class PrestoDriverUri
             }
 
             if (KERBEROS_REMOTE_SERVICE_NAME.getValue(properties).isPresent()) {
-                if (!useSecureConnection) {
-                    throw new SQLException("Authentication using Kerberos requires SSL to be enabled");
-                }
                 setupKerberos(
                         builder,
                         KERBEROS_SERVICE_PRINCIPAL_PATTERN.getRequiredValue(properties),
@@ -211,9 +205,6 @@ final class PrestoDriverUri
             }
 
             if (ACCESS_TOKEN.getValue(properties).isPresent()) {
-                if (!useSecureConnection) {
-                    throw new SQLException("Authentication using an access token requires SSL to be enabled");
-                }
                 builder.addInterceptor(tokenAuth(ACCESS_TOKEN.getValue(properties).get()));
             }
         }
