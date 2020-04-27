@@ -440,24 +440,23 @@ public class ElasticsearchPageSource
                 readTimeNanos += System.nanoTime() - start;
                 reset(response);
             }
-            else if (currentPosition == (aggregation.getBuckets().size() - 1)) {
+            else if (currentPosition == (aggregation.getBuckets().size())) {
                 long start = System.nanoTime();
                 SearchResponse response = client.nextPage(scrollId);
                 readTimeNanos += System.nanoTime() - start;
                 reset(response);
             }
 
-            if (currentPosition == (aggregation.getBuckets().size() - 1)) {
+            if (currentPosition == (aggregation.getBuckets().size())) {
                 return endOfData();
             }
-
-            currentPosition++;
-            totalRecordCount++;
 
             MultiBucketsAggregation.Bucket currentBucket = aggregation.getBuckets().get(currentPosition);
             Map<String, Object> bucketFields = new HashMap<>();
             bucketFields.put("key", currentBucket.getKey());
             bucketFields.put("doc_count", currentBucket.getDocCount());
+            currentPosition++;
+            totalRecordCount++;
 
             return new Hit(bucketToFields(currentBucket, bucketFields));
         }
