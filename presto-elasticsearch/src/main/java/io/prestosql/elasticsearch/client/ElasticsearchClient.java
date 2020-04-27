@@ -30,6 +30,7 @@ import io.airlift.security.pem.PemReader;
 import io.airlift.stats.TimeStat;
 import io.airlift.units.Duration;
 import io.prestosql.elasticsearch.AwsSecurityConfig;
+import io.prestosql.elasticsearch.ElasticsearchAggregation;
 import io.prestosql.elasticsearch.ElasticsearchConfig;
 import io.prestosql.spi.PrestoException;
 import org.apache.http.HttpEntity;
@@ -525,10 +526,14 @@ public class ElasticsearchClient
         return jsonNode.get(name);
     }
 
-    public SearchResponse beginSearch(String index, int shard, QueryBuilder query, Optional<List<String>> fields, List<String> documentFields, Optional<String> sort, OptionalLong limit)
+    public SearchResponse beginSearch(String index, int shard, QueryBuilder query, Optional<List<String>> fields, List<String> documentFields, Optional<String> sort,
+            OptionalLong limit, Optional<ElasticsearchAggregation> aggregation)
     {
         SearchSourceBuilder sourceBuilder = SearchSourceBuilder.searchSource()
                 .query(query);
+        if (aggregation.isPresent()) {
+            sourceBuilder.aggregation(aggregation.get().buildAggregation());
+        }
 
         if (limit.isPresent() && limit.getAsLong() < scrollSize) {
             // Safe to cast it to int because scrollSize is int.

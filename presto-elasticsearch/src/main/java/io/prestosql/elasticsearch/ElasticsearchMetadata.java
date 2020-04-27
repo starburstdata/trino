@@ -13,13 +13,18 @@
  */
 package io.prestosql.elasticsearch;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.MapperFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.airlift.json.ObjectMapperProvider;
 import io.prestosql.elasticsearch.client.ElasticsearchClient;
 import io.prestosql.elasticsearch.client.IndexMetadata;
 import io.prestosql.elasticsearch.client.IndexMetadata.DateTimeType;
 import io.prestosql.elasticsearch.client.IndexMetadata.ObjectType;
 import io.prestosql.elasticsearch.client.IndexMetadata.PrimitiveType;
+import io.prestosql.spi.PrestoException;
 import io.prestosql.spi.connector.ColumnHandle;
 import io.prestosql.spi.connector.ColumnMetadata;
 import io.prestosql.spi.connector.ConnectorMetadata;
@@ -51,6 +56,7 @@ import java.util.OptionalLong;
 import java.util.stream.Collectors;
 
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static io.prestosql.spi.StandardErrorCode.SYNTAX_ERROR;
 import static io.prestosql.spi.type.BigintType.BIGINT;
 import static io.prestosql.spi.type.BooleanType.BOOLEAN;
 import static io.prestosql.spi.type.DoubleType.DOUBLE;
@@ -99,12 +105,25 @@ public class ElasticsearchMetadata
             String[] parts = tableName.getTableName().split(":", 2);
             String table = parts[0];
             Optional<String> query = Optional.empty();
+            Optional<ElasticsearchAggregation> aggregation = Optional.empty();
             if (parts.length == 2) {
-                query = Optional.of(parts[1]);
+                String[] queryParts = parts[1].split("@aggregation:", 2);
+                if (queryParts[0].length() > 0) {
+                    query = Optional.of(queryParts[0]);
+                }
+                if (queryParts.length == 2) {
+                    ObjectMapper objectMapper = new ObjectMapperProvider().get().enable(MapperFeature.CAN_OVERRIDE_ACCESS_MODIFIERS);
+                    try {
+                        aggregation = Optional.of(objectMapper.readValue(queryParts[1], ElasticsearchAggregation.class));
+                    }
+                    catch (JsonProcessingException e) {
+                        throw new PrestoException(SYNTAX_ERROR, "Could not parse ES aggregation: " + queryParts[1], e);
+                    }
+                }
             }
 
             if (listTables(session, Optional.of(schemaName)).contains(new SchemaTableName(schemaName, table))) {
-                return new ElasticsearchTableHandle(schemaName, table, query);
+                return new ElasticsearchTableHandle(schemaName, table, query, aggregation);
             }
         }
 
@@ -115,6 +134,11 @@ public class ElasticsearchMetadata
     public ConnectorTableMetadata getTableMetadata(ConnectorSession session, ConnectorTableHandle table)
     {
         ElasticsearchTableHandle handle = (ElasticsearchTableHandle) table;
+        if (handle.getAggregation().isPresent()) {
+            return new ConnectorTableMetadata(
+                new SchemaTableName(handle.getSchema(), handle.getIndex()),
+                handle.getAggregation().get().getColumnHandles());
+        }
         return getTableMetadata(handle.getSchema(), handle.getIndex());
     }
 
@@ -333,6 +357,7 @@ public class ElasticsearchMetadata
                 handle.getIndex(),
                 handle.getConstraint(),
                 handle.getQuery(),
+                handle.getAggregation(),
                 OptionalLong.of(limit));
 
         return Optional.of(new LimitApplicationResult<>(handle, false));
@@ -369,6 +394,7 @@ public class ElasticsearchMetadata
                 handle.getIndex(),
                 newDomain,
                 handle.getQuery(),
+                handle.getAggregation(),
                 handle.getLimit());
 
         return Optional.of(new ConstraintApplicationResult<>(handle, TupleDomain.withColumnDomains(unsupported)));

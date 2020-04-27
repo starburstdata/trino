@@ -32,6 +32,7 @@ public final class ElasticsearchTableHandle
     private final String index;
     private final TupleDomain<ColumnHandle> constraint;
     private final Optional<String> query;
+    private final Optional<ElasticsearchAggregation> aggregation;
     private final OptionalLong limit;
 
     public ElasticsearchTableHandle(String schema, String index, Optional<String> query)
@@ -39,6 +40,18 @@ public final class ElasticsearchTableHandle
         this.schema = requireNonNull(schema, "schema is null");
         this.index = requireNonNull(index, "index is null");
         this.query = requireNonNull(query, "query is null");
+        this.aggregation = Optional.empty();
+
+        constraint = TupleDomain.all();
+        limit = OptionalLong.empty();
+    }
+
+    public ElasticsearchTableHandle(String schema, String index, Optional<String> query, Optional<ElasticsearchAggregation> aggregation)
+    {
+        this.schema = requireNonNull(schema, "schema is null");
+        this.index = requireNonNull(index, "index is null");
+        this.query = requireNonNull(query, "query is null");
+        this.aggregation = requireNonNull(aggregation, "aggregation is null");
 
         constraint = TupleDomain.all();
         limit = OptionalLong.empty();
@@ -50,12 +63,14 @@ public final class ElasticsearchTableHandle
             @JsonProperty("index") String index,
             @JsonProperty("constraint") TupleDomain<ColumnHandle> constraint,
             @JsonProperty("query") Optional<String> query,
+            @JsonProperty("aggregation") Optional<ElasticsearchAggregation> aggregation,
             @JsonProperty("limit") OptionalLong limit)
     {
         this.schema = requireNonNull(schema, "schema is null");
         this.index = requireNonNull(index, "index is null");
         this.constraint = requireNonNull(constraint, "constraint is null");
         this.query = requireNonNull(query, "query is null");
+        this.aggregation = requireNonNull(aggregation, "aggregation is null");
         this.limit = requireNonNull(limit, "limit is null");
     }
 
@@ -81,6 +96,12 @@ public final class ElasticsearchTableHandle
     public Optional<String> getQuery()
     {
         return query;
+    }
+
+    @JsonProperty
+    public Optional<ElasticsearchAggregation> getAggregation()
+    {
+        return aggregation;
     }
 
     @JsonProperty

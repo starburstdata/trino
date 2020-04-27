@@ -35,6 +35,7 @@ import io.prestosql.elasticsearch.decoders.TinyintDecoder;
 import io.prestosql.elasticsearch.decoders.VarbinaryDecoder;
 import io.prestosql.elasticsearch.decoders.VarcharDecoder;
 import io.prestosql.spi.Page;
+import io.prestosql.spi.PrestoException;
 import io.prestosql.spi.block.Block;
 import io.prestosql.spi.block.BlockBuilder;
 import io.prestosql.spi.block.PageBuilderStatus;
@@ -45,8 +46,12 @@ import io.prestosql.spi.type.RowType;
 import io.prestosql.spi.type.StandardTypes;
 import io.prestosql.spi.type.Type;
 import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.aggregations.Aggregation;
+import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation;
+import org.elasticsearch.search.aggregations.metrics.ParsedSingleValueNumericMetricsAggregation;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -61,6 +66,7 @@ import static io.prestosql.elasticsearch.BuiltinColumns.ID;
 import static io.prestosql.elasticsearch.BuiltinColumns.SCORE;
 import static io.prestosql.elasticsearch.BuiltinColumns.SOURCE;
 import static io.prestosql.elasticsearch.ElasticsearchQueryBuilder.buildSearchQuery;
+import static io.prestosql.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.prestosql.spi.type.BigintType.BIGINT;
 import static io.prestosql.spi.type.BooleanType.BOOLEAN;
 import static io.prestosql.spi.type.DoubleType.DOUBLE;
@@ -82,7 +88,7 @@ public class ElasticsearchPageSource
 
     private final List<Decoder> decoders;
 
-    private final SearchHitIterator iterator;
+    private final ElasticIterator iterator;
     private final BlockBuilder[] columnBuilders;
     private final List<ElasticsearchColumnHandle> columns;
     private long totalBytes;
@@ -143,11 +149,18 @@ public class ElasticsearchPageSource
                 needAllFields ? Optional.empty() : Optional.of(requiredFields),
                 documentFields,
                 sort,
-                table.getLimit());
+                table.getLimit(),
+                table.getAggregation());
         readTimeNanos += System.nanoTime() - start;
-        this.iterator = new SearchHitIterator(client, () -> searchResponse, table.getLimit());
+        if (table.getAggregation().isPresent()) {
+            this.iterator = new AggregationBucketIterator(client, () -> searchResponse, table.getLimit());
+        }
+        else {
+            this.iterator = new SearchHitIterator(client, () -> searchResponse, table.getLimit());
+        }
     }
 
+    //        Aggregation agg = searchResponse.getAggregations().asList().get(0);
     @Override
     public long getCompletedBytes()
     {
@@ -195,12 +208,12 @@ public class ElasticsearchPageSource
 
         long size = 0;
         while (size < PageBuilderStatus.DEFAULT_MAX_PAGE_SIZE_IN_BYTES && iterator.hasNext()) {
-            SearchHit hit = iterator.next();
+            Hit hit = iterator.next();
             Map<String, Object> document = hit.getSourceAsMap();
 
             for (int i = 0; i < decoders.size(); i++) {
                 String field = columns.get(i).getName();
-                decoders.get(i).decode(hit, () -> getField(document, field), columnBuilders[i]);
+                decoders.get(i).decode(hit.asSearchHit(), () -> getField(document, field), columnBuilders[i]);
             }
 
             if (hit.getSourceRef() != null) {
@@ -208,8 +221,8 @@ public class ElasticsearchPageSource
             }
 
             size = Arrays.stream(columnBuilders)
-                    .mapToLong(BlockBuilder::getSizeInBytes)
-                    .sum();
+                .mapToLong(BlockBuilder::getSizeInBytes)
+                .sum();
         }
 
         Block[] blocks = new Block[columnBuilders.length];
@@ -219,6 +232,46 @@ public class ElasticsearchPageSource
         }
 
         return new Page(blocks);
+    }
+
+    static class Hit
+    {
+        private Optional<SearchHit> searchHit = Optional.empty();
+        private Optional<Map<String, Object>> aggregationMap = Optional.empty();
+
+        public Hit(SearchHit searchHit)
+        {
+            this.searchHit = Optional.of(searchHit);
+        }
+
+        public Hit(Map<String, Object> aggregationMap)
+        {
+            this.aggregationMap = Optional.of(aggregationMap);
+        }
+
+        public BytesReference getSourceRef()
+        {
+            if (searchHit.isPresent()) {
+                return searchHit.get().getSourceRef();
+            }
+            return null;
+        }
+
+        public Map<String, Object> getSourceAsMap()
+        {
+            if (searchHit.isPresent()) {
+                return searchHit.get().getSourceAsMap();
+            }
+            else {
+                return aggregationMap.get();
+            }
+        }
+
+        public SearchHit asSearchHit()
+        {
+            return searchHit.orElse(new SearchHit(-99999));
+                //this is dangerous - but an aggregation should never produce a value that needs a SeachHit to decode
+        }
     }
 
     public static Object getField(Map<String, Object> document, String field)
@@ -268,22 +321,22 @@ public class ElasticsearchPageSource
     private List<Decoder> createDecoders(ConnectorSession session, List<ElasticsearchColumnHandle> columns)
     {
         return columns.stream()
-                .map(column -> {
-                    if (column.getName().equals(ID.getName())) {
-                        return new IdColumnDecoder();
-                    }
+            .map(column -> {
+                if (column.getName().equals(ID.getName())) {
+                    return new IdColumnDecoder();
+                }
 
-                    if (column.getName().equals(SCORE.getName())) {
-                        return new ScoreColumnDecoder();
-                    }
+                if (column.getName().equals(SCORE.getName())) {
+                    return new ScoreColumnDecoder();
+                }
 
-                    if (column.getName().equals(SOURCE.getName())) {
-                        return new SourceColumnDecoder();
-                    }
+                if (column.getName().equals(SOURCE.getName())) {
+                    return new SourceColumnDecoder();
+                }
 
-                    return createDecoder(session, column.getName(), column.getType());
-                })
-                .collect(toImmutableList());
+                return createDecoder(session, column.getName(), column.getType());
+            })
+            .collect(toImmutableList());
     }
 
     private Decoder createDecoder(ConnectorSession session, String path, Type type)
@@ -353,8 +406,105 @@ public class ElasticsearchPageSource
         return base + "." + element;
     }
 
+    private static class AggregationBucketIterator
+            extends ElasticIterator
+    {
+        private final ElasticsearchClient client;
+        private final Supplier<SearchResponse> first;
+        private final OptionalLong limit;
+
+        private String scrollId;
+        private int currentPosition;
+
+        private long totalRecordCount;
+        private MultiBucketsAggregation aggregation;
+
+        public AggregationBucketIterator(ElasticsearchClient client, Supplier<SearchResponse> first, OptionalLong limit)
+        {
+            this.client = client;
+            this.first = first;
+            this.limit = limit;
+            this.totalRecordCount = 0;
+        }
+
+        @Override
+        protected Hit computeNext()
+        {
+            if (limit.isPresent() && totalRecordCount == limit.getAsLong()) {
+                return endOfData();
+            }
+
+            if (scrollId == null) {
+                long start = System.nanoTime();
+                SearchResponse response = first.get();
+                readTimeNanos += System.nanoTime() - start;
+                reset(response);
+            }
+            else if (currentPosition == (aggregation.getBuckets().size() - 1)) {
+                long start = System.nanoTime();
+                SearchResponse response = client.nextPage(scrollId);
+                readTimeNanos += System.nanoTime() - start;
+                reset(response);
+            }
+
+            if (currentPosition == (aggregation.getBuckets().size() - 1)) {
+                return endOfData();
+            }
+
+            currentPosition++;
+            totalRecordCount++;
+
+            MultiBucketsAggregation.Bucket currentBucket = aggregation.getBuckets().get(currentPosition);
+            Map<String, Object> bucketFields = new HashMap<>();
+            bucketFields.put("key", currentBucket.getKey());
+            bucketFields.put("doc_count", currentBucket.getDocCount());
+
+            return new Hit(bucketToFields(currentBucket, bucketFields));
+        }
+
+        Map<String, Object> bucketToFields(MultiBucketsAggregation.Bucket bucket, Map<String, Object> bucketFields)
+        {
+            for (Aggregation agg : bucket.getAggregations()) {
+                if (!(agg instanceof ParsedSingleValueNumericMetricsAggregation)) {
+                    throw new PrestoException(NOT_SUPPORTED, "Only numeric sub-aggregations supported");
+                }
+                bucketFields.put(agg.getName(), ((ParsedSingleValueNumericMetricsAggregation) agg).value());
+            }
+            return bucketFields;
+        }
+
+        private void reset(SearchResponse response)
+        {
+            scrollId = response.getScrollId();
+            if (response.getAggregations() == null) {
+                close();
+                return;
+            }
+            if (response.getAggregations().asList().size() > 1) {
+                throw new PrestoException(NOT_SUPPORTED, "Multiple bucketed aggregations not supported");
+            }
+            aggregation = (MultiBucketsAggregation) response.getAggregations().asList().get(0);
+            //searchHits = response.getHits();
+            currentPosition = 0;
+        }
+
+        @Override
+        public void close()
+        {
+            if (scrollId != null) {
+                try {
+                    client.clearScroll(scrollId);
+                }
+                catch (Exception e) {
+                    // ignore
+                    LOG.debug("Error clearing scroll", e);
+                }
+            }
+        }
+    }
+
     private static class SearchHitIterator
-            extends AbstractIterator<SearchHit>
+            extends ElasticIterator
     {
         private final ElasticsearchClient client;
         private final Supplier<SearchResponse> first;
@@ -364,7 +514,6 @@ public class ElasticsearchPageSource
         private String scrollId;
         private int currentPosition;
 
-        private long readTimeNanos;
         private long totalRecordCount;
 
         public SearchHitIterator(ElasticsearchClient client, Supplier<SearchResponse> first, OptionalLong limit)
@@ -375,13 +524,8 @@ public class ElasticsearchPageSource
             this.totalRecordCount = 0;
         }
 
-        public long getReadTimeNanos()
-        {
-            return readTimeNanos;
-        }
-
         @Override
-        protected SearchHit computeNext()
+        protected Hit computeNext()
         {
             if (limit.isPresent() && totalRecordCount == limit.getAsLong()) {
                 // No more record is necessary.
@@ -409,7 +553,7 @@ public class ElasticsearchPageSource
             currentPosition++;
             totalRecordCount++;
 
-            return hit;
+            return new Hit(hit);
         }
 
         private void reset(SearchResponse response)
@@ -419,6 +563,7 @@ public class ElasticsearchPageSource
             currentPosition = 0;
         }
 
+        @Override
         public void close()
         {
             if (scrollId != null) {
@@ -430,6 +575,27 @@ public class ElasticsearchPageSource
                     LOG.debug("Error clearing scroll", e);
                 }
             }
+        }
+    }
+
+    private static class ElasticIterator
+            extends AbstractIterator<Hit>
+    {
+        protected long readTimeNanos;
+
+        public long getReadTimeNanos()
+        {
+            return readTimeNanos;
+        }
+
+        @Override
+        protected Hit computeNext()
+        {
+            return null;
+        }
+
+        public void close()
+        {
         }
     }
 }
