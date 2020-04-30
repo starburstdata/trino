@@ -135,11 +135,21 @@ public class ElasticsearchMetadata
     {
         ElasticsearchTableHandle handle = (ElasticsearchTableHandle) table;
         if (handle.getAggregation().isPresent()) {
-            return new ConnectorTableMetadata(
-                new SchemaTableName(handle.getSchema(), handle.getIndex()),
-                handle.getAggregation().get().getColumnHandles());
+            return buildAggregatorMetadata(handle);
         }
         return getTableMetadata(handle.getSchema(), handle.getIndex());
+    }
+
+    private ConnectorTableMetadata buildAggregatorMetadata(ElasticsearchTableHandle handle)
+    {
+        IndexMetadata metadata = client.getIndexMetadata(handle.getIndex());
+        List<ColumnMetadata> docColumns = toColumnMetadata(metadata, true);
+        ImmutableList.Builder<ColumnMetadata> aggColumns = handle.getAggregation().get().getColumnHandles();
+        docColumns.forEach(col -> aggColumns.add(col));
+
+        return new ConnectorTableMetadata(
+            new SchemaTableName(handle.getSchema(), handle.getIndex()),
+            aggColumns.build());
     }
 
     private ConnectorTableMetadata getTableMetadata(String schemaName, String tableName)
@@ -152,6 +162,11 @@ public class ElasticsearchMetadata
     }
 
     private List<ColumnMetadata> toColumnMetadata(IndexMetadata metadata)
+    {
+        return toColumnMetadata(metadata, false);
+    }
+
+    private List<ColumnMetadata> toColumnMetadata(IndexMetadata metadata, boolean hide)
     {
         ImmutableList.Builder<ColumnMetadata> result = ImmutableList.builder();
 
@@ -169,7 +184,7 @@ public class ElasticsearchMetadata
                 continue;
             }
 
-            result.add(makeColumnMetadata(field.getName(), type, supportsPredicates(field.getType())));
+            result.add(makeColumnMetadata(field.getName(), type, supportsPredicates(field.getType()), hide));
         }
 
         return result.build();
@@ -402,12 +417,18 @@ public class ElasticsearchMetadata
 
     private static ColumnMetadata makeColumnMetadata(String name, Type type, boolean supportsPredicates)
     {
+        return makeColumnMetadata(name, type, supportsPredicates, false);
+    }
+
+    private static ColumnMetadata makeColumnMetadata(String name, Type type, boolean supportsPredicates, boolean hide)
+    {
         return ColumnMetadata.builder()
                 .setName(name)
                 .setType(type)
                 .setProperties(ImmutableMap.of(
                         ORIGINAL_NAME, name,
                         SUPPORTS_PREDICATES, supportsPredicates))
+                .setHidden(hide)
                 .build();
     }
 }

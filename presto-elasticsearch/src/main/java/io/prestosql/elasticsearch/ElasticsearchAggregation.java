@@ -31,7 +31,6 @@ import org.elasticsearch.search.aggregations.metrics.min.MinAggregationBuilder;
 import org.elasticsearch.search.aggregations.metrics.sum.SumAggregationBuilder;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static io.prestosql.elasticsearch.ElasticsearchMetadata.SUPPORTS_PREDICATES;
@@ -90,7 +89,7 @@ public class ElasticsearchAggregation
         return aggregations;
     }
 
-    public List<ColumnMetadata> getColumnHandles()
+    public ImmutableList.Builder<ColumnMetadata> getColumnHandles()
     {
         ImmutableList.Builder<ColumnMetadata> result = ImmutableList.builder();
 
@@ -113,7 +112,7 @@ public class ElasticsearchAggregation
                     .setHidden(false)
                     .setProperties(ImmutableMap.of(SUPPORTS_PREDICATES, false))
                     .build()));
-        return result.build();
+        return result;
     }
 
     private AbstractType buckettypeToType()
