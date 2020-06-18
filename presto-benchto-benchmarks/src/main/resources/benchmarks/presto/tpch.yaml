@@ -2,7 +2,7 @@ datasource: presto
 query-names: presto/tpch/${query}.sql
 concurrency: 1
 runs: 6
-prewarm-runs: 2
+prewarm-runs: 10
 before-execution: sleep-4s, presto/session_set_cbo_flags.sql, presto/cache_metrics_before.sql, presto/cache_metrics_before_async.sql
 frequency: 7
 database: hive
