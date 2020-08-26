@@ -15,11 +15,10 @@ package io.prestosql.operator;
 
 import com.google.common.collect.ImmutableList;
 import io.prestosql.execution.Lifespan;
+import io.prestosql.operator.BasicWorkProcessorOperatorAdapter.BasicAdapterWorkProcessorOperatorFactory;
 import io.prestosql.operator.JoinProbe.JoinProbeFactory;
 import io.prestosql.operator.LookupJoinOperators.JoinType;
 import io.prestosql.operator.LookupOuterOperator.LookupOuterOperatorFactory;
-import io.prestosql.operator.WorkProcessorOperatorAdapter.AdapterWorkProcessorOperator;
-import io.prestosql.operator.WorkProcessorOperatorAdapter.AdapterWorkProcessorOperatorFactory;
 import io.prestosql.spi.Page;
 import io.prestosql.spi.type.Type;
 import io.prestosql.spiller.PartitioningSpillerFactory;
@@ -32,12 +31,13 @@ import java.util.OptionalInt;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static io.prestosql.operator.BasicWorkProcessorOperatorAdapter.createAdapterOperatorFactory;
 import static io.prestosql.operator.LookupJoinOperators.JoinType.INNER;
 import static io.prestosql.operator.LookupJoinOperators.JoinType.PROBE_OUTER;
 import static java.util.Objects.requireNonNull;
 
 public class LookupJoinOperatorFactory
-        implements JoinOperatorFactory, AdapterWorkProcessorOperatorFactory
+        implements JoinOperatorFactory, BasicAdapterWorkProcessorOperatorFactory
 {
     private final int operatorId;
     private final PlanNodeId planNodeId;
@@ -139,8 +139,7 @@ public class LookupJoinOperatorFactory
     @Override
     public Operator createOperator(DriverContext driverContext)
     {
-        OperatorContext operatorContext = driverContext.addOperatorContext(getOperatorId(), getPlanNodeId(), getOperatorType());
-        return new WorkProcessorOperatorAdapter(operatorContext, this);
+        return createAdapterOperatorFactory(this).createOperator(driverContext);
     }
 
     @Override
@@ -193,28 +192,7 @@ public class LookupJoinOperatorFactory
                 probeHashGenerator,
                 partitioningSpillerFactory,
                 processorContext,
-                Optional.of(sourcePages));
-    }
-
-    @Override
-    public AdapterWorkProcessorOperator createAdapterOperator(ProcessorContext processorContext)
-    {
-        checkState(!closed, "Factory is already closed");
-        LookupSourceFactory lookupSourceFactory = joinBridgeManager.getJoinBridge(processorContext.getLifespan());
-
-        joinBridgeManager.probeOperatorCreated(processorContext.getLifespan());
-        return new LookupJoinOperator(
-                probeTypes,
-                buildOutputTypes,
-                joinType,
-                lookupSourceFactory,
-                joinProbeFactory,
-                () -> joinBridgeManager.probeOperatorClosed(processorContext.getLifespan()),
-                totalOperatorsCount,
-                probeHashGenerator,
-                partitioningSpillerFactory,
-                processorContext,
-                Optional.empty());
+                sourcePages);
     }
 
     @Override

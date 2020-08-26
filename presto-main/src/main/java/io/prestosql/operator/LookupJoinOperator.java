@@ -24,7 +24,6 @@ import io.prestosql.operator.PartitionedConsumption.Partition;
 import io.prestosql.operator.WorkProcessor.ProcessState;
 import io.prestosql.operator.WorkProcessor.Transformation;
 import io.prestosql.operator.WorkProcessor.TransformationState;
-import io.prestosql.operator.WorkProcessorOperatorAdapter.AdapterWorkProcessorOperator;
 import io.prestosql.operator.exchange.LocalPartitionGenerator;
 import io.prestosql.spi.Page;
 import io.prestosql.spi.type.Type;
@@ -69,10 +68,8 @@ import static java.util.Collections.emptyIterator;
 import static java.util.Objects.requireNonNull;
 
 public class LookupJoinOperator
-        implements AdapterWorkProcessorOperator
+        implements WorkProcessorOperator
 {
-    private final ListenableFuture<LookupSourceProvider> lookupSourceProviderFuture;
-    private final PageBuffer pageBuffer;
     private final WorkProcessor<Page> pages;
     private final SpillingJoinProcessor joinProcessor;
     private final JoinStatisticsCounter statisticsCounter;
@@ -87,11 +84,9 @@ public class LookupJoinOperator
             HashGenerator hashGenerator,
             PartitioningSpillerFactory partitioningSpillerFactory,
             ProcessorContext processorContext,
-            Optional<WorkProcessor<Page>> sourcePages)
+            WorkProcessor<Page> sourcePages)
     {
         this.statisticsCounter = new JoinStatisticsCounter(joinType);
-        lookupSourceProviderFuture = lookupSourceFactory.createLookupSourceProvider();
-        pageBuffer = new PageBuffer(lookupSourceProviderFuture);
         joinProcessor = new SpillingJoinProcessor(
                 processorContext,
                 afterClose,
@@ -102,10 +97,10 @@ public class LookupJoinOperator
                 hashGenerator,
                 joinProbeFactory,
                 lookupSourceFactory,
-                lookupSourceProviderFuture,
+                lookupSourceFactory.createLookupSourceProvider(),
                 statisticsCounter,
                 partitioningSpillerFactory,
-                sourcePages.orElse(pageBuffer.pages()));
+                sourcePages);
         pages = flatten(WorkProcessor.create(joinProcessor));
     }
 
@@ -113,24 +108,6 @@ public class LookupJoinOperator
     public Optional<OperatorInfo> getOperatorInfo()
     {
         return Optional.of(statisticsCounter.get());
-    }
-
-    @Override
-    public boolean needsInput()
-    {
-        return lookupSourceProviderFuture.isDone() && pageBuffer.isEmpty() && !pageBuffer.isFinished();
-    }
-
-    @Override
-    public void addInput(Page page)
-    {
-        pageBuffer.add(page);
-    }
-
-    @Override
-    public void finish()
-    {
-        pageBuffer.finish();
     }
 
     @Override

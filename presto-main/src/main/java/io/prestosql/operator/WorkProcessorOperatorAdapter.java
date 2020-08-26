@@ -140,7 +140,7 @@ public class WorkProcessorOperatorAdapter
     private final AdapterWorkProcessorOperator workProcessorOperator;
     private final WorkProcessor<Page> pages;
 
-    public WorkProcessorOperatorAdapter(OperatorContext operatorContext, AdapterWorkProcessorOperatorFactory workProcessorOperatorFactory)
+    private WorkProcessorOperatorAdapter(OperatorContext operatorContext, AdapterWorkProcessorOperatorFactory workProcessorOperatorFactory)
     {
         this.operatorContext = requireNonNull(operatorContext, "operatorContext is null");
         MemoryTrackingContext memoryTrackingContext = new MemoryTrackingContext(
