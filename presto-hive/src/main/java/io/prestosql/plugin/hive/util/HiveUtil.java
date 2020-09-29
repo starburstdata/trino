@@ -340,7 +340,7 @@ public final class HiveUtil
     }
 
     @SuppressWarnings({"unchecked", "RedundantCast"})
-    private static Class<? extends InputFormat<?, ?>> getInputFormatClass(JobConf conf, String inputFormatName)
+    public static Class<? extends InputFormat<?, ?>> getInputFormatClass(JobConf conf, String inputFormatName)
             throws ClassNotFoundException
     {
         // CDH uses different names for Parquet
