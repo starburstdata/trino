@@ -34,7 +34,7 @@ public class FileOrcDataSource
     public void close()
             throws IOException
     {
-        input.close();
+        //input.close();
     }
 
     @Override

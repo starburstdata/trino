@@ -15,6 +15,7 @@ package io.prestosql.orc;
 
 import com.google.common.collect.ImmutableList;
 import io.airlift.slice.Slices;
+import io.prestosql.orc.metadata.CompressionKind;
 import io.prestosql.spi.Page;
 import io.prestosql.spi.block.Block;
 import io.prestosql.spi.type.DecimalType;
@@ -38,6 +39,7 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import org.openjdk.jmh.runner.options.VerboseMode;
+import org.testng.annotations.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -49,6 +51,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static com.google.common.io.Files.createTempDir;
 import static com.google.common.io.MoreFiles.deleteRecursively;
@@ -58,6 +61,7 @@ import static io.prestosql.metadata.MetadataManager.createTestMetadataManager;
 import static io.prestosql.orc.OrcReader.INITIAL_BATCH_SIZE;
 import static io.prestosql.orc.OrcTester.writeOrcColumnPresto;
 import static io.prestosql.orc.metadata.CompressionKind.NONE;
+import static io.prestosql.orc.metadata.CompressionKind.ZLIB;
 import static io.prestosql.spi.type.BigintType.BIGINT;
 import static io.prestosql.spi.type.BooleanType.BOOLEAN;
 import static io.prestosql.spi.type.DecimalType.createDecimalType;
@@ -90,7 +94,7 @@ public class BenchmarkColumnReaders
     private static final int MAX_STRING = 19;
     private static final Collection<?> NULL_VALUES = Collections.nCopies(ROWS, null);
 
-    @Benchmark
+    //@Benchmark
     public Object readBooleanNoNull(BooleanNoNullBenchmarkData data)
             throws Exception
     {
@@ -99,7 +103,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readBooleanWithNull(BooleanWithNullBenchmarkData data)
             throws Exception
     {
@@ -108,7 +112,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readAllNull(AllNullBenchmarkData data)
             throws Exception
     {
@@ -117,7 +121,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readByteNoNull(TinyIntNoNullBenchmarkData data)
             throws Exception
     {
@@ -126,7 +130,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readByteWithNull(TinyIntWithNullBenchmarkData data)
             throws Exception
     {
@@ -135,7 +139,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readShortDecimalNoNull(ShortDecimalNoNullBenchmarkData data)
             throws Exception
     {
@@ -144,7 +148,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readShortDecimalWithNull(ShortDecimalWithNullBenchmarkData data)
             throws Exception
     {
@@ -171,7 +175,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readDoubleNoNull(DoubleNoNullBenchmarkData data)
             throws Exception
     {
@@ -180,7 +184,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readDoubleWithNull(DoubleWithNullBenchmarkData data)
             throws Exception
     {
@@ -189,7 +193,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readFloatNoNull(FloatNoNullBenchmarkData data)
             throws Exception
     {
@@ -198,8 +202,17 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readFloatWithNull(FloatWithNullBenchmarkData data)
+            throws Exception
+    {
+        try (OrcRecordReader recordReader = data.createRecordReader()) {
+            return readFirstColumn(recordReader);
+        }
+    }
+
+    @Benchmark
+    public Object readLongNonRandomNoNull(BigintNonRandomNoNullNullBenchmarkData data)
             throws Exception
     {
         try (OrcRecordReader recordReader = data.createRecordReader()) {
@@ -226,6 +239,24 @@ public class BenchmarkColumnReaders
     }
 
     @Benchmark
+    public Object readLongWithNullAndAggregate(BigintWithNullBenchmarkData data)
+            throws Exception
+    {
+        try (OrcRecordReader recordReader = data.createRecordReader()) {
+            List<Block> blocks = readFirstColumn(recordReader);
+            long sum = 0;
+            for (Block block : blocks) {
+                for (int i = 0; i < block.getPositionCount(); ++i) {
+                    if (!block.isNull(i)) {
+                        sum += BIGINT.getLong(block, i);
+                    }
+                }
+            }
+            return sum;
+        }
+    }
+
+    //@Benchmark
     public Object readIntNoNull(IntegerNoNullBenchmarkData data)
             throws Exception
     {
@@ -234,7 +265,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readIntWithNull(IntegerWithNullBenchmarkData data)
             throws Exception
     {
@@ -243,7 +274,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readShortNoNull(SmallintNoNullBenchmarkData data)
             throws Exception
     {
@@ -252,7 +283,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readShortWithNull(SmallintWithNullBenchmarkData data)
             throws Exception
     {
@@ -280,6 +311,18 @@ public class BenchmarkColumnReaders
     }
 
     @Benchmark
+    public Object readSliceDirectWithNullAndCopy(VarcharDirectWithNullBenchmarkData data)
+            throws Exception
+    {
+        try (OrcRecordReader recordReader = data.createRecordReader()) {
+            List<Block> blocks = readFirstColumn(recordReader).stream()
+                    .map(block -> block.copyRegion(0, block.getPositionCount()))
+                    .collect(ImmutableList.toImmutableList());
+            return blocks;
+        }
+    }
+
+    //@Benchmark
     public Object readSliceDictionaryNoNull(VarcharDictionaryNoNullBenchmarkData data)
             throws Exception
     {
@@ -288,7 +331,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readSliceDictionaryWithNull(VarcharDictionaryWithNullBenchmarkData data)
             throws Exception
     {
@@ -297,7 +340,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readTimestampNoNull(TimestampNoNullBenchmarkData data)
             throws Exception
     {
@@ -306,7 +349,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public Object readTimestampWithNull(TimestampWithNullBenchmarkData data)
             throws Exception
     {
@@ -315,7 +358,7 @@ public class BenchmarkColumnReaders
         }
     }
 
-    private Object readFirstColumn(OrcRecordReader recordReader)
+    private List<Block> readFirstColumn(OrcRecordReader recordReader)
             throws IOException
     {
         List<Block> blocks = new ArrayList<>();
@@ -325,7 +368,7 @@ public class BenchmarkColumnReaders
         return blocks;
     }
 
-    private abstract static class BenchmarkData
+    public abstract static class BenchmarkData
     {
         protected final Random random = new Random(0);
         private Type type;
@@ -333,15 +376,38 @@ public class BenchmarkColumnReaders
         private File orcFile;
         private OrcDataSource dataSource;
 
+        @Param({"NONE", "ZLIB"})
+        private String compression = "NONE";
+
+        @Param({"MMAP", "FILE", "MEM"})
+        private String access = "MMAP";
+
         public void setup(Type type)
                 throws Exception
         {
             this.type = type;
             temporaryDirectory = createTempDir();
             orcFile = new File(temporaryDirectory, randomUUID().toString());
-            writeOrcColumnPresto(orcFile, NONE, type, createValues(), new OrcWriterStats());
+            writeOrcColumnPresto(orcFile, CompressionKind.valueOf(compression), type, createValues(), new OrcWriterStats());
 
-            dataSource = new MemoryOrcDataSource(new OrcDataSourceId(orcFile.getPath()), Slices.wrappedBuffer(readAllBytes(orcFile.toPath())));
+            switch (access) {
+                case "MMAP":
+                    dataSource = new MemoryOrcDataSource(new OrcDataSourceId(orcFile.getPath()), Slices.mapFileReadOnly(orcFile));
+                    break;
+
+                case "FILE":
+                    dataSource = new UnclosableOrcDataSource(new FileOrcDataSource(orcFile, new OrcReaderOptions()));
+                    break;
+
+                case "MEM":
+                    dataSource = new MemoryOrcDataSource(new OrcDataSourceId(orcFile.getPath()), Slices.wrappedBuffer(readAllBytes(orcFile.toPath())));
+                    break;
+
+                default:
+                    throw new IllegalStateException();
+            }
+
+            System.err.println(this.getClass().getSimpleName() + ", file length " + orcFile.length());
         }
 
         @TearDown
@@ -767,6 +833,36 @@ public class BenchmarkColumnReaders
     }
 
     @State(Scope.Thread)
+    public static class BigintNonRandomNoNullNullBenchmarkData
+            extends BenchmarkData
+    {
+        public static BigintWithNullBenchmarkData create()
+                throws Exception
+        {
+            BigintWithNullBenchmarkData data = new BigintWithNullBenchmarkData();
+            data.setup();
+            return data;
+        }
+
+        @Setup
+        public void setup()
+                throws Exception
+        {
+            setup(BIGINT);
+        }
+
+        @Override
+        protected Iterator<?> createValues()
+        {
+            List<Long> values = new ArrayList<>();
+            for (int i = 0; i < ROWS; ++i) {
+                values.add((long) i);
+            }
+            return values.iterator();
+        }
+    }
+
+    @State(Scope.Thread)
     public static class IntegerNoNullBenchmarkData
             extends BenchmarkData
     {
@@ -1080,6 +1176,19 @@ public class BenchmarkColumnReaders
         catch (Throwable throwable) {
             throw new RuntimeException(throwable);
         }
+    }
+
+    @Test
+    public void testWithProfiling()
+            throws Exception
+    {
+        BenchmarkColumnReaders benchmark = new BenchmarkColumnReaders();
+        BigintWithNullBenchmarkData data = BigintWithNullBenchmarkData.create();
+        Object obj = null;
+        for (int i = 0; i < 1_000_000; ++i) {
+            obj = benchmark.readLongWithNull(data);
+        }
+        System.err.println(obj.toString());
     }
 
     public static void main(String[] args)

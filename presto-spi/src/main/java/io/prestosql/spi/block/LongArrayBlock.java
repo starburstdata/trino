@@ -13,6 +13,8 @@
  */
 package io.prestosql.spi.block;
 
+import io.airlift.slice.Slice;
+import io.airlift.slice.Slices;
 import org.openjdk.jol.info.ClassLayout;
 
 import javax.annotation.Nullable;
@@ -269,5 +271,10 @@ public class LongArrayBlock
         if (position < 0 || position >= getPositionCount()) {
             throw new IllegalArgumentException("position is not valid");
         }
+    }
+
+    public Slice getRawSlice()
+    {
+        return Slices.wrappedLongArray(values);
     }
 }

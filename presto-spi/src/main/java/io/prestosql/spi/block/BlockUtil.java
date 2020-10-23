@@ -22,7 +22,7 @@ import static java.lang.Math.ceil;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
-final class BlockUtil
+public final class BlockUtil
 {
     private static final double BLOCK_RESET_SKEW = 1.25;
 
@@ -34,7 +34,7 @@ final class BlockUtil
     {
     }
 
-    static void checkArrayRange(int[] array, int offset, int length)
+    public static void checkArrayRange(int[] array, int offset, int length)
     {
         requireNonNull(array, "array is null");
         if (offset < 0 || length < 0 || offset + length > array.length) {
@@ -42,7 +42,7 @@ final class BlockUtil
         }
     }
 
-    static void checkValidRegion(int positionCount, int positionOffset, int length)
+    public static void checkValidRegion(int positionCount, int positionOffset, int length)
     {
         if (positionOffset < 0 || length < 0 || positionOffset + length > positionCount) {
             throw new IndexOutOfBoundsException(format("Invalid position %s and length %s in block with %s positions", positionOffset, length, positionCount));
@@ -56,7 +56,7 @@ final class BlockUtil
         }
     }
 
-    static void checkValidPosition(int position, int positionCount)
+    public static void checkValidPosition(int position, int positionCount)
     {
         if (position < 0 || position >= positionCount) {
             throw new IllegalArgumentException(format("Invalid position %s in block with %s positions", position, positionCount));
@@ -128,7 +128,7 @@ final class BlockUtil
      * If the range matches the entire slice, the input slice will be returned.
      * Otherwise, a copy will be returned.
      */
-    static Slice compactSlice(Slice slice, int index, int length)
+    public static Slice compactSlice(Slice slice, int index, int length)
     {
         if (slice.isCompact() && index == 0 && length == slice.length()) {
             return slice;
@@ -181,7 +181,7 @@ final class BlockUtil
         return Arrays.copyOfRange(array, index, index + length);
     }
 
-    static int countUsedPositions(boolean[] positions)
+    public static int countUsedPositions(boolean[] positions)
     {
         int used = 0;
         for (boolean position : positions) {

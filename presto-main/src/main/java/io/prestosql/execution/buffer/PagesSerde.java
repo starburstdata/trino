@@ -125,6 +125,9 @@ public class PagesSerde
 
             int uncompressedSize = serializedPage.getUncompressedSizeInBytes();
             byte[] decompressed = new byte[uncompressedSize];
+            if (!slice.hasByteArray()) {
+                slice = Slices.copyOf(slice);
+            }
             checkState(decompressor.get().decompress(
                     slice.byteArray(),
                     slice.byteArrayOffset(),
