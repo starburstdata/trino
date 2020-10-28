@@ -44,7 +44,7 @@ public class OptimizedInt128ArrayBlockEncoding
         sliceOutput.appendInt(positionCount);
 
         encodeNullsAsBits(sliceOutput, block);
-        sliceOutput.writeBytes(((Int128ArrayBlock) block).getRawSlice());
+        sliceOutput.writeBytes(((Int128ArrayBlock) block).getRawSlice(), 0, positionCount * 16);
     }
 
     @Override

@@ -14,6 +14,7 @@
 package io.prestosql.execution.buffer;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Streams;
 import io.airlift.slice.BasicSliceInput;
 import io.airlift.slice.OutputStreamSliceOutput;
@@ -24,6 +25,8 @@ import io.prestosql.spi.PageBuilder;
 import io.prestosql.spi.block.Block;
 import io.prestosql.spi.block.BlockBuilder;
 import io.prestosql.spi.block.BlockEncoding;
+import io.prestosql.spi.block.Int128ArrayBlockEncoding;
+import io.prestosql.spi.block.IntArrayBlockEncoding;
 import io.prestosql.spi.block.LongArrayBlockEncoding;
 import io.prestosql.spi.block.VariableWidthBlockEncoding;
 import io.prestosql.spi.type.DecimalType;
@@ -54,6 +57,7 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
@@ -61,6 +65,7 @@ import static com.google.common.io.Files.createTempDir;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.prestosql.execution.buffer.PagesSerdeUtil.readPages;
 import static io.prestosql.execution.buffer.PagesSerdeUtil.writePages;
+import static io.prestosql.plugin.tpch.TpchTables.getTablePages;
 import static io.prestosql.spi.type.BigintType.BIGINT;
 import static io.prestosql.spi.type.DecimalType.createDecimalType;
 import static io.prestosql.spi.type.VarcharType.VARCHAR;
@@ -173,6 +178,12 @@ public class BenchmarkPagesSerde
                 .collect(ImmutableList.toImmutableList());
     }
 
+    @Benchmark
+    public Object readLineitem(LineitemBenchmarkData data)
+    {
+        return ImmutableList.copyOf(readPages(data.getPagesSerde(), new BasicSliceInput(data.getDataSource())));
+    }
+
     public abstract static class BenchmarkData
     {
         protected final Random random = new Random(0);
@@ -181,7 +192,20 @@ public class BenchmarkPagesSerde
         private Slice dataSource;
         private PagesSerde pagesSerde;
 
-        public void setup(Type type, BlockEncoding blockEncoding)
+        public void setup(Map<String, BlockEncoding> blockEncodings, Iterator<Page> pages)
+                throws Exception
+        {
+            temporaryDirectory = createTempDir();
+            file = new File(temporaryDirectory, randomUUID().toString());
+            pagesSerde = new TestingPagesSerdeFactory(new TestingBlockEncodingSerde(blockEncodings::get), false).createPagesSerde();
+
+            writePages(pagesSerde, new OutputStreamSliceOutput(new FileOutputStream(file)), pages);
+            dataSource = Slices.mapFileReadOnly(file);
+
+            System.err.println(this.getClass().getSimpleName() + ", file length " + file.length());
+        }
+
+        public void setup(Type type, BlockEncoding blockEncoding, Iterator<?> values)
                 throws Exception
         {
             temporaryDirectory = createTempDir();
@@ -189,7 +213,6 @@ public class BenchmarkPagesSerde
             pagesSerde = new TestingPagesSerdeFactory(new TestingBlockEncodingSerde(ignored -> blockEncoding), false).createPagesSerde();
             PageBuilder pageBuilder = new PageBuilder(ImmutableList.of(type));
             BlockBuilder blockBuilder = pageBuilder.getBlockBuilder(0);
-            Iterator<?> values = createValues();
             ImmutableList.Builder<Page> pages = ImmutableList.builder();
             while (values.hasNext()) {
                 Object value = values.next();
@@ -234,8 +257,6 @@ public class BenchmarkPagesSerde
         {
             return dataSource;
         }
-
-        protected abstract Iterator<?> createValues();
     }
 
     @State(Scope.Thread)
@@ -246,11 +267,10 @@ public class BenchmarkPagesSerde
         public void setup()
                 throws Exception
         {
-            setup(LONG_DECIMAL_TYPE, new OptimizedInt128ArrayBlockEncoding());
+            setup(LONG_DECIMAL_TYPE, new OptimizedInt128ArrayBlockEncoding(), createValues());
         }
 
-        @Override
-        protected Iterator<?> createValues()
+        private Iterator<?> createValues()
         {
             List<SqlDecimal> values = new ArrayList<>();
             for (int i = 0; i < ROWS; ++i) {
@@ -268,11 +288,10 @@ public class BenchmarkPagesSerde
         public void setup()
                 throws Exception
         {
-            setup(LONG_DECIMAL_TYPE, new OptimizedInt128ArrayBlockEncoding());
+            setup(LONG_DECIMAL_TYPE, new OptimizedInt128ArrayBlockEncoding(), createValues());
         }
 
-        @Override
-        protected Iterator<?> createValues()
+        private Iterator<?> createValues()
         {
             List<SqlDecimal> values = new ArrayList<>();
             for (int i = 0; i < ROWS; ++i) {
@@ -295,11 +314,10 @@ public class BenchmarkPagesSerde
         public void setup()
                 throws Exception
         {
-            setup(BIGINT, new OptimizedLongArrayBlockEncoding());
+            setup(BIGINT, new OptimizedLongArrayBlockEncoding(), createValues());
         }
 
-        @Override
-        protected Iterator<?> createValues()
+        private Iterator<?> createValues()
         {
             List<Long> values = new ArrayList<>();
             for (int i = 0; i < ROWS; ++i) {
@@ -317,11 +335,10 @@ public class BenchmarkPagesSerde
         public void setup()
                 throws Exception
         {
-            setup(BIGINT, new OptimizedLongArrayBlockEncoding());
+            setup(BIGINT, new OptimizedLongArrayBlockEncoding(), createValues());
         }
 
-        @Override
-        protected Iterator<?> createValues()
+        private Iterator<?> createValues()
         {
             List<Long> values = new ArrayList<>();
             for (int i = 0; i < ROWS; ++i) {
@@ -339,10 +356,10 @@ public class BenchmarkPagesSerde
         public void setup()
                 throws Exception
         {
-            setup(BIGINT, new OptimizedLongArrayBlockEncoding());
+            setup(BIGINT, new OptimizedLongArrayBlockEncoding(), createValues());
         }
 
-        protected Iterator<?> createValues()
+        private Iterator<?> createValues()
         {
             List<Long> values = new ArrayList<>();
             for (int i = 0; i < ROWS; ++i) {
@@ -365,10 +382,10 @@ public class BenchmarkPagesSerde
         public void setup()
                 throws Exception
         {
-            setup(BIGINT, new LongArrayBlockEncoding());
+            setup(BIGINT, new LongArrayBlockEncoding(), createValues());
         }
 
-        protected Iterator<?> createValues()
+        private Iterator<?> createValues()
         {
             List<Long> values = new ArrayList<>();
             for (int i = 0; i < ROWS; ++i) {
@@ -391,10 +408,10 @@ public class BenchmarkPagesSerde
         public void setup()
                 throws Exception
         {
-            setup(BIGINT, new LongArrayBlockToFixedWidthBlockEncoding());
+            setup(BIGINT, new LongArrayBlockToFixedWidthBlockEncoding(), createValues());
         }
 
-        protected Iterator<?> createValues()
+        private Iterator<?> createValues()
         {
             List<Long> values = new ArrayList<>();
             for (int i = 0; i < ROWS; ++i) {
@@ -417,11 +434,10 @@ public class BenchmarkPagesSerde
         public void setup()
                 throws Exception
         {
-            setup(VARCHAR, new VariableWidthBlockEncoding());
+            setup(VARCHAR, new VariableWidthBlockEncoding(), createValues());
         }
 
-        @Override
-        protected Iterator<?> createValues()
+        private Iterator<?> createValues()
         {
             List<String> values = new ArrayList<>();
             for (int i = 0; i < ROWS; ++i) {
@@ -439,11 +455,10 @@ public class BenchmarkPagesSerde
         public void setup()
                 throws Exception
         {
-            setup(VARCHAR, new VariableWidthBlockEncoding());
+            setup(VARCHAR, new VariableWidthBlockEncoding(), createValues());
         }
 
-        @Override
-        protected Iterator<?> createValues()
+        private Iterator<?> createValues()
         {
             List<String> values = new ArrayList<>();
             for (int i = 0; i < ROWS; ++i) {
@@ -455,6 +470,25 @@ public class BenchmarkPagesSerde
                 }
             }
             return values.iterator();
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class LineitemBenchmarkData
+            extends BenchmarkData
+    {
+        @Setup
+        public void setup()
+                throws Exception
+        {
+            setup(
+                    ImmutableMap.<String, BlockEncoding>builder()
+                            .put(LongArrayBlockEncoding.NAME, new OptimizedLongArrayBlockEncoding())
+                            .put(IntArrayBlockEncoding.NAME, new OptimizedIntArrayBlockEncoding())
+                            .put(Int128ArrayBlockEncoding.NAME, new OptimizedInt128ArrayBlockEncoding())
+                            .put(VariableWidthBlockEncoding.NAME, new VariableWidthBlockEncoding())
+                            .build(),
+                    getTablePages("lineitem", 0.1, 8 * 1024));
         }
     }
 
@@ -472,11 +506,11 @@ public class BenchmarkPagesSerde
             throws Exception
     {
         BenchmarkPagesSerde benchmark = new BenchmarkPagesSerde();
-        BigintWithNullBenchmarkData data = new BigintWithNullBenchmarkData();
-        data.setup(BIGINT, new OptimizedLongArrayBlockEncoding());
+        LineitemBenchmarkData data = new LineitemBenchmarkData();
+        data.setup();
         Object obj = null;
         for (int i = 0; i < 1_000_000; ++i) {
-            obj = benchmark.readLongWithNull(data);
+            obj = benchmark.readLineitem(data);
         }
         System.err.println(obj.toString());
     }

@@ -19,17 +19,17 @@ import io.airlift.slice.Slices;
 import io.prestosql.spi.block.Block;
 import io.prestosql.spi.block.BlockEncoding;
 import io.prestosql.spi.block.BlockEncodingSerde;
-import io.prestosql.spi.block.LongArrayBlock;
+import io.prestosql.spi.block.IntArrayBlock;
 
 import java.util.Optional;
 
 import static io.prestosql.spi.block.EncoderUtil.decodeNullBits;
 import static io.prestosql.spi.block.EncoderUtil.encodeNullsAsBits;
 
-public class OptimizedLongArrayBlockEncoding
+public class OptimizedIntArrayBlockEncoding
         implements BlockEncoding
 {
-    public static final String NAME = "LONG_ARRAY";
+    public static final String NAME = "INT_ARRAY";
 
     @Override
     public String getName()
@@ -44,7 +44,7 @@ public class OptimizedLongArrayBlockEncoding
         sliceOutput.appendInt(positionCount);
 
         encodeNullsAsBits(sliceOutput, block);
-        sliceOutput.writeBytes(((LongArrayBlock) block).getRawSlice(), 0, positionCount * 8);
+        sliceOutput.writeBytes(((IntArrayBlock) block).getRawSlice(), 0, positionCount * 4);
     }
 
     @Override
@@ -53,9 +53,9 @@ public class OptimizedLongArrayBlockEncoding
         int positionCount = sliceInput.readInt();
 
         Optional<boolean[]> valueIsNull = decodeNullBits(sliceInput, positionCount);
-        long[] values = new long[positionCount];
-        sliceInput.readBytes(Slices.wrappedLongArray(values), 0, positionCount * 8);
+        int[] values = new int[positionCount];
+        sliceInput.readBytes(Slices.wrappedIntArray(values), 0, positionCount * 4);
 
-        return new LongArrayBlock(positionCount, valueIsNull, values);
+        return new IntArrayBlock(positionCount, valueIsNull, values);
     }
 }

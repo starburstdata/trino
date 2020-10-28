@@ -105,7 +105,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.IntStream;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.Iterators.advance;
 import static com.google.common.collect.Lists.newArrayList;
 import static io.airlift.slice.Slices.utf8Slice;
@@ -603,13 +605,37 @@ public class OrcTester
                 RuntimeException::new);
     }
 
+    public static void writeOrcPages(File outputFile, CompressionKind compression, List<Type> types, Iterator<Page> pages, OrcWriterStats stats)
+            throws Exception
+    {
+        List<String> columnNames = IntStream.range(0, types.size())
+                .mapToObj(i -> "test" + i)
+                .collect(toImmutableList());
+
+        OrcWriter writer = new OrcWriter(
+                new OutputStreamOrcDataSink(new FileOutputStream(outputFile)),
+                columnNames,
+                types,
+                OrcType.createRootOrcType(columnNames, types),
+                compression,
+                new OrcWriterOptions(),
+                false,
+                ImmutableMap.of(),
+                true,
+                BOTH,
+                stats);
+
+        for (; pages.hasNext(); ) {
+            writer.write(pages.next());
+        }
+
+        writer.close();
+        writer.validate(new FileOrcDataSource(outputFile, READER_OPTIONS));
+    }
+
     public static void writeOrcColumnPresto(File outputFile, CompressionKind compression, Type type, Iterator<?> values, OrcWriterStats stats)
             throws Exception
     {
-        ImmutableMap.Builder<String, String> metadata = ImmutableMap.builder();
-        metadata.put("columns", "test");
-        metadata.put("columns.types", createSettableStructObjectInspector("test", type).getTypeName());
-
         List<String> columnNames = ImmutableList.of("test");
         List<Type> types = ImmutableList.of(type);
 
