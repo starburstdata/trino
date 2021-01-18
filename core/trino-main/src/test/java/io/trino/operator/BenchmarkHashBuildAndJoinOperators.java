@@ -95,13 +95,13 @@ public class BenchmarkHashBuildAndJoinOperators
         protected static final int ROWS_PER_PAGE = 1024;
         protected static final int BUILD_ROWS_NUMBER = 8_000_000;
 
-        @Param({"varchar", "bigint", "all"})
+        @Param({"bigint"})
         protected String hashColumns = "bigint";
 
-        @Param({"false", "true"})
+        @Param({"true"})
         protected boolean buildHashEnabled;
 
-        @Param({"1", "5"})
+        @Param({"1"})
         protected int buildRowsRepetition = 1;
 
         protected ExecutorService executor;
@@ -184,13 +184,13 @@ public class BenchmarkHashBuildAndJoinOperators
     {
         protected static final int PROBE_ROWS_NUMBER = 1_400_000;
 
-        @Param({"0.1", "1", "2"})
+        @Param({"1"})
         protected double matchRate = 1;
 
-        @Param({"bigint", "all"})
+        @Param({"all"})
         protected String outputColumns = "bigint";
 
-        @Param({"1", "4"})
+        @Param({"4"})
         protected int partitionCount = 1;
 
         protected List<Page> probePages;
@@ -292,7 +292,7 @@ public class BenchmarkHashBuildAndJoinOperators
         }
     }
 
-    @Benchmark
+    //@Benchmark
     public JoinBridgeManager<PartitionedLookupSourceFactory> benchmarkBuildHash(BuildContext buildContext)
     {
         List<Integer> outputChannels = ImmutableList.of(0, 1, 2);
