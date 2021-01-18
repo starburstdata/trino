@@ -15,10 +15,13 @@ package io.trino.operator;
 
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
+import io.trino.spi.block.Block;
+import io.trino.spi.type.Type;
 import org.openjdk.jol.info.ClassLayout;
 
 import javax.annotation.Nullable;
 
+import java.util.List;
 import java.util.Optional;
 
 import static java.lang.Math.toIntExact;
@@ -30,6 +33,7 @@ public final class JoinHash
 {
     private static final int INSTANCE_SIZE = ClassLayout.parseClass(JoinHash.class).instanceSize();
     private final PagesHash pagesHash;
+    private final List<List<Block>> outputChannels;
 
     // we unwrap Optional<JoinFilterFunction> to actual verifier or null in constructor for performance reasons
     // we do quick check for `filterFunction == null` in `isJoinPositionEligible` to avoid calls to applyFilterFunction
@@ -41,9 +45,14 @@ public final class JoinHash
     @Nullable
     private final PositionLinks positionLinks;
 
-    public JoinHash(PagesHash pagesHash, Optional<JoinFilterFunction> filterFunction, Optional<PositionLinks> positionLinks)
+    public JoinHash(
+            PagesHash pagesHash,
+            List<List<Block>> outputChannels,
+            Optional<JoinFilterFunction> filterFunction,
+            Optional<PositionLinks> positionLinks)
     {
         this.pagesHash = requireNonNull(pagesHash, "pagesHash is null");
+        this.outputChannels = requireNonNull(outputChannels, "outputChannels is null");
         this.filterFunction = requireNonNull(filterFunction, "filterFunction cannot be null").orElse(null);
         this.positionLinks = requireNonNull(positionLinks, "positionLinks is null").orElse(null);
     }
@@ -122,6 +131,18 @@ public final class JoinHash
     public void appendTo(long position, PageBuilder pageBuilder, int outputChannelOffset)
     {
         pagesHash.appendTo(toIntExact(position), pageBuilder, outputChannelOffset);
+    }
+
+    @Override
+    public Block getBlock(int buildChannel, Type type)
+    {
+        return new LookupSourceBlock(outputChannels.get(buildChannel), type, pagesHash.getAddresses().elements(), Optional.empty(), 0, pagesHash.getAddresses().size());
+    }
+
+    @Override
+    public Block getBlock(int buildChannel, Type type, long[] addresses, Optional<boolean[]> valueIsNull, int arrayOffset, int positionCount)
+    {
+        return new LookupSourceBlock(outputChannels.get(buildChannel), type, addresses, valueIsNull, arrayOffset, positionCount);
     }
 
     @Override

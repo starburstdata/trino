@@ -15,10 +15,13 @@ package io.trino.operator;
 
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
+import io.trino.spi.block.Block;
+import io.trino.spi.type.Type;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.Closeable;
+import java.util.Optional;
 
 @NotThreadSafe
 public interface LookupSource
@@ -40,9 +43,23 @@ public interface LookupSource
 
     void appendTo(long position, PageBuilder pageBuilder, int outputChannelOffset);
 
+    default void markVisited(long position)
+    {
+    }
+
     boolean isJoinPositionEligible(long currentJoinPosition, int probePosition, Page allProbeChannelsPage);
 
     boolean isEmpty();
+
+    default Block getBlock(int buildChannel, Type type)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    default Block getBlock(int buildChannel, Type type, long[] addresses, Optional<boolean[]> valueIsNull, int arrayOffset, int positionCount)
+    {
+        throw new UnsupportedOperationException();
+    }
 
     @Override
     void close();

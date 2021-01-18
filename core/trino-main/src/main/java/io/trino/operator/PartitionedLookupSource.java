@@ -17,6 +17,7 @@ import com.google.common.io.Closer;
 import io.trino.operator.exchange.LocalPartitionGenerator;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
+import io.trino.spi.block.Block;
 import io.trino.spi.type.Type;
 import io.trino.type.BlockTypeOperators;
 
@@ -26,7 +27,6 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,6 +37,7 @@ import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static java.lang.Integer.numberOfTrailingZeros;
 import static java.lang.Math.toIntExact;
+import static java.util.Arrays.stream;
 
 @NotThreadSafe
 public class PartitionedLookupSource
@@ -109,7 +110,7 @@ public class PartitionedLookupSource
     @Override
     public boolean isEmpty()
     {
-        return Arrays.stream(lookupSources).allMatch(LookupSource::isEmpty);
+        return stream(lookupSources).allMatch(LookupSource::isEmpty);
     }
 
     @Override
@@ -121,7 +122,7 @@ public class PartitionedLookupSource
     @Override
     public long getJoinPositionCount()
     {
-        return Arrays.stream(lookupSources)
+        return stream(lookupSources)
                 .mapToLong(LookupSource::getJoinPositionCount)
                 .sum();
     }
@@ -129,7 +130,7 @@ public class PartitionedLookupSource
     @Override
     public long getInMemorySizeInBytes()
     {
-        return Arrays.stream(lookupSources).mapToLong(LookupSource::getInMemorySizeInBytes).sum();
+        return stream(lookupSources).mapToLong(LookupSource::getInMemorySizeInBytes).sum();
     }
 
     @Override
@@ -184,9 +185,28 @@ public class PartitionedLookupSource
     }
 
     @Override
+    public void markVisited(long partitionedJoinPosition)
+    {
+        if (outerPositionTracker != null) {
+            int partition = decodePartition(partitionedJoinPosition);
+            int joinPosition = decodeJoinPosition(partitionedJoinPosition);
+            outerPositionTracker.positionVisited(partition, joinPosition);
+        }
+    }
+
+    @Override
     public long joinPositionWithinPartition(long joinPosition)
     {
         return decodeJoinPosition(joinPosition);
+    }
+
+    @Override
+    public Block getBlock(int buildChannel, Type type, long[] addresses, Optional<boolean[]> valueIsNull, int arrayOffset, int positionCount)
+    {
+        List<Block> partitionBlocks = stream(lookupSources)
+                .map(lookupSource -> lookupSource.getBlock(buildChannel, type))
+                .collect(toImmutableList());
+        return new PartitionedLookupSourceBlock(partitionMask, shiftSize, partitionBlocks, type, addresses, valueIsNull, arrayOffset, positionCount);
     }
 
     @Override
@@ -200,7 +220,7 @@ public class PartitionedLookupSource
             if (outerPositionTracker != null) {
                 closer.register(outerPositionTracker::commit);
             }
-            Arrays.stream(lookupSources).forEach(closer::register);
+            stream(lookupSources).forEach(closer::register);
         }
         catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -291,7 +311,7 @@ public class PartitionedLookupSource
                         .map(Supplier::get)
                         .toArray(LookupSource[]::new);
 
-                visitedPositions = Arrays.stream(this.lookupSources)
+                visitedPositions = stream(this.lookupSources)
                         .map(LookupSource::getJoinPositionCount)
                         .map(Math::toIntExact)
                         .map(boolean[]::new)

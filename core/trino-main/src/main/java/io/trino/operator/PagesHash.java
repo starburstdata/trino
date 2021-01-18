@@ -168,6 +168,11 @@ public final class PagesHash
         return -1;
     }
 
+    public LongArrayList getAddresses()
+    {
+        return addresses;
+    }
+
     public void appendTo(long position, PageBuilder pageBuilder, int outputChannelOffset)
     {
         long pageAddress = addresses.getLong(toIntExact(position));

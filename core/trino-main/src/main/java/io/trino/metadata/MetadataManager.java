@@ -25,6 +25,7 @@ import io.trino.Session;
 import io.trino.client.NodeVersion;
 import io.trino.connector.CatalogName;
 import io.trino.metadata.ResolvedFunction.ResolvedFunctionDecoder;
+import io.trino.operator.IndexBlockEncoding;
 import io.trino.operator.aggregation.InternalAggregationFunction;
 import io.trino.operator.window.WindowFunctionSupplier;
 import io.trino.spi.QueryId;
@@ -239,6 +240,7 @@ public final class MetadataManager
         addBlockEncoding(new SingleRowBlockEncoding());
         addBlockEncoding(new RunLengthBlockEncoding());
         addBlockEncoding(new LazyBlockEncoding());
+        addBlockEncoding(new IndexBlockEncoding());
 
         verifyTypes();
 
@@ -902,7 +904,7 @@ public final class MetadataManager
                 .map(TableHandle::getConnectorHandle)
                 .collect(toImmutableList());
         return metadata.finishRefreshMaterializedView(session.toConnectorSession(catalogName), tableHandle.getConnectorHandle(), insertHandle.getConnectorHandle(),
-            fragments, computedStatistics, sourceConnectorHandles);
+                fragments, computedStatistics, sourceConnectorHandles);
     }
 
     @Override

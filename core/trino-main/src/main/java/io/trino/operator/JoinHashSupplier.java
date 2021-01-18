@@ -34,6 +34,7 @@ public class JoinHashSupplier
     private final Session session;
     private final PagesHash pagesHash;
     private final LongArrayList addresses;
+    private final List<List<Block>> outputChannels;
     private final List<Page> pages;
     private final Optional<PositionLinks.Factory> positionLinks;
     private final Optional<JoinFilterFunctionFactory> filterFunctionFactory;
@@ -44,6 +45,7 @@ public class JoinHashSupplier
             PagesHashStrategy pagesHashStrategy,
             LongArrayList addresses,
             List<List<Block>> channels,
+            List<Integer> outputChannels,
             Optional<JoinFilterFunctionFactory> filterFunctionFactory,
             Optional<Integer> sortChannel,
             List<JoinFilterFunctionFactory> searchFunctionFactories)
@@ -52,7 +54,7 @@ public class JoinHashSupplier
         this.addresses = requireNonNull(addresses, "addresses is null");
         this.filterFunctionFactory = requireNonNull(filterFunctionFactory, "filterFunctionFactory is null");
         this.searchFunctionFactories = ImmutableList.copyOf(searchFunctionFactories);
-        requireNonNull(channels, "pages is null");
+        requireNonNull(channels, "channels is null");
         requireNonNull(pagesHashStrategy, "pagesHashStrategy is null");
 
         PositionLinks.FactoryBuilder positionLinksFactoryBuilder;
@@ -67,6 +69,9 @@ public class JoinHashSupplier
             positionLinksFactoryBuilder = ArrayPositionLinks.builder(addresses.size());
         }
 
+        this.outputChannels = outputChannels.stream()
+                .map(channels::get)
+                .collect(toImmutableList());
         this.pages = channelsToPages(channels);
         this.pagesHash = new PagesHash(addresses, pagesHashStrategy, positionLinksFactoryBuilder);
         this.positionLinks = positionLinksFactoryBuilder.isEmpty() ? Optional.empty() : Optional.of(positionLinksFactoryBuilder.build());
@@ -99,6 +104,7 @@ public class JoinHashSupplier
                 filterFunctionFactory.map(factory -> factory.create(session.toConnectorSession(), addresses, pages));
         return new JoinHash(
                 pagesHash,
+                outputChannels,
                 filterFunction,
                 positionLinks.map(links -> {
                     List<JoinFilterFunction> searchFunctions = searchFunctionFactories.stream()

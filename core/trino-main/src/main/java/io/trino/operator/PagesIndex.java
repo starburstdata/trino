@@ -493,19 +493,23 @@ public class PagesIndex
             Optional<JoinFilterFunctionFactory> filterFunctionFactory,
             Optional<Integer> sortChannel,
             List<JoinFilterFunctionFactory> searchFunctionFactories,
-            Optional<List<Integer>> outputChannels)
+            Optional<List<Integer>> outputChannelsOptional)
     {
-        List<List<Block>> channels = ImmutableList.copyOf(this.channels);
+        List<List<Block>> channels = Arrays.stream(this.channels)
+                .map(ImmutableList::copyOf)
+                .collect(toImmutableList());
+        List<Integer> outputChannels = outputChannelsOptional.orElse(rangeList(types.size()));
         if (!joinChannels.isEmpty()) {
             // todo compiled implementation of lookup join does not support when we are joining with empty join channels.
             // This code path will trigger only for OUTER joins. To fix that we need to add support for
             //        OUTER joins into NestedLoopsJoin and remove "type == INNER" condition in LocalExecutionPlanner.visitJoin()
 
-            LookupSourceSupplierFactory lookupSourceFactory = joinCompiler.compileLookupSourceFactory(types, joinChannels, sortChannel, outputChannels);
+            LookupSourceSupplierFactory lookupSourceFactory = joinCompiler.compileLookupSourceFactory(types, joinChannels, sortChannel, outputChannelsOptional);
             return lookupSourceFactory.createLookupSourceSupplier(
                     session,
                     valueAddresses,
                     channels,
+                    outputChannels,
                     hashChannel,
                     filterFunctionFactory,
                     sortChannel,
@@ -515,7 +519,7 @@ public class PagesIndex
         // if compilation fails
         PagesHashStrategy hashStrategy = new SimplePagesHashStrategy(
                 types,
-                outputChannels.orElse(rangeList(types.size())),
+                outputChannels,
                 channels,
                 joinChannels,
                 hashChannel,
@@ -527,6 +531,7 @@ public class PagesIndex
                 hashStrategy,
                 valueAddresses,
                 channels,
+                outputChannels,
                 filterFunctionFactory,
                 sortChannel,
                 searchFunctionFactories);

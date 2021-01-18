@@ -310,6 +310,11 @@ public interface Block
         return this;
     }
 
+    default Block getBlockForStorage()
+    {
+        return this;
+    }
+
     /**
      * Gets the direct child blocks of this block.
      */

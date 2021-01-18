@@ -15,11 +15,14 @@ package io.trino.operator;
 
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
+import io.trino.spi.block.Block;
+import io.trino.spi.type.Type;
 
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.NotThreadSafe;
 import javax.annotation.concurrent.ThreadSafe;
 
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -104,6 +107,24 @@ public final class OuterLookupSource
     {
         lookupSource.appendTo(position, pageBuilder, outputChannelOffset);
         outerPositionTracker.positionVisited(position);
+    }
+
+    @Override
+    public void markVisited(long position)
+    {
+        outerPositionTracker.positionVisited(position);
+    }
+
+    @Override
+    public Block getBlock(int buildChannel, Type type)
+    {
+        return lookupSource.getBlock(buildChannel, type);
+    }
+
+    @Override
+    public Block getBlock(int buildChannel, Type type, long[] addresses, Optional<boolean[]> valueIsNull, int arrayOffset, int positionCount)
+    {
+        return lookupSource.getBlock(buildChannel, type, addresses, valueIsNull, arrayOffset, positionCount);
     }
 
     @Override

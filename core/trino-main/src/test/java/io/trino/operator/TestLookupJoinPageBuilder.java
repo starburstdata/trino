@@ -52,7 +52,7 @@ public class TestLookupJoinPageBuilder
         int joinPosition = 0;
         while (!lookupJoinPageBuilder.isFull() && probe.advanceNextPosition()) {
             lookupJoinPageBuilder.appendRow(probe, lookupSource, joinPosition++);
-            lookupJoinPageBuilder.appendNullForBuild(probe);
+            lookupJoinPageBuilder.appendNullForBuild(probe, lookupSource);
         }
         assertFalse(lookupJoinPageBuilder.isEmpty());
 

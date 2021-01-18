@@ -17,9 +17,12 @@ import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.block.Block;
 import io.trino.spi.type.Type;
+import it.unimi.dsi.fastutil.booleans.BooleanArrayList;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 
 import java.util.List;
+import java.util.Optional;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Verify.verify;
@@ -36,7 +39,12 @@ import static java.util.Objects.requireNonNull;
 public class LookupJoinPageBuilder
 {
     private final IntArrayList probeIndexBuilder = new IntArrayList();
+    private final List<Type> buildTypes;
     private final PageBuilder buildPageBuilder;
+    private final LongArrayList buildIndexBuilder = new LongArrayList();
+    private final BooleanArrayList buildValueIsNull = new BooleanArrayList();
+    private boolean buildContainsNull;
+    private LookupSource lookupSource;
     private final int buildOutputChannelCount;
     private int estimatedProbeBlockBytes;
     private int estimatedProbeRowSize = -1;
@@ -44,6 +52,7 @@ public class LookupJoinPageBuilder
 
     public LookupJoinPageBuilder(List<Type> buildTypes)
     {
+        this.buildTypes = requireNonNull(buildTypes, "buildTypes is null");
         this.buildPageBuilder = new PageBuilder(requireNonNull(buildTypes, "buildTypes is null"));
         this.buildOutputChannelCount = buildTypes.size();
     }
@@ -51,7 +60,7 @@ public class LookupJoinPageBuilder
     public boolean isFull()
     {
         return estimatedProbeBlockBytes + buildPageBuilder.getSizeInBytes() >= DEFAULT_MAX_PAGE_SIZE_IN_BYTES ||
-                buildPageBuilder.getPositionCount() >= MAX_BATCH_SIZE ||
+                probeIndexBuilder.size() >= MAX_BATCH_SIZE ||
                 buildPageBuilder.isFull();
     }
 
@@ -65,6 +74,10 @@ public class LookupJoinPageBuilder
         // be aware that probeIndexBuilder will not clear its capacity
         probeIndexBuilder.clear();
         buildPageBuilder.reset();
+        buildIndexBuilder.clear();
+        buildValueIsNull.clear();
+        buildContainsNull = false;
+        lookupSource = null;
         estimatedProbeBlockBytes = 0;
         estimatedProbeRowSize = -1;
         isSequentialProbeIndices = true;
@@ -79,30 +92,38 @@ public class LookupJoinPageBuilder
         appendProbeIndex(probe);
 
         // build side
-        buildPageBuilder.declarePosition();
-        lookupSource.appendTo(joinPosition, buildPageBuilder, 0);
+        //buildPageBuilder.declarePosition();
+        //lookupSource.appendTo(joinPosition, buildPageBuilder, 0);
+        buildIndexBuilder.add(joinPosition);
+        buildValueIsNull.add(false);
+        lookupSource.markVisited(joinPosition);
+        this.lookupSource = lookupSource;
     }
 
     /**
      * append the index for the probe and append nulls for the build
      */
-    public void appendNullForBuild(JoinProbe probe)
+    public void appendNullForBuild(JoinProbe probe, LookupSource lookupSource)
     {
         // probe side
         appendProbeIndex(probe);
 
         // build side
-        buildPageBuilder.declarePosition();
-        for (int i = 0; i < buildOutputChannelCount; i++) {
-            buildPageBuilder.getBlockBuilder(i).appendNull();
-        }
+        //buildPageBuilder.declarePosition();
+        //for (int i = 0; i < buildOutputChannelCount; i++) {
+        //    buildPageBuilder.getBlockBuilder(i).appendNull();
+        //}
+        buildIndexBuilder.add(-1);
+        buildValueIsNull.add(true);
+        buildContainsNull = true;
+        this.lookupSource = lookupSource;
     }
 
     public Page build(JoinProbe probe)
     {
         int[] probeIndices = probeIndexBuilder.toIntArray();
         int length = probeIndices.length;
-        verify(buildPageBuilder.getPositionCount() == length);
+        verify(buildIndexBuilder.size() == length);
 
         int[] probeOutputChannels = probe.getOutputChannels();
         Block[] blocks = new Block[probeOutputChannels.length + buildOutputChannelCount];
@@ -124,12 +145,24 @@ public class LookupJoinPageBuilder
             }
         }
 
-        Page buildPage = buildPageBuilder.build();
+        //Page buildPage = buildPageBuilder.build();
+        //int offset = probeOutputChannels.length;
+        //for (int i = 0; i < buildOutputChannelCount; i++) {
+        //    blocks[offset + i] = buildPage.getBlock(i);
+        //}
+
         int offset = probeOutputChannels.length;
         for (int i = 0; i < buildOutputChannelCount; i++) {
-            blocks[offset + i] = buildPage.getBlock(i);
+            blocks[offset + i] = lookupSource.getBlock(
+                    i,
+                    buildTypes.get(i),
+                    buildIndexBuilder.toLongArray(),
+                    buildContainsNull ? Optional.of(buildValueIsNull.toBooleanArray()) : Optional.empty(),
+                    0,
+                    buildIndexBuilder.size());
         }
-        return new Page(buildPageBuilder.getPositionCount(), blocks);
+
+        return new Page(probeIndexBuilder.size(), blocks);
     }
 
     @Override

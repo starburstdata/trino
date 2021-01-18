@@ -305,7 +305,7 @@ public class LookupJoinOperator
                     }
                     if (!currentProbePositionProducedRow) {
                         currentProbePositionProducedRow = true;
-                        if (!outerJoinCurrentPosition()) {
+                        if (!outerJoinCurrentPosition(lookupSource)) {
                             break;
                         }
                     }
@@ -351,10 +351,10 @@ public class LookupJoinOperator
          *
          * @return whether pageBuilder can still not fill
          */
-        private boolean outerJoinCurrentPosition()
+        private boolean outerJoinCurrentPosition(LookupSource lookupSource)
         {
             if (probeOnOuterSide) {
-                pageBuilder.appendNullForBuild(probe);
+                pageBuilder.appendNullForBuild(probe, lookupSource);
                 return !pageBuilder.isFull();
             }
             return true;
