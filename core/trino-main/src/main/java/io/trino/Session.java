@@ -27,6 +27,7 @@ import io.trino.security.SecurityContext;
 import io.trino.spi.QueryId;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorSession;
+import io.trino.spi.security.ConnectorIdentity;
 import io.trino.spi.security.Identity;
 import io.trino.spi.security.SelectedRole;
 import io.trino.spi.session.ResourceEstimates;
@@ -85,6 +86,8 @@ public final class Session
     private final SessionPropertyManager sessionPropertyManager;
     private final Map<String, String> preparedStatements;
     private final ProtocolHeaders protocolHeaders;
+    private Map<String, Identity> tableIdentityMapping;
+
 
     public Session(
             QueryId queryId,
@@ -150,6 +153,27 @@ public final class Session
         checkArgument(transactionId.isEmpty() || unprocessedCatalogProperties.isEmpty(), "Catalog session properties cannot be set if there is an open transaction");
 
         checkArgument(catalog.isPresent() || schema.isEmpty(), "schema is set but catalog is not");
+        tableIdentityMapping = new HashMap<>();
+    }
+
+    public Identity getIdentity(String table)
+    {
+        return tableIdentityMapping.getOrDefault(table, identity);
+    }
+
+    public Map<String, Identity> getTableIdentityMapping()
+    {
+        return tableIdentityMapping;
+    }
+
+    public void setTableIdentityMapping(Map<String, Identity> tableIdentityMapping)
+    {
+        this.tableIdentityMapping = tableIdentityMapping;
+    }
+
+    public void addTableIdentityMapping(String table, Identity identity)
+    {
+        tableIdentityMapping.putIfAbsent(table, identity);
     }
 
     public QueryId getQueryId()

@@ -1265,6 +1265,7 @@ class StatementAnalyzer
             analyzeFiltersAndMasks(table, name, tableHandle, outputFields, session.getIdentity().getUser());
 
             Scope tableScope = createAndAssignScope(table, scope, outputFields);
+            analysis.addTableIdentityMapping(name.toString(), session.getIdentity());
 
             if (isUpdateQuery) {
                 FieldReference reference = new FieldReference(outputFields.size() - 1);

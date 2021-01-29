@@ -369,6 +369,9 @@ public class BackgroundHiveSplitLoader
         Configuration configuration = hdfsEnvironment.getConfiguration(hdfsContext, path);
         InputFormat<?, ?> inputFormat = getInputFormat(configuration, schema, false);
         FileSystem fs = hdfsEnvironment.getFileSystem(hdfsContext, path);
+        //Now that hdfsContext should return the identity mapped to the table during analysis, view impersonation should work
+        //
+        //
         boolean s3SelectPushdownEnabled = shouldEnablePushdownForTable(session, table, path.toString(), partition.getPartition());
 
         // S3 Select pushdown works at the granularity of individual S3 objects,

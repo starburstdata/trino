@@ -22,6 +22,7 @@ import io.trino.spi.security.ConnectorIdentity;
 import io.trino.spi.type.TimeZoneKey;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -40,6 +41,7 @@ public class FullConnectorSession
     private final CatalogName catalogName;
     private final String catalog;
     private final SessionPropertyManager sessionPropertyManager;
+    private final Map<String, ConnectorIdentity> tableIdentityMapping;
 
     public FullConnectorSession(Session session, ConnectorIdentity identity)
     {
@@ -49,6 +51,7 @@ public class FullConnectorSession
         this.catalogName = null;
         this.catalog = null;
         this.sessionPropertyManager = null;
+        tableIdentityMapping = new HashMap<>();
     }
 
     public FullConnectorSession(
@@ -65,6 +68,25 @@ public class FullConnectorSession
         this.catalogName = requireNonNull(catalogName, "catalogName is null");
         this.catalog = requireNonNull(catalog, "catalog is null");
         this.sessionPropertyManager = requireNonNull(sessionPropertyManager, "sessionPropertyManager is null");
+        tableIdentityMapping = new HashMap<>();
+    }
+
+    public FullConnectorSession(
+            Session session,
+            ConnectorIdentity identity,
+            Map<String, String> properties,
+            CatalogName catalogName,
+            String catalog,
+            SessionPropertyManager sessionPropertyManager,
+            Map<String, ConnectorIdentity> tableIdentityMapping)
+    {
+        this.session = requireNonNull(session, "session is null");
+        this.identity = requireNonNull(identity, "identity is null");
+        this.properties = ImmutableMap.copyOf(requireNonNull(properties, "properties is null"));
+        this.catalogName = requireNonNull(catalogName, "catalogName is null");
+        this.catalog = requireNonNull(catalog, "catalog is null");
+        this.sessionPropertyManager = requireNonNull(sessionPropertyManager, "sessionPropertyManager is null");
+        this.tableIdentityMapping = tableIdentityMapping;
     }
 
     public Session getSession()
@@ -88,6 +110,18 @@ public class FullConnectorSession
     public ConnectorIdentity getIdentity()
     {
         return identity;
+    }
+
+    @Override
+    public ConnectorIdentity getIdentity(String table)
+    {
+        return tableIdentityMapping.getOrDefault(table, identity);
+    }
+
+    @Override
+    public Map<String, ConnectorIdentity> getTableIdentityMapping()
+    {
+        return tableIdentityMapping;
     }
 
     @Override

@@ -184,6 +184,8 @@ public class SqlQueryExecution
 
             // analyze query
             this.analysis = analyze(preparedQuery, stateMachine, metadata, groupProvider, accessControl, sqlParser, queryExplainer, warningCollector);
+            getSession().setTableIdentityMapping(analysis.getTableIdentityMapping());
+            //stow the mapping inside the session so that I can reference it in the connector. Kind of hacky since its query dependent, not session dependent
 
             stateMachine.addStateChangeListener(state -> {
                 if (!state.isDone()) {
@@ -261,6 +263,7 @@ public class SqlQueryExecution
                 warningCollector,
                 statsCalculator);
         Analysis analysis = analyzer.analyze(preparedQuery.getStatement());
+
 
         stateMachine.setUpdateType(analysis.getUpdateType());
         stateMachine.setReferencedTables(analysis.getReferencedTables());

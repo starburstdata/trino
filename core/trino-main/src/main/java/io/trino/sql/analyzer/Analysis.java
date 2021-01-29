@@ -71,6 +71,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -183,6 +184,7 @@ public class Analysis
     private Optional<Insert> insert = Optional.empty();
     private Optional<RefreshMaterializedViewAnalysis> refreshMaterializedView = Optional.empty();
     private Optional<TableHandle> analyzeTarget = Optional.empty();
+    private final Map<String, Identity> tableIdentityMapping = new HashMap<>();
 
     // for describe input and describe output
     private final boolean isDescribe;
@@ -198,6 +200,16 @@ public class Analysis
         this.root = root;
         this.parameters = ImmutableMap.copyOf(requireNonNull(parameters, "parameterMap is null"));
         this.isDescribe = isDescribe;
+    }
+
+    public Map<String, Identity> getTableIdentityMapping()
+    {
+        return tableIdentityMapping;
+    }
+
+    public void addTableIdentityMapping(String table, Identity identity)
+    {
+        tableIdentityMapping.putIfAbsent(table, identity);
     }
 
     public Statement getStatement()

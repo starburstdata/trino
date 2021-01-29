@@ -18,6 +18,7 @@ import io.trino.spi.type.TimeZoneKey;
 
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 public interface ConnectorSession
@@ -32,6 +33,10 @@ public interface ConnectorSession
     }
 
     ConnectorIdentity getIdentity();
+
+    ConnectorIdentity getIdentity(String table);
+
+    Map<String, ConnectorIdentity> getTableIdentityMapping();
 
     TimeZoneKey getTimeZoneKey();
 
