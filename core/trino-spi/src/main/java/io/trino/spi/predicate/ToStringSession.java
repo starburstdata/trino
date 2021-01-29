@@ -19,7 +19,9 @@ import io.trino.spi.security.ConnectorIdentity;
 import io.trino.spi.type.TimeZoneKey;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 import static io.trino.spi.StandardErrorCode.INVALID_SESSION_PROPERTY;
@@ -50,6 +52,18 @@ enum ToStringSession
     public ConnectorIdentity getIdentity()
     {
         return ConnectorIdentity.ofUser("to_string");
+    }
+
+    @Override
+    public ConnectorIdentity getIdentity(String table)
+    {
+        return ConnectorIdentity.ofUser("to_string");
+    }
+
+    @Override
+    public Map<String, ConnectorIdentity> getTableIdentityMapping()
+    {
+        return new HashMap<>();
     }
 
     @Override

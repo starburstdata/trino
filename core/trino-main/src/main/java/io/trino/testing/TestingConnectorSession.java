@@ -24,6 +24,7 @@ import io.trino.spi.session.PropertyMetadata;
 import io.trino.spi.type.TimeZoneKey;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -88,6 +89,18 @@ public class TestingConnectorSession
     public ConnectorIdentity getIdentity()
     {
         return identity;
+    }
+
+    @Override
+    public ConnectorIdentity getIdentity(String table)
+    {
+        return identity;
+    }
+
+    @Override
+    public Map<String, ConnectorIdentity> getTableIdentityMapping()
+    {
+        return new HashMap<>();
     }
 
     @Override

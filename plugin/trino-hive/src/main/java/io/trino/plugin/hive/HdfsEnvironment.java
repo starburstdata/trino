@@ -27,8 +27,6 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import javax.inject.Inject;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
@@ -113,7 +111,7 @@ public class HdfsEnvironment
 
         public HdfsContext(ConnectorIdentity identity)
         {
-            this.identity = requireNonNull( identity, "identity is null");
+            this.identity = requireNonNull(identity, "identity is null");
             this.source = Optional.empty();
             this.queryId = Optional.empty();
             this.schemaName = Optional.empty();
@@ -136,7 +134,7 @@ public class HdfsEnvironment
             requireNonNull(session, "session is null");
             requireNonNull(schemaName, "schemaName is null");
             requireNonNull(tableName, "tableName is null");
-            this.identity = requireNonNull(session.getIdentity( "hive." + schemaName + "." + tableName)  , "session.getIdentity() is null");
+            this.identity = requireNonNull(session.getIdentity("hive." + schemaName + "." + tableName), "session.getIdentity() is null");
             //TODO: figure out how to get catalogName in there
             this.source = requireNonNull(session.getSource(), "session.getSource()");
             this.queryId = Optional.of(session.getQueryId());

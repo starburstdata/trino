@@ -264,7 +264,6 @@ public class SqlQueryExecution
                 statsCalculator);
         Analysis analysis = analyzer.analyze(preparedQuery.getStatement());
 
-
         stateMachine.setUpdateType(analysis.getUpdateType());
         stateMachine.setReferencedTables(analysis.getReferencedTables());
         stateMachine.setRoutines(analysis.getRoutines());
