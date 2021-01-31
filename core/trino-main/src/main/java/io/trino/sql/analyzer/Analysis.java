@@ -34,6 +34,7 @@ import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.eventlistener.ColumnInfo;
 import io.trino.spi.eventlistener.RoutineInfo;
 import io.trino.spi.eventlistener.TableInfo;
+import io.trino.spi.security.ConnectorIdentity;
 import io.trino.spi.security.Identity;
 import io.trino.spi.security.ViewExpression;
 import io.trino.spi.type.Type;
@@ -184,7 +185,7 @@ public class Analysis
     private Optional<Insert> insert = Optional.empty();
     private Optional<RefreshMaterializedViewAnalysis> refreshMaterializedView = Optional.empty();
     private Optional<TableHandle> analyzeTarget = Optional.empty();
-    private final Map<String, Identity> tableIdentityMapping = new HashMap<>();
+    private final Map<String, ConnectorIdentity> tableIdentityMapping = new HashMap<>();
 
     // for describe input and describe output
     private final boolean isDescribe;
@@ -202,12 +203,12 @@ public class Analysis
         this.isDescribe = isDescribe;
     }
 
-    public Map<String, Identity> getTableIdentityMapping()
+    public Map<String, ConnectorIdentity> getTableIdentityMapping()
     {
         return tableIdentityMapping;
     }
 
-    public void addTableIdentityMapping(String table, Identity identity)
+    public void addTableIdentityMapping(String table, ConnectorIdentity identity)
     {
         tableIdentityMapping.putIfAbsent(table, identity);
     }

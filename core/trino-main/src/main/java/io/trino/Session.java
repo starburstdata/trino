@@ -27,6 +27,7 @@ import io.trino.security.SecurityContext;
 import io.trino.spi.QueryId;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorSession;
+import io.trino.spi.security.ConnectorIdentity;
 import io.trino.spi.security.Identity;
 import io.trino.spi.security.SelectedRole;
 import io.trino.spi.session.ResourceEstimates;
@@ -85,7 +86,7 @@ public final class Session
     private final SessionPropertyManager sessionPropertyManager;
     private final Map<String, String> preparedStatements;
     private final ProtocolHeaders protocolHeaders;
-    private Map<String, Identity> tableIdentityMapping;
+    private Map<String, ConnectorIdentity> tableIdentityMapping;
 
     public Session(
             QueryId queryId,
@@ -154,22 +155,22 @@ public final class Session
         tableIdentityMapping = new HashMap<>();
     }
 
-    public Identity getIdentity(String table)
+    public ConnectorIdentity getIdentity(String table)
     {
-        return tableIdentityMapping.getOrDefault(table, identity);
+        return tableIdentityMapping.getOrDefault(table, identity.toConnectorIdentity());
     }
 
-    public Map<String, Identity> getTableIdentityMapping()
+    public Map<String, ConnectorIdentity> getTableIdentityMapping()
     {
         return tableIdentityMapping;
     }
 
-    public void setTableIdentityMapping(Map<String, Identity> tableIdentityMapping)
+    public void setTableIdentityMapping(Map<String, ConnectorIdentity> tableIdentityMapping)
     {
         this.tableIdentityMapping = tableIdentityMapping;
     }
 
-    public void addTableIdentityMapping(String table, Identity identity)
+    public void addTableIdentityMapping(String table, ConnectorIdentity identity)
     {
         tableIdentityMapping.putIfAbsent(table, identity);
     }

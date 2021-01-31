@@ -22,7 +22,6 @@ import io.trino.spi.security.ConnectorIdentity;
 import io.trino.spi.type.TimeZoneKey;
 
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -51,7 +50,7 @@ public class FullConnectorSession
         this.catalogName = null;
         this.catalog = null;
         this.sessionPropertyManager = null;
-        tableIdentityMapping = new HashMap<>();
+        this.tableIdentityMapping = session.getTableIdentityMapping();
     }
 
     public FullConnectorSession(
@@ -68,7 +67,7 @@ public class FullConnectorSession
         this.catalogName = requireNonNull(catalogName, "catalogName is null");
         this.catalog = requireNonNull(catalog, "catalog is null");
         this.sessionPropertyManager = requireNonNull(sessionPropertyManager, "sessionPropertyManager is null");
-        tableIdentityMapping = new HashMap<>();
+        tableIdentityMapping = session.getTableIdentityMapping();
     }
 
     public FullConnectorSession(
