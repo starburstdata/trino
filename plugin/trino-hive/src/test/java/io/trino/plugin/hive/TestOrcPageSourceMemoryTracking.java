@@ -557,6 +557,7 @@ public class TestOrcPageSourceMemoryTracking
                     new Configuration(false),
                     session,
                     fileSplit.getPath(),
+                    Optional.empty(),
                     OptionalInt.empty(),
                     fileSplit.getStart(),
                     fileSplit.getLength(),

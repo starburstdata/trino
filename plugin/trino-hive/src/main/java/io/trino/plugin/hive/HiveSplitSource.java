@@ -381,7 +381,8 @@ class HiveSplitSource
                         internalSplit.getBucketConversion(),
                         internalSplit.getBucketValidation(),
                         internalSplit.isS3SelectPushdownEnabled(),
-                        internalSplit.getAcidInfo()));
+                        internalSplit.getAcidInfo(),
+                        internalSplit.getUser()));
 
                 internalSplit.increaseStart(splitBytes);
 

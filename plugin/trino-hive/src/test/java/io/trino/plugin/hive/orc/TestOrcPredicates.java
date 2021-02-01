@@ -210,6 +210,7 @@ public class TestOrcPredicates
                 new Configuration(false),
                 session,
                 split.getPath(),
+                Optional.empty(),
                 OptionalInt.empty(),
                 split.getStart(),
                 split.getLength(),

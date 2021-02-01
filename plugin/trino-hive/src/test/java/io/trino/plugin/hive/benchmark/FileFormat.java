@@ -396,6 +396,7 @@ public enum FileFormat
                 Optional.empty(),
                 Optional.empty(),
                 false,
+                Optional.empty(),
                 Optional.empty());
 
         ConnectorPageSource hivePageSource = factory.createPageSource(
@@ -436,6 +437,7 @@ public enum FileFormat
                 conf,
                 session,
                 new Path(targetFile.getAbsolutePath()),
+                Optional.empty(),
                 0,
                 targetFile.length(),
                 targetFile.length(),

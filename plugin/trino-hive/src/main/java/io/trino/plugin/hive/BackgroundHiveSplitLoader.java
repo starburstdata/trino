@@ -460,7 +460,8 @@ public class BackgroundHiveSplitLoader
                 getMaxInitialSplitSize(session),
                 isForceLocalScheduling(session),
                 s3SelectPushdownEnabled,
-                transaction);
+                transaction,
+                Optional.of(hdfsContext.getIdentity().getUser()));
 
         // To support custom input formats, we want to call getSplits()
         // on the input format to obtain file splits.
@@ -627,7 +628,8 @@ public class BackgroundHiveSplitLoader
                     getMaxInitialSplitSize(session),
                     isForceLocalScheduling(session),
                     s3SelectPushdownEnabled,
-                    transaction);
+                    transaction,
+                    Optional.of(hdfsContext.getIdentity().getUser()));
             lastResult = addSplitsToSource(targetSplits, splitFactory);
             if (stopped) {
                 return COMPLETED_FUTURE;
@@ -683,7 +685,8 @@ public class BackgroundHiveSplitLoader
                 getMaxInitialSplitSize(session),
                 isForceLocalScheduling(session),
                 s3SelectPushdownEnabled,
-                transaction);
+                transaction,
+                Optional.of(hdfsContext.getIdentity().getUser()));
         return Optional.of(locatedFileStatuses.stream()
                 .map(locatedFileStatus -> splitFactory.createInternalHiveSplit(locatedFileStatus, OptionalInt.empty(), splittable, Optional.empty()))
                 .filter(Optional::isPresent)

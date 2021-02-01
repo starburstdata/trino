@@ -60,6 +60,7 @@ public class InternalHiveSplit
     private final Optional<BucketValidation> bucketValidation;
     private final boolean s3SelectPushdownEnabled;
     private final Optional<AcidInfo> acidInfo;
+    private final Optional<String> user;
 
     private long start;
     private int currentBlockIndex;
@@ -82,7 +83,8 @@ public class InternalHiveSplit
             Optional<BucketConversion> bucketConversion,
             Optional<BucketValidation> bucketValidation,
             boolean s3SelectPushdownEnabled,
-            Optional<AcidInfo> acidInfo)
+            Optional<AcidInfo> acidInfo,
+            Optional<String> user)
     {
         checkArgument(start >= 0, "start must be positive");
         checkArgument(end >= 0, "length must be positive");
@@ -116,6 +118,12 @@ public class InternalHiveSplit
         this.bucketValidation = bucketValidation;
         this.s3SelectPushdownEnabled = s3SelectPushdownEnabled;
         this.acidInfo = acidInfo;
+        this.user = user;
+    }
+
+    public Optional<String> getUser()
+    {
+        return user;
     }
 
     public String getPath()

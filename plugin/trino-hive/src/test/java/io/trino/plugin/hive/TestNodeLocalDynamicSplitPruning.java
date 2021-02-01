@@ -106,6 +106,7 @@ public class TestNodeLocalDynamicSplitPruning
                 Optional.empty(),
                 Optional.empty(),
                 false,
+                Optional.empty(),
                 Optional.empty());
 
         TableHandle tableHandle = new TableHandle(

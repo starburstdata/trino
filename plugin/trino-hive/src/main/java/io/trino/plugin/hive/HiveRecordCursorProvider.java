@@ -32,6 +32,7 @@ public interface HiveRecordCursorProvider
             Configuration configuration,
             ConnectorSession session,
             Path path,
+            Optional<String> user,
             long start,
             long length,
             long fileSize,

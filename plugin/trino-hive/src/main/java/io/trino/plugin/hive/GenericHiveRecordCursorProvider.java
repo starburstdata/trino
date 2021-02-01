@@ -64,6 +64,7 @@ public class GenericHiveRecordCursorProvider
             Configuration configuration,
             ConnectorSession session,
             Path path,
+            Optional<String> user,
             long start,
             long length,
             long fileSize,
@@ -77,7 +78,7 @@ public class GenericHiveRecordCursorProvider
 
         // make sure the FileSystem is created with the proper Configuration object
         try {
-            this.hdfsEnvironment.getFileSystem(session.getUser(), path, configuration);
+            this.hdfsEnvironment.getFileSystem(user.orElse(session.getUser()), path, configuration);
         }
         catch (IOException e) {
             throw new TrinoException(HIVE_FILESYSTEM_ERROR, "Failed getting FileSystem: " + path, e);
@@ -91,7 +92,7 @@ public class GenericHiveRecordCursorProvider
                         .collect(toUnmodifiableList()))
                 .orElse(columns);
 
-        RecordCursor cursor = hdfsEnvironment.doAs(session.getUser(), () -> {
+        RecordCursor cursor = hdfsEnvironment.doAs(user.orElse(session.getUser()), () -> {
             RecordReader<?, ?> recordReader = HiveUtil.createRecordReader(
                     configuration,
                     path,

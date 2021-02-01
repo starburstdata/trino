@@ -73,6 +73,7 @@ public class InternalHiveSplitFactory
     private final boolean s3SelectPushdownEnabled;
     private final AcidTransaction transaction;
     private final Map<Integer, AtomicInteger> bucketStatementCounters = new ConcurrentHashMap<>();
+    private final Optional<String> user;
 
     public InternalHiveSplitFactory(
             FileSystem fileSystem,
@@ -88,7 +89,8 @@ public class InternalHiveSplitFactory
             DataSize minimumTargetSplitSize,
             boolean forceLocalScheduling,
             boolean s3SelectPushdownEnabled,
-            AcidTransaction transaction)
+            AcidTransaction transaction,
+            Optional<String> user)
     {
         this.fileSystem = requireNonNull(fileSystem, "fileSystem is null");
         this.partitionName = requireNonNull(partitionName, "partitionName is null");
@@ -105,6 +107,7 @@ public class InternalHiveSplitFactory
         this.transaction = requireNonNull(transaction, "transaction is null");
         this.minimumTargetSplitSizeInBytes = requireNonNull(minimumTargetSplitSize, "minimumTargetSplitSize is null").toBytes();
         checkArgument(minimumTargetSplitSizeInBytes > 0, "minimumTargetSplitSize must be > 0, found: %s", minimumTargetSplitSize);
+        this.user = user;
     }
 
     public String getPartitionName()
@@ -226,7 +229,8 @@ public class InternalHiveSplitFactory
                 bucketConversion,
                 bucketValidation,
                 s3SelectPushdownEnabled && S3SelectPushdown.isCompressionCodecSupported(inputFormat, path),
-                acidInfo));
+                acidInfo,
+                user));
     }
 
     private static void checkBlocks(Path path, List<InternalHiveBlock> blocks, long start, long length)

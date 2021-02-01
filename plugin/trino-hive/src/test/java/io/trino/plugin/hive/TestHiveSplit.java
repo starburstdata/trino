@@ -80,7 +80,8 @@ public class TestHiveSplit
                         ImmutableList.of(createBaseColumn("col", 5, HIVE_LONG, BIGINT, ColumnType.REGULAR, Optional.of("comment"))))),
                 Optional.empty(),
                 false,
-                Optional.of(acidInfo));
+                Optional.of(acidInfo),
+                Optional.empty());
 
         String json = codec.toJson(expected);
         HiveSplit actual = codec.fromJson(json);

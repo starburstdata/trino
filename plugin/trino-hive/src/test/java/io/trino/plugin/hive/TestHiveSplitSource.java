@@ -339,6 +339,7 @@ public class TestHiveSplitSource
                     Optional.empty(),
                     Optional.empty(),
                     false,
+                    Optional.empty(),
                     Optional.empty());
         }
 
