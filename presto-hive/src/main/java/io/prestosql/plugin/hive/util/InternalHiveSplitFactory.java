@@ -14,6 +14,7 @@
 package io.prestosql.plugin.hive.util;
 
 import com.google.common.collect.ImmutableList;
+import io.airlift.log.Logger;
 import io.airlift.units.DataSize;
 import io.prestosql.plugin.hive.AcidInfo;
 import io.prestosql.plugin.hive.HiveColumnHandle;
@@ -73,6 +74,7 @@ public class InternalHiveSplitFactory
     private final boolean s3SelectPushdownEnabled;
     private final AcidTransaction transaction;
     private final Map<Integer, AtomicInteger> bucketStatementCounters = new ConcurrentHashMap<>();
+    private static final Logger log = Logger.get(InternalHiveSplitFactory.class);
 
     public InternalHiveSplitFactory(
             FileSystem fileSystem,
@@ -194,7 +196,16 @@ public class InternalHiveSplitFactory
             blockBuilder.add(new InternalHiveBlock(blockStart, blockEnd, getHostAddresses(blockLocation)));
         }
         List<InternalHiveBlock> blocks = blockBuilder.build();
-        checkBlocks(path, blocks, start, length);
+        try {
+            checkBlocks(path, blocks, start, length);
+        }
+        catch (IllegalArgumentException e) {
+            log.debug("Printing corrupt block list associated with " + e.getMessage() + " for path " + path.getName());
+            for (int i = 1; i < blocks.size(); i++) {
+                log.debug(String.format("Block %d. Start: %d. End: %d", i, blocks.get(i).getStart(), blocks.get(i).getEnd()));
+            }
+            throw e;
+        }
 
         if (!splittable) {
             // not splittable, use the hosts from the first block if it exists
