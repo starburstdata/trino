@@ -119,7 +119,8 @@ public final class TaskTestUtils
                 new InMemoryNodeManager(),
                 new NodeSchedulerConfig().setIncludeCoordinator(true),
                 new NodeTaskMap(finalizerService)));
-        NodePartitioningManager nodePartitioningManager = new NodePartitioningManager(nodeScheduler, blockTypeOperators, new PartitioningProviderManager());
+        PartitioningProviderManager partitioningProviderManager = new PartitioningProviderManager();
+        NodePartitioningManager nodePartitioningManager = new NodePartitioningManager(nodeScheduler, blockTypeOperators, partitioningProviderManager);
 
         PageFunctionCompiler pageFunctionCompiler = new PageFunctionCompiler(metadata, 0);
         return new LocalExecutionPlanner(
@@ -128,6 +129,7 @@ public final class TaskTestUtils
                 Optional.empty(),
                 pageSourceManager,
                 new IndexManager(),
+                partitioningProviderManager,
                 nodePartitioningManager,
                 new PageSinkManager(),
                 new MockExchangeClientSupplier(),

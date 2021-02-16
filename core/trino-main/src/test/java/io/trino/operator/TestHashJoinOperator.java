@@ -44,6 +44,7 @@ import io.trino.spiller.PartitioningSpillerFactory;
 import io.trino.spiller.SingleStreamSpiller;
 import io.trino.spiller.SingleStreamSpillerFactory;
 import io.trino.sql.gen.JoinFilterFunctionCompiler.JoinFilterFunctionFactory;
+import io.trino.sql.planner.PartitioningProviderManager;
 import io.trino.sql.planner.plan.PlanNodeId;
 import io.trino.testing.MaterializedResult;
 import io.trino.testing.TestingTaskContext;
@@ -1555,6 +1556,8 @@ public class TestHashJoinOperator
 
         int partitionCount = parallelBuild ? PARTITION_COUNT : 1;
         LocalExchangeFactory localExchangeFactory = new LocalExchangeFactory(
+                new PartitioningProviderManager(),
+                taskContext.getSession(),
                 FIXED_HASH_DISTRIBUTION,
                 partitionCount,
                 buildPages.getTypes(),

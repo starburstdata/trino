@@ -246,6 +246,7 @@ public class LocalQueryRunner
     private final SplitManager splitManager;
     private final PageSourceManager pageSourceManager;
     private final IndexManager indexManager;
+    private final PartitioningProviderManager partitioningProviderManager;
     private final NodePartitioningManager nodePartitioningManager;
     private final PageSinkManager pageSinkManager;
     private final TransactionManager transactionManager;
@@ -316,7 +317,7 @@ public class LocalQueryRunner
                 yieldExecutor,
                 catalogManager,
                 notificationExecutor);
-        PartitioningProviderManager partitioningProviderManager = new PartitioningProviderManager();
+        this.partitioningProviderManager = new PartitioningProviderManager();
         this.nodePartitioningManager = new NodePartitioningManager(nodeScheduler, blockTypeOperators, partitioningProviderManager);
 
         this.metadata = new MetadataManager(
@@ -747,6 +748,7 @@ public class LocalQueryRunner
                 Optional.empty(),
                 pageSourceManager,
                 indexManager,
+                partitioningProviderManager,
                 nodePartitioningManager,
                 pageSinkManager,
                 null,

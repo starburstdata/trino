@@ -314,6 +314,7 @@ public class LocalExecutionPlanner
     private final Optional<ExplainAnalyzeContext> explainAnalyzeContext;
     private final PageSourceProvider pageSourceProvider;
     private final IndexManager indexManager;
+    private final PartitioningProviderManager partitioningProviderManager;
     private final NodePartitioningManager nodePartitioningManager;
     private final PageSinkManager pageSinkManager;
     private final ExchangeClientSupplier exchangeClientSupplier;
@@ -343,6 +344,7 @@ public class LocalExecutionPlanner
             Optional<ExplainAnalyzeContext> explainAnalyzeContext,
             PageSourceProvider pageSourceProvider,
             IndexManager indexManager,
+            PartitioningProviderManager partitioningProviderManager,
             NodePartitioningManager nodePartitioningManager,
             PageSinkManager pageSinkManager,
             ExchangeClientSupplier exchangeClientSupplier,
@@ -365,6 +367,7 @@ public class LocalExecutionPlanner
         this.explainAnalyzeContext = requireNonNull(explainAnalyzeContext, "explainAnalyzeContext is null");
         this.pageSourceProvider = requireNonNull(pageSourceProvider, "pageSourceProvider is null");
         this.indexManager = requireNonNull(indexManager, "indexManager is null");
+        this.partitioningProviderManager = requireNonNull(partitioningProviderManager, "partitioningProviderManager is null");
         this.nodePartitioningManager = requireNonNull(nodePartitioningManager, "nodePartitioningManager is null");
         this.exchangeClientSupplier = exchangeClientSupplier;
         this.metadata = requireNonNull(metadata, "metadata is null");
@@ -2744,6 +2747,8 @@ public class LocalExecutionPlanner
             int operatorsCount = subContext.getDriverInstanceCount().orElse(1);
             List<Type> types = getSourceOperatorTypes(node, context.getTypes());
             LocalExchangeFactory exchangeFactory = new LocalExchangeFactory(
+                    partitioningProviderManager,
+                    session,
                     node.getPartitioningScheme().getPartitioning().getHandle(),
                     operatorsCount,
                     types,
@@ -2818,6 +2823,8 @@ public class LocalExecutionPlanner
             }
 
             LocalExchangeFactory localExchangeFactory = new LocalExchangeFactory(
+                    partitioningProviderManager,
+                    session,
                     node.getPartitioningScheme().getPartitioning().getHandle(),
                     driverInstanceCount,
                     types,
