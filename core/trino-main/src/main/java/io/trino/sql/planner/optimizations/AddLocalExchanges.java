@@ -95,7 +95,6 @@ import static io.trino.sql.planner.plan.ExchangeNode.gatheringExchange;
 import static io.trino.sql.planner.plan.ExchangeNode.mergingExchange;
 import static io.trino.sql.planner.plan.ExchangeNode.partitionedExchange;
 import static java.util.Objects.requireNonNull;
-import static java.util.function.Predicate.isEqual;
 import static java.util.stream.Collectors.toList;
 
 public class AddLocalExchanges
@@ -536,24 +535,14 @@ public class AddLocalExchanges
         {
             StreamPreferredProperties requiredProperties;
             StreamPreferredProperties preferredProperties;
-            // TODO: add support for arbitrary partitioning in local exchanges
             if (getTaskWriterCount(session) > 1) {
-                boolean hasFixedHashDistribution = node.getPartitioningScheme()
-                        .map(scheme -> scheme.getPartitioning().getHandle())
-                        .filter(isEqual(FIXED_HASH_DISTRIBUTION))
-                        .isPresent();
                 if (node.getPartitioningScheme().isEmpty()) {
                     requiredProperties = fixedParallelism();
-                    preferredProperties = fixedParallelism();
-                }
-                else if (hasFixedHashDistribution) {
-                    requiredProperties = exactlyPartitionedOn(node.getPartitioningScheme().get().getPartitioning().getColumns());
-                    preferredProperties = requiredProperties;
                 }
                 else {
-                    requiredProperties = singleStream();
-                    preferredProperties = defaultParallelism(session);
+                    requiredProperties = exactlyPartitionedOn(node.getPartitioningScheme().get().getPartitioning().getColumns());
                 }
+                preferredProperties = requiredProperties;
             }
             else {
                 requiredProperties = singleStream();

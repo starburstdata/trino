@@ -23,6 +23,7 @@ import io.trino.plugin.tpch.TpchPartitioningHandle;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorNewTableLayout;
 import io.trino.sql.planner.assertions.BasePlanTest;
+import io.trino.sql.planner.plan.ProjectNode;
 import io.trino.sql.planner.plan.TableWriterNode;
 import io.trino.testing.LocalQueryRunner;
 import org.testng.annotations.Test;
@@ -39,7 +40,6 @@ import static io.trino.sql.planner.assertions.PlanMatchPattern.node;
 import static io.trino.sql.planner.assertions.PlanMatchPattern.values;
 import static io.trino.sql.planner.plan.ExchangeNode.Scope.LOCAL;
 import static io.trino.sql.planner.plan.ExchangeNode.Scope.REMOTE;
-import static io.trino.sql.planner.plan.ExchangeNode.Type.GATHER;
 import static io.trino.sql.planner.plan.ExchangeNode.Type.REPARTITION;
 import static io.trino.testing.TestingSession.testSessionBuilder;
 
@@ -62,6 +62,10 @@ public class TestInsert
                                 return new MockConnectorTableHandle(schemaTableName);
                             }
 
+                            if (schemaTableName.getTableName().equals("test_table_required_partitioning")) {
+                                return new MockConnectorTableHandle(schemaTableName);
+                            }
+
                             return null;
                         })
                         .withGetColumns(name -> ImmutableList.of(
@@ -70,6 +74,10 @@ public class TestInsert
                         .withGetInsertLayout((session, tableName) -> {
                             if (tableName.getTableName().equals("test_table_preferred_partitioning")) {
                                 return Optional.of(new ConnectorNewTableLayout(ImmutableList.of("column1")));
+                            }
+
+                            if (tableName.getTableName().equals("test_table_required_partitioning")) {
+                                return Optional.of(new ConnectorNewTableLayout(new TpchPartitioningHandle("orders", 10), ImmutableList.of("column1")));
                             }
 
                             return Optional.empty();
@@ -122,6 +130,27 @@ public class TestInsert
     }
 
     @Test
+    public void testInsertWithRequiredPartitioning()
+    {
+        testInsertWithRequiredPartitioning(withPreferredPartitioning());
+        testInsertWithRequiredPartitioning(withoutPreferredPartitioning());
+    }
+
+    private void testInsertWithRequiredPartitioning(Session session)
+    {
+        assertDistributedPlan(
+                "INSERT into test_table_required_partitioning VALUES (1, 2)",
+                withoutPreferredPartitioning(),
+                anyTree(
+                        node(TableWriterNode.class,
+                                node(ProjectNode.class,
+                                        exchange(LOCAL, REPARTITION, ImmutableList.of(), ImmutableSet.of("column1"),
+                                                exchange(REMOTE, REPARTITION, ImmutableList.of(), ImmutableSet.of("column1"),
+                                                        node(ProjectNode.class,
+                                                                values("column1", "column2"))))))));
+    }
+
+    @Test
     public void testCreateTableAsSelectWithPreferredPartitioning()
     {
         assertDistributedPlan(
@@ -165,14 +194,22 @@ public class TestInsert
     @Test
     public void testCreateTableAsSelectWithRequiredPartitioning()
     {
+        testCreateTableAsSelectWithRequiredPartitioning(withPreferredPartitioning());
+        testCreateTableAsSelectWithRequiredPartitioning(withoutPreferredPartitioning());
+    }
+
+    private void testCreateTableAsSelectWithRequiredPartitioning(Session session)
+    {
         assertDistributedPlan(
                 "CREATE TABLE new_test_table_required_partitioning (column1, column2) AS SELECT * FROM (VALUES (1, 2)) t(column1, column2)",
-                withPreferredPartitioning(),
+                session,
                 anyTree(
                         node(TableWriterNode.class,
-                                exchange(LOCAL, GATHER, ImmutableList.of(), ImmutableSet.of(),
-                                        exchange(REMOTE, REPARTITION, ImmutableList.of(), ImmutableSet.of("column1"),
-                                                values("column1", "column2"))))));
+                                node(ProjectNode.class,
+                                        exchange(LOCAL, REPARTITION, ImmutableList.of(), ImmutableSet.of("column1"),
+                                                exchange(REMOTE, REPARTITION, ImmutableList.of(), ImmutableSet.of("column1"),
+                                                        node(ProjectNode.class,
+                                                                values("column1", "column2"))))))));
     }
 
     @Test

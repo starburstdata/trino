@@ -2011,7 +2011,11 @@ public class TestHiveIntegrationSmokeTest
 
         assertQuery("SELECT * from " + tableName, "VALUES ('a', 'b', 'c'), ('aa', 'bb', 'cc'), ('aaa', 'bbb', 'ccc')");
 
-        assertUpdate(parallelWriter, "INSERT INTO " + tableName + " VALUES ('a0', 'b0', 'c0')", 1);
+        assertUpdate(
+                parallelWriter,
+                "INSERT INTO " + tableName + " VALUES ('a0', 'b0', 'c0')",
+                1,
+                assertLocalRepartitionedExchangesCount(1));
         assertUpdate(parallelWriter, "INSERT INTO " + tableName + " VALUES ('a1', 'b1', 'c1')", 1);
 
         assertQuery("SELECT * from " + tableName, "VALUES ('a', 'b', 'c'), ('aa', 'bb', 'cc'), ('aaa', 'bbb', 'ccc'), ('a0', 'b0', 'c0'), ('a1', 'b1', 'c1')");
@@ -5533,6 +5537,33 @@ public class TestHiveIntegrationSmokeTest
                         "Expected [\n%s\n] remote exchanges but found [\n%s\n] remote exchanges. Actual plan is [\n\n%s\n]",
                         expectedRemoteExchangesCount,
                         actualRemoteExchangesCount,
+                        formattedPlan));
+            }
+        };
+    }
+
+    private Consumer<Plan> assertLocalRepartitionedExchangesCount(int expectedLocalExchangesCount)
+    {
+        return plan -> {
+            int actualLocalExchangesCount = searchFrom(plan.getRoot())
+                    .where(node -> {
+                        if (!(node instanceof ExchangeNode)) {
+                            return false;
+                        }
+
+                        ExchangeNode exchangeNode = (ExchangeNode) node;
+                        return exchangeNode.getScope() == ExchangeNode.Scope.LOCAL && exchangeNode.getType() == ExchangeNode.Type.REPARTITION;
+                    })
+                    .findAll()
+                    .size();
+            if (actualLocalExchangesCount != expectedLocalExchangesCount) {
+                Session session = getSession();
+                Metadata metadata = getDistributedQueryRunner().getCoordinator().getMetadata();
+                String formattedPlan = textLogicalPlan(plan.getRoot(), plan.getTypes(), metadata, StatsAndCosts.empty(), session, 0, false);
+                throw new AssertionError(format(
+                        "Expected [\n%s\n] local repartitioned exchanges but found [\n%s\n] local repartitioned exchanges. Actual plan is [\n\n%s\n]",
+                        expectedLocalExchangesCount,
+                        actualLocalExchangesCount,
                         formattedPlan));
             }
         };
