@@ -141,6 +141,7 @@ import io.trino.sql.planner.LocalExecutionPlanner;
 import io.trino.sql.planner.LocalExecutionPlanner.LocalExecutionPlan;
 import io.trino.sql.planner.LogicalPlanner;
 import io.trino.sql.planner.NodePartitioningManager;
+import io.trino.sql.planner.PartitioningProviderManager;
 import io.trino.sql.planner.Plan;
 import io.trino.sql.planner.PlanFragmenter;
 import io.trino.sql.planner.PlanNodeIdAllocator;
@@ -315,7 +316,8 @@ public class LocalQueryRunner
                 yieldExecutor,
                 catalogManager,
                 notificationExecutor);
-        this.nodePartitioningManager = new NodePartitioningManager(nodeScheduler, blockTypeOperators);
+        PartitioningProviderManager partitioningProviderManager = new PartitioningProviderManager();
+        this.nodePartitioningManager = new NodePartitioningManager(nodeScheduler, blockTypeOperators, partitioningProviderManager);
 
         this.metadata = new MetadataManager(
                 featuresConfig,
@@ -353,7 +355,7 @@ public class LocalQueryRunner
                 splitManager,
                 pageSourceManager,
                 indexManager,
-                nodePartitioningManager,
+                partitioningProviderManager,
                 pageSinkManager,
                 new HandleResolver(),
                 nodeManager,

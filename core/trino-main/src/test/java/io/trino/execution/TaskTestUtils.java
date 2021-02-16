@@ -46,6 +46,7 @@ import io.trino.sql.parser.SqlParser;
 import io.trino.sql.planner.LocalExecutionPlanner;
 import io.trino.sql.planner.NodePartitioningManager;
 import io.trino.sql.planner.Partitioning;
+import io.trino.sql.planner.PartitioningProviderManager;
 import io.trino.sql.planner.PartitioningScheme;
 import io.trino.sql.planner.PlanFragment;
 import io.trino.sql.planner.Symbol;
@@ -118,7 +119,7 @@ public final class TaskTestUtils
                 new InMemoryNodeManager(),
                 new NodeSchedulerConfig().setIncludeCoordinator(true),
                 new NodeTaskMap(finalizerService)));
-        NodePartitioningManager nodePartitioningManager = new NodePartitioningManager(nodeScheduler, blockTypeOperators);
+        NodePartitioningManager nodePartitioningManager = new NodePartitioningManager(nodeScheduler, blockTypeOperators, new PartitioningProviderManager());
 
         PageFunctionCompiler pageFunctionCompiler = new PageFunctionCompiler(metadata, 0);
         return new LocalExecutionPlanner(

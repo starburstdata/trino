@@ -54,7 +54,7 @@ import io.trino.split.PageSinkManager;
 import io.trino.split.PageSourceManager;
 import io.trino.split.RecordPageSourceProvider;
 import io.trino.split.SplitManager;
-import io.trino.sql.planner.NodePartitioningManager;
+import io.trino.sql.planner.PartitioningProviderManager;
 import io.trino.transaction.TransactionManager;
 import io.trino.type.InternalTypeManager;
 import io.trino.version.EmbedVersion;
@@ -92,7 +92,7 @@ public class ConnectorManager
     private final SplitManager splitManager;
     private final PageSourceManager pageSourceManager;
     private final IndexManager indexManager;
-    private final NodePartitioningManager nodePartitioningManager;
+    private final PartitioningProviderManager partitioningProviderManager;
 
     private final PageSinkManager pageSinkManager;
     private final HandleResolver handleResolver;
@@ -121,7 +121,7 @@ public class ConnectorManager
             SplitManager splitManager,
             PageSourceManager pageSourceManager,
             IndexManager indexManager,
-            NodePartitioningManager nodePartitioningManager,
+            PartitioningProviderManager partitioningProviderManager,
             PageSinkManager pageSinkManager,
             HandleResolver handleResolver,
             InternalNodeManager nodeManager,
@@ -139,7 +139,7 @@ public class ConnectorManager
         this.splitManager = splitManager;
         this.pageSourceManager = pageSourceManager;
         this.indexManager = indexManager;
-        this.nodePartitioningManager = nodePartitioningManager;
+        this.partitioningProviderManager = partitioningProviderManager;
         this.pageSinkManager = pageSinkManager;
         this.handleResolver = handleResolver;
         this.nodeManager = nodeManager;
@@ -286,7 +286,7 @@ public class ConnectorManager
                 .ifPresent(indexProvider -> indexManager.addIndexProvider(catalogName, indexProvider));
 
         connector.getPartitioningProvider()
-                .ifPresent(partitioningProvider -> nodePartitioningManager.addPartitioningProvider(catalogName, partitioningProvider));
+                .ifPresent(partitioningProvider -> partitioningProviderManager.addPartitioningProvider(catalogName, partitioningProvider));
 
         metadataManager.getProcedureRegistry().addProcedures(catalogName, connector.getProcedures());
 
@@ -319,7 +319,7 @@ public class ConnectorManager
         pageSourceManager.removeConnectorPageSourceProvider(catalogName);
         pageSinkManager.removeConnectorPageSinkProvider(catalogName);
         indexManager.removeIndexProvider(catalogName);
-        nodePartitioningManager.removePartitioningProvider(catalogName);
+        partitioningProviderManager.removePartitioningProvider(catalogName);
         metadataManager.getProcedureRegistry().removeProcedures(catalogName);
         accessControlManager.removeCatalogAccessControl(catalogName);
         metadataManager.getTablePropertyManager().removeProperties(catalogName);

@@ -41,8 +41,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.function.ToIntFunction;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -55,26 +53,14 @@ public class NodePartitioningManager
 {
     private final NodeScheduler nodeScheduler;
     private final BlockTypeOperators blockTypeOperators;
-    private final ConcurrentMap<CatalogName, ConnectorNodePartitioningProvider> partitioningProviders = new ConcurrentHashMap<>();
+    private final PartitioningProviderManager partitioningProviderManager;
 
     @Inject
-    public NodePartitioningManager(NodeScheduler nodeScheduler, BlockTypeOperators blockTypeOperators)
+    public NodePartitioningManager(NodeScheduler nodeScheduler, BlockTypeOperators blockTypeOperators, PartitioningProviderManager partitioningProviderManager)
     {
         this.nodeScheduler = requireNonNull(nodeScheduler, "nodeScheduler is null");
         this.blockTypeOperators = requireNonNull(blockTypeOperators, "blockTypeOperators is null");
-    }
-
-    public void addPartitioningProvider(CatalogName catalogName, ConnectorNodePartitioningProvider nodePartitioningProvider)
-    {
-        requireNonNull(catalogName, "catalogName is null");
-        requireNonNull(nodePartitioningProvider, "nodePartitioningProvider is null");
-        checkArgument(partitioningProviders.putIfAbsent(catalogName, nodePartitioningProvider) == null,
-                "NodePartitioningProvider for connector '%s' is already registered", catalogName);
-    }
-
-    public void removePartitioningProvider(CatalogName catalogName)
-    {
-        partitioningProviders.remove(catalogName);
+        this.partitioningProviderManager = requireNonNull(partitioningProviderManager, "partitioningProviderManager is null");
     }
 
     public PartitionFunction getPartitionFunction(
@@ -97,8 +83,7 @@ public class NodePartitioningManager
                     blockTypeOperators);
         }
         CatalogName catalogName = partitioningHandle.getConnectorId().get();
-        ConnectorNodePartitioningProvider partitioningProvider = partitioningProviders.get(catalogName);
-        checkArgument(partitioningProvider != null, "No partitioning provider for connector %s", catalogName);
+        ConnectorNodePartitioningProvider partitioningProvider = partitioningProviderManager.getPartitioningProvider(catalogName);
 
         bucketFunction = partitioningProvider.getBucketFunction(
                 partitioningHandle.getTransactionHandle().orElse(null),
@@ -115,7 +100,7 @@ public class NodePartitioningManager
             Session session,
             PartitioningHandle partitioningHandle)
     {
-        ConnectorNodePartitioningProvider partitioningProvider = partitioningProviders.get(partitioningHandle.getConnectorId().get());
+        ConnectorNodePartitioningProvider partitioningProvider = partitioningProviderManager.getPartitioningProvider(partitioningHandle.getConnectorId().get());
         return partitioningProvider.listPartitionHandles(
                 partitioningHandle.getTransactionHandle().orElse(null),
                 session.toConnectorSession(partitioningHandle.getConnectorId().get()),
@@ -131,11 +116,6 @@ public class NodePartitioningManager
             return ((SystemPartitioningHandle) partitioningHandle.getConnectorHandle()).getNodePartitionMap(session, nodeScheduler);
         }
 
-        CatalogName catalogName = partitioningHandle.getConnectorId()
-                .orElseThrow(() -> new IllegalArgumentException("No connector ID for partitioning handle: " + partitioningHandle));
-        ConnectorNodePartitioningProvider partitioningProvider = partitioningProviders.get(catalogName);
-        checkArgument(partitioningProvider != null, "No partitioning provider for connector %s", catalogName);
-
         ConnectorBucketNodeMap connectorBucketNodeMap = getConnectorBucketNodeMap(session, partitioningHandle);
         // safety check for crazy partitioning
         checkArgument(connectorBucketNodeMap.getBucketCount() < 1_000_000, "Too many buckets in partitioning: %s", connectorBucketNodeMap.getBucketCount());
@@ -145,6 +125,8 @@ public class NodePartitioningManager
             bucketToNode = getFixedMapping(connectorBucketNodeMap);
         }
         else {
+            CatalogName catalogName = partitioningHandle.getConnectorId()
+                    .orElseThrow(() -> new IllegalArgumentException("No connector ID for partitioning handle: " + partitioningHandle));
             bucketToNode = createArbitraryBucketToNode(
                     nodeScheduler.createNodeSelector(Optional.of(catalogName)).allNodes(),
                     connectorBucketNodeMap.getBucketCount());
@@ -202,8 +184,7 @@ public class NodePartitioningManager
     {
         checkArgument(!(partitioningHandle.getConnectorHandle() instanceof SystemPartitioningHandle));
 
-        ConnectorNodePartitioningProvider partitioningProvider = partitioningProviders.get(partitioningHandle.getConnectorId().get());
-        checkArgument(partitioningProvider != null, "No partitioning provider for connector %s", partitioningHandle.getConnectorId().get());
+        ConnectorNodePartitioningProvider partitioningProvider = partitioningProviderManager.getPartitioningProvider(partitioningHandle.getConnectorId().get());
 
         ConnectorBucketNodeMap connectorBucketNodeMap = partitioningProvider.getBucketNodeMap(
                 partitioningHandle.getTransactionHandle().orElse(null),
@@ -216,8 +197,7 @@ public class NodePartitioningManager
 
     private ToIntFunction<Split> getSplitToBucket(Session session, PartitioningHandle partitioningHandle)
     {
-        ConnectorNodePartitioningProvider partitioningProvider = partitioningProviders.get(partitioningHandle.getConnectorId().get());
-        checkArgument(partitioningProvider != null, "No partitioning provider for connector %s", partitioningHandle.getConnectorId().get());
+        ConnectorNodePartitioningProvider partitioningProvider = partitioningProviderManager.getPartitioningProvider(partitioningHandle.getConnectorId().get());
 
         ToIntFunction<ConnectorSplit> splitBucketFunction = partitioningProvider.getSplitBucketFunction(
                 partitioningHandle.getTransactionHandle().orElse(null),
