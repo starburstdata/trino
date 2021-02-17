@@ -27,6 +27,7 @@ import io.trino.sql.planner.plan.ProjectNode;
 import io.trino.sql.tree.DereferenceExpression;
 import io.trino.sql.tree.Expression;
 import io.trino.sql.tree.Literal;
+import io.trino.sql.tree.SymbolReference;
 import io.trino.sql.tree.TryExpression;
 import io.trino.sql.util.AstUtils;
 
@@ -170,7 +171,9 @@ public class InlineProjections
                 .collect(toSet());
 
         Set<Symbol> singletons = dependencies.entrySet().stream()
-                .filter(entry -> entry.getValue() == 1) // reference appears just once across all expressions in parent project node
+                .filter(entry -> entry.getValue() == 1
+                        || child.getAssignments().get(entry.getKey()) instanceof Literal
+                        || child.getAssignments().get(entry.getKey()) instanceof SymbolReference) // reference appears just once across all expressions in parent project node
                 .filter(entry -> !tryArguments.contains(entry.getKey())) // they are not inputs to TRY. Otherwise, inlining might change semantics
                 .filter(entry -> !child.getAssignments().isIdentity(entry.getKey())) // skip identities, otherwise, this rule will keep firing forever
                 .filter(entry -> !(child.getAssignments().get(entry.getKey()) instanceof DereferenceExpression)) // skip dereferences, otherwise, inlining can cause conflicts with PushdownDereferences
