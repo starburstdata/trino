@@ -145,8 +145,8 @@ public class TestInsert
                         node(TableWriterNode.class,
                                 node(ProjectNode.class,
                                         exchange(LOCAL, REPARTITION, ImmutableList.of(), ImmutableSet.of("column1"),
-                                                exchange(REMOTE, REPARTITION, ImmutableList.of(), ImmutableSet.of("column1"),
-                                                        node(ProjectNode.class,
+                                                node(ProjectNode.class,
+                                                        exchange(REMOTE, REPARTITION, ImmutableList.of(), ImmutableSet.of("column1"),
                                                                 values("column1", "column2"))))))));
     }
 
@@ -207,8 +207,8 @@ public class TestInsert
                         node(TableWriterNode.class,
                                 node(ProjectNode.class,
                                         exchange(LOCAL, REPARTITION, ImmutableList.of(), ImmutableSet.of("column1"),
-                                                exchange(REMOTE, REPARTITION, ImmutableList.of(), ImmutableSet.of("column1"),
-                                                        node(ProjectNode.class,
+                                                node(ProjectNode.class,
+                                                        exchange(REMOTE, REPARTITION, ImmutableList.of(), ImmutableSet.of("column1"),
                                                                 values("column1", "column2"))))))));
     }
 

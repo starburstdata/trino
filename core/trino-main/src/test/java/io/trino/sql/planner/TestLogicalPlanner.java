@@ -348,8 +348,8 @@ public class TestLogicalPlanner
                                 "is_distinct",
                                 ImmutableList.of("orderstatus"),
                                 "hash",
-                                anyTree(
-                                        project(ImmutableMap.of("hash", expression("combine_hash(bigint '0', coalesce(\"$operator$hash_code\"(orderstatus), 0))")),
+                                project(ImmutableMap.of("hash", expression("combine_hash(bigint '0', coalesce(\"$operator$hash_code\"(orderstatus), 0))")),
+                                        anyTree(
                                                 tableScan("orders", ImmutableMap.of("orderstatus", "orderstatus")))))));
     }
 

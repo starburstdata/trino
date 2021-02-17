@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Streams;
 import io.trino.Session;
 import io.trino.SystemSessionProperties;
 import io.trino.execution.warnings.WarningCollector;
@@ -68,6 +69,7 @@ import io.trino.sql.tree.SymbolReference;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -509,38 +511,41 @@ public class HashGenerationOptimizer
             // Currently, precomputed hash values are only supported for system hash distributions without constants
             Optional<HashComputation> partitionSymbols = Optional.empty();
             PartitioningScheme partitioningScheme = node.getPartitioningScheme();
+
+            HashComputationSet requirement;
+            if (node.getSources().size() == 1) {
+                // Split parent preference from hashes required by this exchange. This saves
+                // network and CPU since only required or already precomputed preferred hashes
+                // will be transmitted over network.
+                requirement = new HashComputationSet();
+            }
+            else {
+                // Preferred hashes might not be computed by some sources. In that case, such
+                // hash computation would have to be removed from all sources which would require
+                // second planning recursion that could lead to exponential planning.
+                requirement = preference;
+            }
+
             if (partitioningScheme.getPartitioning().getHandle().equals(FIXED_HASH_DISTRIBUTION) &&
                     partitioningScheme.getPartitioning().getArguments().stream().allMatch(ArgumentBinding::isVariable)) {
                 // add precomputed hash for exchange
                 partitionSymbols = computeHash(partitioningScheme.getPartitioning().getArguments().stream()
                         .map(ArgumentBinding::getColumn)
                         .collect(toImmutableList()));
-                preference = preference.withHashComputation(partitionSymbols);
+                requirement = requirement.withHashComputation(partitionSymbols);
             }
 
             // establish fixed ordering for hash symbols
-            List<HashComputation> hashSymbolOrder = ImmutableList.copyOf(preference.getHashes());
-            Map<HashComputation, Symbol> newHashSymbols = new HashMap<>();
-            for (HashComputation preferredHashSymbol : hashSymbolOrder) {
-                newHashSymbols.put(preferredHashSymbol, symbolAllocator.newHashSymbol());
-            }
-
-            // rewrite partition function to include new symbols (and precomputed hash
-            partitioningScheme = new PartitioningScheme(
-                    partitioningScheme.getPartitioning(),
-                    ImmutableList.<Symbol>builder()
-                            .addAll(partitioningScheme.getOutputLayout())
-                            .addAll(hashSymbolOrder.stream()
-                                    .map(newHashSymbols::get)
-                                    .collect(toImmutableList()))
-                            .build(),
-                    partitionSymbols.map(newHashSymbols::get),
-                    partitioningScheme.isReplicateNullsAndAny(),
-                    partitioningScheme.getBucketToPartition());
+            Map<HashComputation, Symbol> newHashSymbols = Streams.concat(
+                    preference.getHashes().stream(),
+                    requirement.getHashes().stream())
+                    .distinct()
+                    .collect(toImmutableMap(hash -> hash, hash -> symbolAllocator.newHashSymbol()));
 
             // add hash symbols to sources
             ImmutableList.Builder<List<Symbol>> newInputs = ImmutableList.builder();
             ImmutableList.Builder<PlanNode> newSources = ImmutableList.builder();
+            Set<HashComputation> computedHashes = new HashSet<>();
             for (int sourceId = 0; sourceId < node.getSources().size(); sourceId++) {
                 PlanNode source = node.getSources().get(sourceId);
                 List<Symbol> inputSymbols = node.getInputs().get(sourceId);
@@ -551,31 +556,50 @@ public class HashGenerationOptimizer
                 }
                 Function<Symbol, Optional<Symbol>> outputToInputTranslator = symbol -> Optional.of(outputToInputMap.get(symbol));
 
-                HashComputationSet sourceContext = preference.translate(outputToInputTranslator);
-                PlanWithProperties child = planAndEnforce(source, sourceContext, true, sourceContext);
+                HashComputationSet sourceRequirement = requirement.translate(outputToInputTranslator);
+                HashComputationSet sourcePreference = preference.translate(outputToInputTranslator);
+                PlanWithProperties child = planAndEnforce(source, sourceRequirement, true, sourcePreference);
                 newSources.add(child.getNode());
 
                 // add hash symbols to inputs in the required order
                 ImmutableList.Builder<Symbol> newInputSymbols = ImmutableList.builder();
                 newInputSymbols.addAll(node.getInputs().get(sourceId));
-                for (HashComputation preferredHashSymbol : hashSymbolOrder) {
+                for (HashComputation preferredHashSymbol : newHashSymbols.keySet()) {
                     HashComputation hashComputation = preferredHashSymbol.translate(outputToInputTranslator).get();
-                    newInputSymbols.add(child.getRequiredHashSymbol(hashComputation));
+                    if (child.getHashSymbols().containsKey(hashComputation)) {
+                        newInputSymbols.add(child.getRequiredHashSymbol(hashComputation));
+                        computedHashes.add(preferredHashSymbol);
+                    }
                 }
 
                 newInputs.add(newInputSymbols.build());
             }
+
+            Map<HashComputation, Symbol> computedHashSymbols = newHashSymbols.entrySet().stream()
+                    .filter(entry -> computedHashes.contains(entry.getKey()))
+                    .collect(toImmutableMap(Entry::getKey, Entry::getValue));
+
+            // rewrite partition function to include new symbols (and precomputed hash
+            PartitioningScheme newPartitioningScheme = new PartitioningScheme(
+                    partitioningScheme.getPartitioning(),
+                    ImmutableList.<Symbol>builder()
+                            .addAll(partitioningScheme.getOutputLayout())
+                            .addAll(computedHashSymbols.values())
+                            .build(),
+                    partitionSymbols.map(newHashSymbols::get),
+                    partitioningScheme.isReplicateNullsAndAny(),
+                    partitioningScheme.getBucketToPartition());
 
             return new PlanWithProperties(
                     new ExchangeNode(
                             node.getId(),
                             node.getType(),
                             node.getScope(),
-                            partitioningScheme,
+                            newPartitioningScheme,
                             newSources.build(),
                             newInputs.build(),
                             node.getOrderingScheme()),
-                    newHashSymbols);
+                    computedHashSymbols);
         }
 
         @Override
