@@ -40,10 +40,11 @@ public class DataPageV2
             ParquetEncoding dataEncoding,
             Slice slice,
             int uncompressedSize,
+            long firstRowIndex,
             Statistics<?> statistics,
             boolean isCompressed)
     {
-        super(uncompressedSize, valueCount);
+        super(uncompressedSize, valueCount, firstRowIndex);
         this.rowCount = rowCount;
         this.nullCount = nullCount;
         this.repetitionLevels = requireNonNull(repetitionLevels, "repetitionLevels slice is null");

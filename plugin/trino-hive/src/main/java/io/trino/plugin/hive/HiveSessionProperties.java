@@ -98,6 +98,7 @@ public final class HiveSessionProperties
     private static final String DYNAMIC_FILTERING_PROBE_BLOCKING_TIMEOUT = "dynamic_filtering_probe_blocking_timeout";
     private static final String OPTIMIZE_SYMLINK_LISTING = "optimize_symlink_listing";
     private static final String LEGACY_HIVE_VIEW_TRANSLATION = "legacy_hive_view_translation";
+    private static final String READ_COLUMN_INDEX_FILTER = "read_column_index_filter";
 
     private final List<PropertyMetadata<?>> sessionProperties;
 
@@ -404,6 +405,11 @@ public final class HiveSessionProperties
                         LEGACY_HIVE_VIEW_TRANSLATION,
                         "Use legacy Hive view translation mechanism",
                         hiveConfig.isLegacyHiveViewTranslation(),
+                        false),
+                booleanProperty(
+                        READ_COLUMN_INDEX_FILTER,
+                        "should use column index statistics filtering",
+                        hiveConfig.getReadColumnIndexFilter(),
                         false));
     }
 
@@ -677,5 +683,10 @@ public final class HiveSessionProperties
     public static boolean isLegacyHiveViewTranslation(ConnectorSession session)
     {
         return session.getProperty(LEGACY_HIVE_VIEW_TRANSLATION, Boolean.class);
+    }
+
+    public static boolean readColumnIndexFilter(ConnectorSession session)
+    {
+        return session.getProperty(READ_COLUMN_INDEX_FILTER, Boolean.class);
     }
 }

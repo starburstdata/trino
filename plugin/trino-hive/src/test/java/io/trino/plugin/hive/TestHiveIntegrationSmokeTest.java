@@ -186,7 +186,8 @@ public class TestHiveIntegrationSmokeTest
                 .setHiveProperties(ImmutableMap.of(
                         "hive.allow-register-partition-procedure", "true",
                         // Reduce writer sort buffer size to ensure SortingFileWriter gets used
-                        "hive.writer-sort-buffer-size", "1MB"))
+                        "hive.writer-sort-buffer-size", "1MB",
+                        "parquet.writer.block-size", "100B"))
                 .setInitialTables(ImmutableList.of(CUSTOMER, NATION, ORDERS, REGION))
                 .build();
 
@@ -2548,7 +2549,7 @@ public class TestHiveIntegrationSmokeTest
 
         assertUpdate(session, "INSERT INTO test_insert_format_table (_double, _bigint) SELECT 2.72E0, 3", 1);
 
-        assertQuery(session, "SELECT * FROM test_insert_format_table WHERE _bigint = 3", "SELECT null, null, null, 3, null, null, null, null, 2.72, null, null, null");
+        assertQuery(session, "SELECT * FROM test_insert_format_table WHERE _double = CAST(2.72E0 as DOUBLE)", "SELECT null, null, null, 3, null, null, null, null, 2.72, null, null, null");
 
         assertUpdate(session, "INSERT INTO test_insert_format_table (_decimal_short, _decimal_long) SELECT DECIMAL '2.72', DECIMAL '98765432101234567890.0123456789'", 1);
 
@@ -3396,6 +3397,7 @@ public class TestHiveIntegrationSmokeTest
                     createTableSql,
                     (long) computeActual("SELECT count(*) FROM tpch.sf1.orders").getOnlyValue());
 
+            computeActual("select custkey from scale_writers_large where custkey = 2");
             long files = (long) computeScalar("SELECT count(DISTINCT \"$path\") FROM scale_writers_large");
             long workers = (long) computeScalar("SELECT count(*) FROM system.runtime.nodes");
             assertThat(files).isBetween(2L, workers);

@@ -486,7 +486,10 @@ public class IcebergPageSourceProvider
                     dataSource,
                     UTC,
                     systemMemoryContext,
-                    options);
+                    options,
+                    null,
+                    null,
+                    false);
 
             ImmutableList.Builder<Type> trinoTypes = ImmutableList.builder();
             ImmutableList.Builder<Optional<Field>> internalFields = ImmutableList.builder();

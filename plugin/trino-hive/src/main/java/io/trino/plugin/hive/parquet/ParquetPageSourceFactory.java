@@ -23,6 +23,8 @@ import io.trino.parquet.ParquetDataSourceId;
 import io.trino.parquet.ParquetReaderOptions;
 import io.trino.parquet.RichColumnDescriptor;
 import io.trino.parquet.predicate.Predicate;
+import io.trino.parquet.predicate.TupleDomainParquetPredicate;
+import io.trino.parquet.reader.ColumnIndexStoreImpl;
 import io.trino.parquet.reader.MetadataReader;
 import io.trino.parquet.reader.ParquetReader;
 import io.trino.plugin.hive.AcidInfo;
@@ -48,8 +50,11 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.BlockMissingException;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
+import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
+import org.apache.parquet.hadoop.metadata.ColumnPath;
 import org.apache.parquet.hadoop.metadata.FileMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.internal.filter2.columnindex.ColumnIndexStore;
 import org.apache.parquet.io.MessageColumnIO;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
@@ -59,6 +64,8 @@ import javax.inject.Inject;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -85,6 +92,7 @@ import static io.trino.plugin.hive.HivePageSourceProvider.projectSufficientColum
 import static io.trino.plugin.hive.HiveSessionProperties.getParquetMaxReadBlockSize;
 import static io.trino.plugin.hive.HiveSessionProperties.isParquetIgnoreStatistics;
 import static io.trino.plugin.hive.HiveSessionProperties.isUseParquetColumnNames;
+import static io.trino.plugin.hive.HiveSessionProperties.readColumnIndexFilter;
 import static io.trino.plugin.hive.parquet.ParquetColumnIOConverter.constructField;
 import static io.trino.plugin.hive.util.HiveUtil.getDeserializerClassName;
 import static io.trino.spi.type.BigintType.BIGINT;
@@ -167,7 +175,8 @@ public class ParquetPageSourceFactory
                 timeZone,
                 stats,
                 options.withIgnoreStatistics(isParquetIgnoreStatistics(session))
-                        .withMaxReadBlockSize(getParquetMaxReadBlockSize(session))));
+                        .withMaxReadBlockSize(getParquetMaxReadBlockSize(session)),
+                readColumnIndexFilter(session)));
     }
 
     /**
@@ -186,7 +195,8 @@ public class ParquetPageSourceFactory
             String user,
             DateTimeZone timeZone,
             FileFormatDataSourceStats stats,
-            ParquetReaderOptions options)
+            ParquetReaderOptions options,
+            boolean readColumnIndexFilter)
     {
         // Ignore predicates on partial columns for now.
         effectivePredicate = effectivePredicate.filter((column, domain) -> column.isBaseColumn());
@@ -230,10 +240,12 @@ public class ParquetPageSourceFactory
             long nextStart = 0;
             ImmutableList.Builder<BlockMetaData> blocks = ImmutableList.builder();
             ImmutableList.Builder<Long> blockStarts = ImmutableList.builder();
+            List<ColumnIndexStore> blockIndexStores = new ArrayList<>();
             for (BlockMetaData block : parquetMetadata.getBlocks()) {
                 long firstDataPage = block.getColumns().get(0).getFirstDataPageOffset();
+                ColumnIndexStore ciStore = getColumnIndexStore(parquetPredicate, dataSource, block, descriptorsByPath, readColumnIndexFilter);
                 if (start <= firstDataPage && firstDataPage < start + length
-                        && predicateMatches(parquetPredicate, block, dataSource, descriptorsByPath, parquetTupleDomain)) {
+                        && predicateMatches(parquetPredicate, block, dataSource, descriptorsByPath, parquetTupleDomain, ciStore, readColumnIndexFilter)) {
                     blocks.add(block);
                     blockStarts.add(nextStart);
                 }
@@ -247,7 +259,10 @@ public class ParquetPageSourceFactory
                     dataSource,
                     timeZone,
                     newSimpleAggregatedMemoryContext(),
-                    options);
+                    options,
+                    parquetPredicate,
+                    blockIndexStores,
+                    readColumnIndexFilter);
         }
         catch (Exception e) {
             try {
@@ -349,6 +364,31 @@ public class ParquetPageSourceFactory
             type = new GroupType(type.getRepetition(), groupType.getName(), ImmutableList.of(type));
         }
         return Optional.of(new GroupType(baseType.getRepetition(), baseType.getName(), ImmutableList.of(type)));
+    }
+
+    private static ColumnIndexStore getColumnIndexStore(Predicate parquetPredicate, ParquetDataSource dataSource, BlockMetaData blockMetadata, Map<List<String>, RichColumnDescriptor> descriptorsByPath, boolean readColumnIndexFilter)
+    {
+        if (!readColumnIndexFilter || parquetPredicate == null || !(parquetPredicate instanceof TupleDomainParquetPredicate)) {
+            return null;
+        }
+
+        boolean hasColumnIndex = false;
+        for (ColumnChunkMetaData column : blockMetadata.getColumns()) {
+            if (column.getColumnIndexReference() != null && column.getOffsetIndexReference() != null) {
+                hasColumnIndex = true;
+                break;
+            }
+        }
+
+        if (!hasColumnIndex) {
+            return null;
+        }
+
+        Set<ColumnPath> paths = new HashSet<>();
+        for (List<String> path : descriptorsByPath.keySet()) {
+            paths.add(ColumnPath.get(path.toArray(new String[0])));
+        }
+        return ColumnIndexStoreImpl.create(dataSource, blockMetadata, paths);
     }
 
     public static TupleDomain<ColumnDescriptor> getParquetTupleDomain(

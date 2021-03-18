@@ -13,11 +13,14 @@
  */
 package io.trino.parquet;
 
+import com.google.common.collect.Multimap;
 import io.airlift.slice.Slice;
+import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
+import org.apache.parquet.internal.column.columnindex.ColumnIndex;
+import org.apache.parquet.internal.column.columnindex.OffsetIndex;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Map;
 
 public interface ParquetDataSource
         extends Closeable
@@ -34,7 +37,11 @@ public interface ParquetDataSource
 
     Slice readFully(long position, int length);
 
-    <K> Map<K, ChunkReader> planRead(Map<K, DiskRange> diskRanges);
+    <K> Multimap<K, ChunkReader> planRead(Multimap<K, DiskRange> diskRanges);
+
+    ColumnIndex readColumnIndex(ColumnChunkMetaData column) throws IOException;
+
+    OffsetIndex readOffsetIndex(ColumnChunkMetaData column) throws IOException;
 
     @Override
     default void close()

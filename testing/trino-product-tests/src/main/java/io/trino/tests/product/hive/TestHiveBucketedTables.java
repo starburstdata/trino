@@ -75,7 +75,7 @@ public class TestHiveBucketedTables
                         "CLUSTERED BY (n_regionkey) " +
                         (sorted ? "SORTED BY (n_regionkey) " : " ") +
                         "INTO 2 BUCKETS " +
-                        "ROW FORMAT DELIMITED FIELDS TERMINATED BY '|' " +
+                        "ROW FORMAT DELIMITED FIELDS TERMINATED BY '|' STORED AS PARQUET " +
                         "TBLPROPERTIES ('bucketing_version'='1')")
                 .setNoData()
                 .build();

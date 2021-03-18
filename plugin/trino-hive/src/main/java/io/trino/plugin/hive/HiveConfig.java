@@ -137,6 +137,7 @@ public class HiveConfig
     private boolean queryPartitionFilterRequired;
 
     private boolean projectionPushdownEnabled = true;
+    private boolean readColumnIndexFilter = true;
 
     private Duration dynamicFilteringProbeBlockingTimeout = new Duration(0, MINUTES);
 
@@ -1040,5 +1041,18 @@ public class HiveConfig
     public boolean isLegacyHiveViewTranslation()
     {
         return this.legacyHiveViewTranslation;
+    }
+
+    @Config("hive.read-column-index-filter")
+    @ConfigDescription("Enable using Parquet column index filter")
+    public HiveConfig setReadColumnIndexFilter(boolean readColumnIndexFilter)
+    {
+        this.readColumnIndexFilter = readColumnIndexFilter;
+        return this;
+    }
+
+    public boolean getReadColumnIndexFilter()
+    {
+        return this.readColumnIndexFilter;
     }
 }

@@ -17,11 +17,21 @@ public abstract class DataPage
         extends Page
 {
     protected final int valueCount;
+    private final long firstRowIndex;
 
-    public DataPage(int uncompressedSize, int valueCount)
+    public DataPage(int uncompressedSize, int valueCount, long firstRowIndex)
     {
         super(uncompressedSize);
         this.valueCount = valueCount;
+        this.firstRowIndex = firstRowIndex;
+    }
+
+    /**
+     * @return the index of the first row index in this page or -1 if unset.
+     */
+    public long getFirstRowIndex()
+    {
+        return firstRowIndex;
     }
 
     public int getValueCount()
