@@ -228,7 +228,6 @@ import io.trino.sql.planner.optimizations.UnaliasSymbolReferences;
 import io.trino.sql.planner.optimizations.WindowFilterPushDown;
 import org.weakref.jmx.MBeanExporter;
 
-import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.inject.Inject;
 
@@ -244,6 +243,8 @@ public class TrinoPlanOptimizers
     private final RuleStatsRecorder ruleStats;
     private final OptimizerStatsRecorder optimizerStats = new OptimizerStatsRecorder();
     private final MBeanExporter exporter;
+
+    private boolean initialized;
 
     @Inject
     public TrinoPlanOptimizers(
@@ -277,13 +278,6 @@ public class TrinoPlanOptimizers
                 taskCountEstimator,
                 ruleStats,
                 nodePartitioningManager);
-    }
-
-    @PostConstruct
-    public void initialize()
-    {
-        ruleStats.export(exporter);
-        optimizerStats.export(exporter);
     }
 
     @PreDestroy
@@ -894,6 +888,18 @@ public class TrinoPlanOptimizers
 
     public List<PlanOptimizer> get()
     {
+        initialize();
         return optimizers;
+    }
+
+    private synchronized void initialize()
+    {
+        if (initialized) {
+            return;
+        }
+
+        ruleStats.export(exporter);
+        optimizerStats.export(exporter);
+        initialized = true;
     }
 }
