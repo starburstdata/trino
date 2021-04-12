@@ -38,8 +38,8 @@ import io.trino.sql.analyzer.QueryExplainer;
 import io.trino.sql.parser.SqlParser;
 import io.trino.sql.planner.Plan;
 import io.trino.sql.planner.PlanFragmenter;
-import io.trino.sql.planner.PlanOptimizers;
 import io.trino.sql.planner.RuleStatsRecorder;
+import io.trino.sql.planner.TrinoPlanOptimizers;
 import io.trino.sql.planner.TypeAnalyzer;
 import io.trino.sql.planner.optimizations.PlanNodeSearcher;
 import io.trino.sql.planner.optimizations.PlanOptimizer;
@@ -420,7 +420,7 @@ public abstract class AbstractTestQueryFramework
         TaskCountEstimator taskCountEstimator = new TaskCountEstimator(queryRunner::getNodeCount);
         CostCalculator costCalculator = new CostCalculatorUsingExchanges(taskCountEstimator);
         TypeOperators typeOperators = new TypeOperators();
-        List<PlanOptimizer> optimizers = new PlanOptimizers(
+        List<PlanOptimizer> optimizers = new TrinoPlanOptimizers(
                 metadata,
                 typeOperators,
                 new TypeAnalyzer(sqlParser, metadata),

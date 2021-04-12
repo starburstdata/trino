@@ -144,9 +144,9 @@ import io.trino.sql.planner.NodePartitioningManager;
 import io.trino.sql.planner.Plan;
 import io.trino.sql.planner.PlanFragmenter;
 import io.trino.sql.planner.PlanNodeIdAllocator;
-import io.trino.sql.planner.PlanOptimizers;
 import io.trino.sql.planner.RuleStatsRecorder;
 import io.trino.sql.planner.SubPlan;
+import io.trino.sql.planner.TrinoPlanOptimizers;
 import io.trino.sql.planner.TypeAnalyzer;
 import io.trino.sql.planner.optimizations.PlanOptimizer;
 import io.trino.sql.planner.plan.PlanNode;
@@ -856,7 +856,7 @@ public class LocalQueryRunner
 
     public List<PlanOptimizer> getPlanOptimizers(boolean forceSingleNode)
     {
-        return new PlanOptimizers(
+        return new TrinoPlanOptimizers(
                 metadata,
                 typeOperators,
                 new TypeAnalyzer(sqlParser, metadata),

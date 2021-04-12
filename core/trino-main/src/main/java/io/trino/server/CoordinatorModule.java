@@ -83,6 +83,7 @@ import io.trino.sql.analyzer.QueryExplainer;
 import io.trino.sql.planner.PlanFragmenter;
 import io.trino.sql.planner.PlanOptimizers;
 import io.trino.sql.planner.RuleStatsRecorder;
+import io.trino.sql.planner.TrinoPlanOptimizers;
 import io.trino.transaction.ForTransactionManager;
 import io.trino.transaction.InMemoryTransactionManager;
 import io.trino.transaction.TransactionManager;
@@ -98,6 +99,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 
 import static com.google.inject.multibindings.MapBinder.newMapBinder;
+import static com.google.inject.multibindings.OptionalBinder.newOptionalBinder;
 import static io.airlift.concurrent.Threads.daemonThreadsNamed;
 import static io.airlift.concurrent.Threads.threadsNamed;
 import static io.airlift.configuration.ConditionalModule.installModuleIf;
@@ -209,7 +211,8 @@ public class CoordinatorModule
 
         // planner
         binder.bind(PlanFragmenter.class).in(Scopes.SINGLETON);
-        binder.bind(PlanOptimizers.class).in(Scopes.SINGLETON);
+        newOptionalBinder(binder, PlanOptimizers.class)
+                .setDefault().to(TrinoPlanOptimizers.class).in(Scopes.SINGLETON);
 
         // Rule Stats Recorder
         binder.bind(RuleStatsRecorder.class).in(Scopes.SINGLETON);
