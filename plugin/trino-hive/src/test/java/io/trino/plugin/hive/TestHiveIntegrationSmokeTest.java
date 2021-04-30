@@ -187,6 +187,7 @@ public class TestHiveIntegrationSmokeTest
                         "hive.allow-register-partition-procedure", "true",
                         // Reduce writer sort buffer size to ensure SortingFileWriter gets used
                         "hive.writer-sort-buffer-size", "1MB",
+                        "parquet.use-column-index", "true",
                         "parquet.writer.block-size", "100B"))
                 .setInitialTables(ImmutableList.of(CUSTOMER, NATION, ORDERS, REGION))
                 .build();

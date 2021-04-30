@@ -117,11 +117,11 @@ public class ParquetReader
 
     private AggregatedMemoryContext currentRowGroupMemoryContext;
     private final Multimap<ChunkKey, ChunkReader> chunkReaders;
-    private final List<ColumnIndexStore> blockIndexStores;
+    private final List<Optional<ColumnIndexStore>> columnIndexStore;
     private final List<RowRanges> blockRowRanges;
     private final Map<ColumnPath, ColumnDescriptor> paths = new HashMap<>();
 
-    private final boolean readColumnIndexFilter;
+    private final boolean useColumnIndex;
 
     public ParquetReader(
             Optional<String> fileCreatedBy,
@@ -133,8 +133,8 @@ public class ParquetReader
             AggregatedMemoryContext systemMemoryContext,
             ParquetReaderOptions options,
             Predicate parquetPredicate,
-            List<ColumnIndexStore> blockIndexStores,
-            boolean readColumnIndexFilter)
+            List<Optional<ColumnIndexStore>> columnIndexStore,
+            boolean useColumnIndex)
             throws IOException
     {
         this.fileCreatedBy = requireNonNull(fileCreatedBy, "fileCreatedBy is null");
@@ -153,20 +153,19 @@ public class ParquetReader
             checkArgument(blocks.size() == firstRows.size(), "elements of firstRowsOfBlocks must correspond to blocks");
         });
 
-        Map<ChunkKey, DiskRange> ranges = new HashMap<>();
-        this.blockIndexStores = blockIndexStores;
+        this.columnIndexStore = columnIndexStore;
         this.blockRowRanges = listWithNulls(this.blocks.size());
         for (PrimitiveColumnIO column : columns) {
             ColumnDescriptor columnDescriptor = column.getColumnDescriptor();
             this.paths.put(ColumnPath.get(columnDescriptor.getPath()), columnDescriptor);
         }
-        if (parquetPredicate != null && readColumnIndexFilter && parquetPredicate instanceof TupleDomainParquetPredicate) {
-            this.filter = ((TupleDomainParquetPredicate) parquetPredicate).convertToParquetUdp();
+        if (useColumnIndex && parquetPredicate instanceof TupleDomainParquetPredicate) {
+            this.filter = ((TupleDomainParquetPredicate) parquetPredicate).convertToParquetFilter();
         }
         else {
             this.filter = null;
         }
-        this.readColumnIndexFilter = readColumnIndexFilter;
+        this.useColumnIndex = useColumnIndex;
         Multimap<ChunkKey, DiskRange> ranges = ArrayListMultimap.create();
         for (int rowGroup = 0; rowGroup < blocks.size(); rowGroup++) {
             BlockMetaData metadata = blocks.get(rowGroup);
@@ -233,7 +232,6 @@ public class ParquetReader
     {
         currentRowGroupMemoryContext.close();
         currentRowGroupMemoryContext = systemMemoryContext.newAggregatedMemoryContext();
-
         freeCurrentRowGroupBuffers();
         currentRowGroup++;
         if (currentRowGroup == blocks.size()) {
@@ -241,20 +239,18 @@ public class ParquetReader
         }
         currentBlockMetadata = blocks.get(currentRowGroup);
         firstRowIndexInGroup = firstRowsOfBlocks.map(firstRows -> firstRows.get(currentRowGroup));
-
-        if (filter != null && readColumnIndexFilter) {
-            ColumnIndexStore ciStore = blockIndexStores.get(currentRowGroup);
-            if (ciStore != null) {
+        currentGroupRowCount = currentBlockMetadata.getRowCount();
+        if (filter != null && useColumnIndex) {
+            if (columnIndexStore.get(currentRowGroup).isPresent()) {
                 currentGroupRowRanges = getRowRanges(currentRowGroup);
                 long rowCount = currentGroupRowRanges.rowCount();
                 if (rowCount == 0) {
                     return false;
                 }
+                currentGroupRowCount = rowCount;
             }
         }
-
         nextRowInGroup = 0L;
-        currentGroupRowCount = currentBlockMetadata.getRowCount();
         initializeColumnReaders();
         return true;
     }
@@ -337,9 +333,9 @@ public class ParquetReader
         if (filter != null) {
             RowRanges rowRanges = getRowRanges(rowGroup);
             if (rowRanges != null && rowRanges.rowCount() < rowGroupRowCount) {
-                ColumnIndexStore columnIndexStore = blockIndexStores.get(rowGroup);
-                if (columnIndexStore != null) {
-                    OffsetIndex offsetIndex = columnIndexStore.getOffsetIndex(columnPath);
+                Optional<ColumnIndexStore> columnIndexStore = this.columnIndexStore.get(rowGroup);
+                if (columnIndexStore.isPresent()) {
+                    OffsetIndex offsetIndex = columnIndexStore.get().getOffsetIndex(columnPath);
                     if (offsetIndex != null) {
                         return ColumnIndexFilterUtils.filterOffsetIndex(offsetIndex, rowRanges, rowGroupRowCount);
                     }
@@ -462,9 +458,9 @@ public class ParquetReader
 
         RowRanges rowRanges = blockRowRanges.get(blockIndex);
         if (rowRanges == null) {
-            ColumnIndexStore columnIndexStore = blockIndexStores.get(blockIndex);
-            if (columnIndexStore != null) {
-                rowRanges = ColumnIndexFilter.calculateRowRanges(FilterCompat.get(filter), columnIndexStore,
+            Optional<ColumnIndexStore> columnIndexStore = this.columnIndexStore.get(blockIndex);
+            if (columnIndexStore.isPresent()) {
+                rowRanges = ColumnIndexFilter.calculateRowRanges(FilterCompat.get(filter), columnIndexStore.get(),
                         paths.keySet(), blocks.get(blockIndex).getRowCount());
                 blockRowRanges.set(blockIndex, rowRanges);
             }

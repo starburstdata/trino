@@ -48,9 +48,9 @@ public interface Predicate
      *
      * @param numberOfRows the number of rows in the segment; this can be used with
      * Statistics to determine if a column is only null
-     * @param ciStore column index (statistics) store
+     * @param columnIndex column index (statistics) store
      * @param id Parquet file name
      */
-    boolean matches(long numberOfRows, ColumnIndexStore ciStore, ParquetDataSourceId id)
+    boolean matches(long numberOfRows, ColumnIndexStore columnIndex, ParquetDataSourceId id)
             throws ParquetCorruptionException;
 }

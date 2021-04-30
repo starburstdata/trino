@@ -30,8 +30,9 @@ import static java.util.Collections.emptySet;
 
 /**
  * Internal implementation of {@link ColumnIndexStore}.
+ * Copy of org.apache.parquet.hadoop.ColumnIndexStoreImpl which is not accessible
  */
-public class ColumnIndexStoreImpl
+public class TrinoColumnIndexStore
         implements ColumnIndexStore
 {
     private interface IndexStore
@@ -95,7 +96,7 @@ public class ColumnIndexStoreImpl
     }
 
     // Used for columns are not in this parquet file
-    private static final ColumnIndexStoreImpl.IndexStore MISSING_INDEX_STORE = new IndexStore()
+    private static final TrinoColumnIndexStore.IndexStore MISSING_INDEX_STORE = new IndexStore()
     {
         @Override
         public ColumnIndex getColumnIndex()
@@ -110,7 +111,7 @@ public class ColumnIndexStoreImpl
         }
     };
 
-    private static final ColumnIndexStoreImpl EMPTY = new ColumnIndexStoreImpl(null, new BlockMetaData(), emptySet())
+    private static final TrinoColumnIndexStore EMPTY = new TrinoColumnIndexStore(null, new BlockMetaData(), emptySet())
     {
         @Override
         public ColumnIndex getColumnIndex(ColumnPath column)
@@ -126,7 +127,7 @@ public class ColumnIndexStoreImpl
     };
 
     private final ParquetDataSource dataSource;
-    private final Map<ColumnPath, ColumnIndexStoreImpl.IndexStore> store;
+    private final Map<ColumnPath, TrinoColumnIndexStore.IndexStore> store;
 
     /*
      * Creates a column index store which lazily reads column/offset indexes for the columns in paths. (paths are the set
@@ -135,21 +136,21 @@ public class ColumnIndexStoreImpl
     public static ColumnIndexStore create(ParquetDataSource dataSource, BlockMetaData block, Set<ColumnPath> paths)
     {
         try {
-            return new ColumnIndexStoreImpl(dataSource, block, paths);
+            return new TrinoColumnIndexStore(dataSource, block, paths);
         }
         catch (MissingOffsetIndexException e) {
             return EMPTY;
         }
     }
 
-    private ColumnIndexStoreImpl(ParquetDataSource dataSource, BlockMetaData block, Set<ColumnPath> paths)
+    private TrinoColumnIndexStore(ParquetDataSource dataSource, BlockMetaData block, Set<ColumnPath> paths)
     {
         this.dataSource = dataSource;
-        Map<ColumnPath, ColumnIndexStoreImpl.IndexStore> store = new HashMap<>();
+        Map<ColumnPath, TrinoColumnIndexStore.IndexStore> store = new HashMap<>();
         for (ColumnChunkMetaData column : block.getColumns()) {
             ColumnPath path = column.getPath();
             if (paths.contains(path)) {
-                store.put(path, new ColumnIndexStoreImpl.IndexStoreImpl(column));
+                store.put(path, new TrinoColumnIndexStore.IndexStoreImpl(column));
             }
         }
         this.store = store;
