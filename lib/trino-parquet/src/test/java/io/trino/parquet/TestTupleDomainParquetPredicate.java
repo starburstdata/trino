@@ -254,9 +254,9 @@ public class TestTupleDomainParquetPredicate
 
         assertEquals(getDomain(DOUBLE, 10, doubleColumnStats(3.3, NaN, true), ID, column, UTC), Domain.all(DOUBLE));
 
-        assertEquals(getDomain(DOUBLE, doubleDictionaryDescriptor(NaN)), Domain.all(DOUBLE));
+        assertEquals(getDomain(DOUBLE, doubleDictionaryDescriptor(NaN), null), Domain.all(DOUBLE));
 
-        assertEquals(getDomain(DOUBLE, doubleDictionaryDescriptor(3.3, NaN)), Domain.all(DOUBLE));
+        assertEquals(getDomain(DOUBLE, doubleDictionaryDescriptor(3.3, NaN), null), Domain.all(DOUBLE));
 
         // fail on corrupted statistics
         assertThatExceptionOfType(ParquetCorruptionException.class)
@@ -314,9 +314,9 @@ public class TestTupleDomainParquetPredicate
 
         assertEquals(getDomain(REAL, 10, floatColumnStats(minimum, NaN, true), ID, column, UTC), Domain.all(REAL));
 
-        assertEquals(getDomain(REAL, floatDictionaryDescriptor(NaN)), Domain.all(REAL));
+        assertEquals(getDomain(REAL, floatDictionaryDescriptor(NaN), null), Domain.all(REAL));
 
-        assertEquals(getDomain(REAL, floatDictionaryDescriptor(minimum, NaN)), Domain.all(REAL));
+        assertEquals(getDomain(REAL, floatDictionaryDescriptor(minimum, NaN), null), Domain.all(REAL));
 
         // fail on corrupted statistics
         assertThatExceptionOfType(ParquetCorruptionException.class)

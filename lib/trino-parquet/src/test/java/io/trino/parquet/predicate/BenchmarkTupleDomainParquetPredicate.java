@@ -56,7 +56,7 @@ public class BenchmarkTupleDomainParquetPredicate
     {
         List<Domain> result = new ArrayList<>(data.bigintDictionaries.size());
         for (DictionaryDescriptor dictionary : data.bigintDictionaries) {
-            result.add(TupleDomainParquetPredicate.getDomain(BIGINT, dictionary));
+            result.add(TupleDomainParquetPredicate.getDomain(BIGINT, dictionary, null));
         }
         return result;
     }

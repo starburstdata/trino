@@ -30,8 +30,7 @@ import io.trino.parquet.PrimitiveField;
 import io.trino.parquet.RichColumnDescriptor;
 import io.trino.parquet.predicate.Predicate;
 import io.trino.parquet.predicate.TupleDomainParquetPredicate;
-import io.trino.parquet.reader.ColumnIndexFilterUtils.FilteredOffsetIndex;
-import io.trino.parquet.reader.ColumnIndexFilterUtils.OffsetRange;
+import io.trino.parquet.reader.FilteredOffsetIndex.OffsetRange;
 import io.trino.spi.block.ArrayBlock;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.RowBlock;
@@ -121,7 +120,19 @@ public class ParquetReader
     private final List<RowRanges> blockRowRanges;
     private final Map<ColumnPath, ColumnDescriptor> paths = new HashMap<>();
 
-    private final boolean useColumnIndex;
+    public ParquetReader(
+            Optional<String> fileCreatedBy,
+            MessageColumnIO messageColumnIO,
+            List<BlockMetaData> blocks,
+            Optional<List<Long>> firstRowsOfBlocks,
+            ParquetDataSource dataSource,
+            DateTimeZone timeZone,
+            AggregatedMemoryContext systemMemoryContext,
+            ParquetReaderOptions options)
+            throws IOException
+    {
+        this(fileCreatedBy, messageColumnIO, blocks, firstRowsOfBlocks, dataSource, timeZone, systemMemoryContext, options, null, null);
+    }
 
     public ParquetReader(
             Optional<String> fileCreatedBy,
@@ -133,8 +144,7 @@ public class ParquetReader
             AggregatedMemoryContext systemMemoryContext,
             ParquetReaderOptions options,
             Predicate parquetPredicate,
-            List<Optional<ColumnIndexStore>> columnIndexStore,
-            boolean useColumnIndex)
+            List<Optional<ColumnIndexStore>> columnIndexStore)
             throws IOException
     {
         this.fileCreatedBy = requireNonNull(fileCreatedBy, "fileCreatedBy is null");
@@ -159,13 +169,12 @@ public class ParquetReader
             ColumnDescriptor columnDescriptor = column.getColumnDescriptor();
             this.paths.put(ColumnPath.get(columnDescriptor.getPath()), columnDescriptor);
         }
-        if (useColumnIndex && parquetPredicate instanceof TupleDomainParquetPredicate) {
+        if (options.isUseColumnIndex() && parquetPredicate instanceof TupleDomainParquetPredicate) {
             this.filter = ((TupleDomainParquetPredicate) parquetPredicate).convertToParquetFilter();
         }
         else {
             this.filter = null;
         }
-        this.useColumnIndex = useColumnIndex;
         Multimap<ChunkKey, DiskRange> ranges = ArrayListMultimap.create();
         for (int rowGroup = 0; rowGroup < blocks.size(); rowGroup++) {
             BlockMetaData metadata = blocks.get(rowGroup);
@@ -240,7 +249,7 @@ public class ParquetReader
         currentBlockMetadata = blocks.get(currentRowGroup);
         firstRowIndexInGroup = firstRowsOfBlocks.map(firstRows -> firstRows.get(currentRowGroup));
         currentGroupRowCount = currentBlockMetadata.getRowCount();
-        if (filter != null && useColumnIndex) {
+        if (filter != null && options.isUseColumnIndex()) {
             if (columnIndexStore.get(currentRowGroup).isPresent()) {
                 currentGroupRowRanges = getRowRanges(currentRowGroup);
                 long rowCount = currentGroupRowRanges.rowCount();
@@ -337,7 +346,7 @@ public class ParquetReader
                 if (columnIndexStore.isPresent()) {
                     OffsetIndex offsetIndex = columnIndexStore.get().getOffsetIndex(columnPath);
                     if (offsetIndex != null) {
-                        return ColumnIndexFilterUtils.filterOffsetIndex(offsetIndex, rowRanges, rowGroupRowCount);
+                        return FilteredOffsetIndex.filterOffsetIndex(offsetIndex, rowRanges, rowGroupRowCount);
                     }
                 }
             }

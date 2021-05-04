@@ -16,7 +16,6 @@ package io.trino.plugin.hive;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import io.airlift.json.JsonCodec;
 import io.airlift.json.JsonCodecFactory;
@@ -187,9 +186,7 @@ public class TestHiveIntegrationSmokeTest
                 .setHiveProperties(ImmutableMap.of(
                         "hive.allow-register-partition-procedure", "true",
                         // Reduce writer sort buffer size to ensure SortingFileWriter gets used
-                        "hive.writer-sort-buffer-size", "1MB",
-                        "parquet.use-column-index", "true",
-                        "parquet.writer.block-size", "100B"))
+                        "hive.writer-sort-buffer-size", "1MB"))
                 .setInitialTables(ImmutableList.of(CUSTOMER, NATION, ORDERS, REGION))
                 .build();
 
@@ -3355,7 +3352,7 @@ public class TestHiveIntegrationSmokeTest
     @Test
     public void testScaleWriters()
     {
-        //testWithAllStorageFormats(this::testSingleWriter);
+        testWithAllStorageFormats(this::testSingleWriter);
         testWithAllStorageFormats(this::testMultipleWriters);
     }
 
@@ -3399,7 +3396,6 @@ public class TestHiveIntegrationSmokeTest
                     createTableSql,
                     (long) computeActual("SELECT count(*) FROM tpch.sf1.orders").getOnlyValue());
 
-            computeActual("select custkey from scale_writers_large where custkey = 2");
             long files = (long) computeScalar("SELECT count(DISTINCT \"$path\") FROM scale_writers_large");
             long workers = (long) computeScalar("SELECT count(*) FROM system.runtime.nodes");
             assertThat(files).isBetween(2L, workers);
@@ -3407,40 +3403,6 @@ public class TestHiveIntegrationSmokeTest
         finally {
             assertUpdate("DROP TABLE IF EXISTS scale_writers_large");
         }
-    }
-
-    protected void buildSortedTables()
-    {
-        @Language("SQL") String createTableSql = format("" +
-                        "CREATE TABLE %s.%s.orderstatus_bucketed_orderkey_sorted (\n" +
-                        "   orderkey bigint,\n" +
-                        "   custkey bigint,\n" +
-                        "   orderstatus varchar(1),\n" +
-                        "   totalprice double,\n" +
-                        "   orderdate date,\n" +
-                        "   orderpriority varchar(15),\n" +
-                        "   clerk varchar(15),\n" +
-                        "   shippriority integer,\n" +
-                        "   comment varchar(79)\n" +
-                        ")\n" +
-                        "WITH (\n" +
-                        "   format = 'PARQUET',\n" +
-                        "   bucketed_by = array['orderstatus'],\n" +
-                        "   bucket_count = 1,\n" +
-                        "   sorted_by = array['orderkey']\n" +
-                        ")",
-                getSession().getCatalog().get(),
-                getSession().getSchema().get());
-
-        getQueryRunner().execute(createTableSql);
-        getQueryRunner().execute("INSERT INTO orderstatus_bucketed_orderkey_sorted SELECT * FROM tpch.sf1.orders");  // 1.5M rows
-    }
-
-    @Test
-    public void testEqualityLookup() {
-        buildSortedTables();
-        MaterializedResult actualResult = computeActual("select orderkey from orderstatus_bucketed_orderkey_sorted where orderkey = 2");
-        MaterializedRow row = actualResult.getMaterializedRows().get(0);
     }
 
     @Test
@@ -7834,7 +7796,7 @@ public class TestHiveIntegrationSmokeTest
     {
         Session session = getSession();
         ImmutableList.Builder<TestingHiveStorageFormat> formats = ImmutableList.builder();
-        for (HiveStorageFormat hiveStorageFormat : Lists .newArrayList(HiveStorageFormat.PARQUET) /*HiveStorageFormat.values()*/) {
+        for (HiveStorageFormat hiveStorageFormat : HiveStorageFormat.values()) {
             if (hiveStorageFormat == HiveStorageFormat.CSV) {
                 // CSV supports only unbounded VARCHAR type
                 continue;

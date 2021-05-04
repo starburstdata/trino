@@ -16,7 +16,6 @@ package io.trino.parquet.predicate;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.VerifyException;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
 import io.trino.parquet.DictionaryPage;
@@ -140,7 +139,7 @@ public class TupleDomainParquetPredicate
 
         Domain effectivePredicateDomain = effectivePredicateDomains.get(dictionary.getColumnDescriptor());
 
-        return effectivePredicateDomain == null || effectivePredicateMatches(effectivePredicateDomain, dictionary);
+        return effectivePredicateDomain == null || effectivePredicateMatches(effectivePredicateDomain, dictionary, timeZone);
     }
 
     @Override
@@ -156,6 +155,7 @@ public class TupleDomainParquetPredicate
         if (effectivePredicate.isNone()) {
             return false;
         }
+
         Map<ColumnDescriptor, Domain> effectivePredicateDomains = effectivePredicate.getDomains()
                 .orElseThrow(() -> new IllegalStateException("Effective predicate other than none should have domains"));
 
@@ -180,9 +180,9 @@ public class TupleDomainParquetPredicate
         return true;
     }
 
-    private static boolean effectivePredicateMatches(Domain effectivePredicateDomain, DictionaryDescriptor dictionary)
+    private static boolean effectivePredicateMatches(Domain effectivePredicateDomain, DictionaryDescriptor dictionary, DateTimeZone timeZone)
     {
-        return effectivePredicateDomain.overlaps(getDomain(effectivePredicateDomain.getType(), dictionary));
+        return effectivePredicateDomain.overlaps(getDomain(effectivePredicateDomain.getType(), dictionary, timeZone));
     }
 
     @VisibleForTesting
@@ -337,21 +337,33 @@ public class TupleDomainParquetPredicate
         boolean hasNullValue = totalNullCount > 0;
 
         if (descriptor.getType().equals(PrimitiveTypeName.INT32) || descriptor.getType().equals(PrimitiveTypeName.INT64) || descriptor.getType().equals(PrimitiveTypeName.FLOAT)) {
-            List<Long> minimums = converter.getMinValuesAsLong(type, columnIndex, columnName);
-            List<Long> maximums = converter.getMaxValuesAsLong(type, columnIndex, columnName);
-            return createDomain(type, columnIndex, id, hasNullValue, columnName, minimums, maximums, (BiFunction<Long, Long, ParquetIntegerStatistics>) (min, max) -> new ParquetIntegerStatistics(min, max));
+            List<Long> minimums = converter.getValuesAsLong(type, columnIndex.getMinValues(), columnName);
+            if (!minimums.isEmpty()) {
+                List<Long> maximums = converter.getValuesAsLong(type, columnIndex.getMaxValues(), columnName);
+                if (!maximums.isEmpty()) {
+                    return createDomain(type, columnIndex, id, hasNullValue, columnName, minimums, maximums, (BiFunction<Long, Long, ParquetIntegerStatistics>) (min, max) -> new ParquetIntegerStatistics(min, max));
+                }
+            }
         }
 
         if (descriptor.getType().equals(PrimitiveTypeName.DOUBLE)) {
-            List<Double> minimums = converter.getMinValuesAsDouble(type, columnIndex, columnName);
-            List<Double> maximums = converter.getMaxValuesAsDouble(type, columnIndex, columnName);
-            return createDomain(type, columnIndex, id, hasNullValue, columnName, minimums, maximums, (BiFunction<Double, Double, ParquetDoubleStatistics>) (min, max) -> new ParquetDoubleStatistics(min, max));
+            List<Double> minimums = converter.getValuesAsDouble(type, columnIndex.getMinValues(), columnName);
+            if (!minimums.isEmpty()) {
+                List<Double> maximums = converter.getValuesAsDouble(type, columnIndex.getMaxValues(), columnName);
+                if (!maximums.isEmpty()) {
+                    return createDomain(type, columnIndex, id, hasNullValue, columnName, minimums, maximums, (BiFunction<Double, Double, ParquetDoubleStatistics>) (min, max) -> new ParquetDoubleStatistics(min, max));
+                }
+            }
         }
 
         if (descriptor.getType().equals(PrimitiveTypeName.BINARY)) {
-            List<Slice> minimums = converter.getMinValuesAsSlice(type, columnIndex);
-            List<Slice> maximums = converter.getMaxValuesAsSlice(type, columnIndex);
-            return createDomain(type, columnIndex, id, hasNullValue, columnName, minimums, maximums, (BiFunction<Slice, Slice, ParquetStringStatistics>) (min, max) -> new ParquetStringStatistics(min, max));
+            List<Slice> minimums = converter.getValuesAsSlice(type, columnIndex.getMinValues());
+            if (!minimums.isEmpty()) {
+                List<Slice> maximums = converter.getValuesAsSlice(type, columnIndex.getMaxValues());
+                if (!maximums.isEmpty()) {
+                    return createDomain(type, columnIndex, id, hasNullValue, columnName, minimums, maximums, (BiFunction<Slice, Slice, ParquetStringStatistics>) (min, max) -> new ParquetStringStatistics(min, max));
+                }
+            }
         }
 
         //TODO: Add INT96 and FIXED_LEN_BYTE_ARRAY later
@@ -382,7 +394,7 @@ public class TupleDomainParquetPredicate
     }
 
     @VisibleForTesting
-    public static Domain getDomain(Type type, DictionaryDescriptor dictionaryDescriptor)
+    public static Domain getDomain(Type type, DictionaryDescriptor dictionaryDescriptor, DateTimeZone timeZone)
     {
         if (dictionaryDescriptor == null) {
             return Domain.all(type);
@@ -401,7 +413,6 @@ public class TupleDomainParquetPredicate
         catch (Exception e) {
             // In case of exception, just continue reading the data, not using dictionary page at all
             // OK to ignore exception when reading dictionaries
-            // TODO take failOnCorruptedParquetStatistics parameter and handle appropriately
             return Domain.all(type);
         }
 
@@ -454,6 +465,16 @@ public class TupleDomainParquetPredicate
             return Domain.create(ValueSet.copyOf(type, values), true);
         }
 
+        // TODO: decode INT96
+//        if (type instanceof TimestampType && columnDescriptor.getPrimitiveType().getPrimitiveTypeName() == PrimitiveTypeName.INT96) {
+//            List<Domain> domains = new ArrayList<>(dictionarySize);
+//            for (int i = 0; i < dictionarySize; i++) {
+//                domains.add(Domain.singleValue(type, createTimestampEncoder((TimestampType) type, timeZone).getTimestamp(decode(dictionary.decodeToBinary(i)))));
+//            }
+//            domains.add(Domain.onlyNull(type));
+//            return Domain.union(domains);
+//        }
+
         return Domain.all(type);
     }
 
@@ -501,7 +522,7 @@ public class TupleDomainParquetPredicate
             List<ParquetRangeStatistics<F>> rangeStatistics,
             Function<F, T> function)
     {
-        List<Range> ranges = Lists.newArrayListWithExpectedSize(rangeStatistics.size());
+        List<Range> ranges = new ArrayList<>(rangeStatistics.size());
         for (int i = 0; i < rangeStatistics.size(); i++) {
             F min = rangeStatistics.get(i).getMin();
             F max = rangeStatistics.get(i).getMax();
@@ -579,7 +600,10 @@ public class TupleDomainParquetPredicate
 
         for (RichColumnDescriptor column : columns) {
             Domain domain = effectivePredicate.getDomains().get().get(column);
-            if (domain == null || domain.isNone()) {
+            if (domain == null
+                    || domain.isNone()
+                    // FIXME: Timestamp column index leads to LazyBlock exception
+                    || column.getPrimitiveType().getPrimitiveTypeName() == PrimitiveTypeName.INT96) {
                 continue;
             }
 
@@ -682,98 +706,43 @@ public class TupleDomainParquetPredicate
             }
         }
 
-        public List<Long> getMinValuesAsLong(Type type, ColumnIndex columnIndex, String column)
+        public List<Long> getValuesAsLong(Type type, List<ByteBuffer> values, String column)
         {
-            int pageCount = columnIndex.getMinValues().size();
-            List<ByteBuffer> minValues = columnIndex.getMinValues();
-            List<Long> minimums = Lists.newArrayListWithExpectedSize(pageCount);
+            int pageCount = values.size();
+            List<Long> minimums = new ArrayList<>(pageCount);
             for (int i = 0; i < pageCount; i++) {
-                if (TINYINT.equals(type) || SMALLINT.equals(type) || INTEGER.equals(type)) {
-                    minimums.add(converter.convert(minValues.get(i), column));
-                }
-                else if (BIGINT.equals(type)) {
-                    minimums.add(converter.convert(minValues.get(i), column));
+                if (BIGINT.equals(type) || TINYINT.equals(type) || SMALLINT.equals(type) || INTEGER.equals(type) || DATE.equals(type)) {
+                    minimums.add(((Number) converter.convert(values.get(i), column)).longValue());
                 }
                 else if (REAL.equals(type)) {
-                    minimums.add((long) floatToRawIntBits(converter.convert(minValues.get(i), column)));
+                    minimums.add((long) floatToRawIntBits(converter.convert(values.get(i), column)));
                 }
             }
             return minimums;
         }
 
-        public List<Long> getMaxValuesAsLong(Type type, ColumnIndex columnIndex, String column)
+        public List<Double> getValuesAsDouble(Type type, List<ByteBuffer> values, String column)
         {
-            int pageCount = columnIndex.getMaxValues().size();
-            List<ByteBuffer> maxValues = columnIndex.getMaxValues();
-            List<Long> maximums = Lists.newArrayListWithExpectedSize(pageCount);
-            if (TINYINT.equals(type) || SMALLINT.equals(type) || INTEGER.equals(type)) {
-                for (int i = 0; i < pageCount; i++) {
-                    maximums.add(converter.convert(maxValues.get(i), column));
-                }
-            }
-            else if (BIGINT.equals(type)) {
-                for (int i = 0; i < pageCount; i++) {
-                    maximums.add(converter.convert(maxValues.get(i), column));
-                }
-            }
-            else if (REAL.equals(type)) {
-                for (int i = 0; i < pageCount; i++) {
-                    maximums.add((long) floatToRawIntBits(converter.convert(maxValues.get(i), column)));
-                }
-            }
-            return maximums;
-        }
-
-        public List<Double> getMinValuesAsDouble(Type type, ColumnIndex columnIndex, String column)
-        {
-            int pageCount = columnIndex.getMinValues().size();
-            List<ByteBuffer> minValues = columnIndex.getMinValues();
-            List<Double> minimums = Lists.newArrayListWithExpectedSize(pageCount);
+            int pageCount = values.size();
+            List<Double> minimums = new ArrayList<>(pageCount);
             if (DOUBLE.equals(type)) {
                 for (int i = 0; i < pageCount; i++) {
-                    minimums.add(converter.convert(minValues.get(i), column));
+                    minimums.add(converter.convert(values.get(i), column));
                 }
             }
             return minimums;
         }
 
-        public List<Double> getMaxValuesAsDouble(Type type, ColumnIndex columnIndex, String column)
+        public List<Slice> getValuesAsSlice(Type type, List<ByteBuffer> values)
         {
-            int pageCount = columnIndex.getMaxValues().size();
-            List<ByteBuffer> maxValues = columnIndex.getMaxValues();
-            List<Double> maximums = Lists.newArrayListWithExpectedSize(pageCount);
-            if (DOUBLE.equals(type)) {
-                for (int i = 0; i < pageCount; i++) {
-                    maximums.add(converter.convert(maxValues.get(i), column));
-                }
-            }
-            return maximums;
-        }
-
-        public List<Slice> getMinValuesAsSlice(Type type, ColumnIndex columnIndex)
-        {
-            int pageCount = columnIndex.getMinValues().size();
-            List<ByteBuffer> minValues = columnIndex.getMinValues();
-            List<Slice> minimums = Lists.newArrayListWithExpectedSize(pageCount);
+            int pageCount = values.size();
+            List<Slice> minimums = new ArrayList<>(pageCount);
             if (type instanceof VarcharType) {
                 for (int i = 0; i < pageCount; i++) {
-                    minimums.add(Slices.wrappedBuffer(minValues.get(i)));
+                    minimums.add(Slices.wrappedBuffer(values.get(i)));
                 }
             }
             return minimums;
-        }
-
-        public List<Slice> getMaxValuesAsSlice(Type type, ColumnIndex columnIndex)
-        {
-            int pageCount = columnIndex.getMaxValues().size();
-            List<ByteBuffer> maxValues = columnIndex.getMaxValues();
-            List<Slice> maximums = Lists.newArrayListWithExpectedSize(pageCount);
-            if (type instanceof VarcharType) {
-                for (int i = 0; i < pageCount; i++) {
-                    maximums.add(Slices.wrappedBuffer(maxValues.get(i)));
-                }
-            }
-            return maximums;
         }
 
         private <T> T convert(ByteBuffer buf, String name)

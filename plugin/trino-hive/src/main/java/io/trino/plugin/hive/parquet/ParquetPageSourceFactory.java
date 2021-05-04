@@ -239,9 +239,12 @@ public class ParquetPageSourceFactory
             ImmutableList.Builder<Long> blockStarts = ImmutableList.builder();
             ImmutableList.Builder<Optional<ColumnIndexStore>> columnIndexes = ImmutableList.builder();
             for (BlockMetaData block : parquetMetadata.getBlocks()) {
+                long firstDataPage = block.getColumns().get(0).getFirstDataPageOffset();
                 Optional<ColumnIndexStore> columnIndex = getColumnIndexStore(parquetPredicate, dataSource, block, descriptorsByPath, options);
-                if (predicateMatches(parquetPredicate, block, dataSource, descriptorsByPath, parquetTupleDomain, columnIndex)) {
+                if (start <= firstDataPage && firstDataPage < start + length
+                        && predicateMatches(parquetPredicate, block, dataSource, descriptorsByPath, parquetTupleDomain, columnIndex)) {
                     blocks.add(block);
+                    blockStarts.add(nextStart);
                     columnIndexes.add(columnIndex);
                 }
                 nextStart += block.getRowCount();
@@ -256,8 +259,7 @@ public class ParquetPageSourceFactory
                     newSimpleAggregatedMemoryContext(),
                     options,
                     parquetPredicate,
-                    columnIndexes.build(),
-                    options.isUseColumnIndex());
+                    columnIndexes.build());
         }
         catch (Exception e) {
             try {

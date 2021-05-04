@@ -13,6 +13,8 @@
  */
 package io.trino.parquet.reader;
 
+import com.google.common.collect.Iterators;
+import com.google.common.collect.PeekingIterator;
 import io.airlift.slice.Slice;
 import io.trino.parquet.DataPage;
 import io.trino.parquet.DataPageV1;
@@ -39,7 +41,6 @@ import org.joda.time.DateTimeZone;
 
 import java.io.IOException;
 import java.util.Optional;
-import java.util.PrimitiveIterator;
 import java.util.function.Consumer;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -71,7 +72,7 @@ public abstract class PrimitiveColumnReader
     private DataPage page;
     private int remainingValueCountInPage;
     private int readOffset;
-    private PrimitiveIterator.OfLong indexIter;
+    private PeekingIterator<Long> indexIter;
     private long currentRow;
     private long targetRow;
 
@@ -154,7 +155,7 @@ public abstract class PrimitiveColumnReader
         }
         checkArgument(pageReader.getTotalValueCount() > 0, "page is empty");
         totalValueCount = pageReader.getTotalValueCount();
-        indexIter = (rowRanges == null) ? null : rowRanges.iterator();
+        indexIter = (rowRanges == null) ? null : Iterators.peekingIterator(rowRanges.iterator());
     }
 
     public void prepareNextRead(int batchSize)
@@ -206,26 +207,31 @@ public abstract class PrimitiveColumnReader
         }
     }
 
-    private void skipValues(int valuesToRead)
+    private int skipValues(int valuesToRead)
     {
-        processValues(valuesToRead, this::skipValue);
+        return processValues(valuesToRead, this::skipValue);
     }
 
-    private void processValues(int valuesToRead, Runnable valueReader)
+    private int processValues(int valuesToRead, Runnable valueReader)
     {
         if (definitionLevel == EMPTY_LEVEL_VALUE && repetitionLevel == EMPTY_LEVEL_VALUE) {
             definitionLevel = definitionReader.readLevel();
             repetitionLevel = repetitionReader.readLevel();
         }
+        int rowCount = 0;
         int valueCount = 0;
         for (int i = 0; i < valuesToRead; i++) {
             do {
+                nextRow(repetitionLevel);
+                if (repetitionLevel == 0) {
+                    rowCount++;
+                }
                 valueReader.run();
                 valueCount++;
                 if (valueCount == remainingValueCountInPage) {
                     updateValueCounts(valueCount, 0);
                     if (!readNextPage()) {
-                        return;
+                        return rowCount;
                     }
                     valueCount = 0;
                 }
@@ -235,6 +241,7 @@ public abstract class PrimitiveColumnReader
             while (repetitionLevel != 0);
         }
         updateValueCounts(valueCount, 0);
+        return rowCount;
     }
 
     /**
@@ -275,7 +282,7 @@ public abstract class PrimitiveColumnReader
         for (int i = 0; i < valuesToRead; ) {
             boolean consumed = false;
             do {
-                if (skipRL(repetitionLevel)) {
+                if (nextRow(repetitionLevel)) {
                     skipValue();
                     skipCount++;
                 }
@@ -313,10 +320,18 @@ public abstract class PrimitiveColumnReader
         if (readOffset == 0) {
             return;
         }
+        int readOffset = this.readOffset;
         int valuePosition = 0;
         while (valuePosition < readOffset) {
             if (page == null) {
                 readNextPage();
+                if (indexIter != null && indexIter.hasNext()) {
+                    long skipRows = targetRow - currentRow;
+                    while (skipRows > 0) {
+                        skipRows -= skipValues((int) skipRows);
+                    }
+                    currentRow = targetRow;
+                }
             }
             int offset = Math.min(remainingValueCountInPage, readOffset - valuePosition);
             skipValues(offset);
@@ -402,10 +417,12 @@ public abstract class PrimitiveColumnReader
         try {
             valuesReader.initFromPage(valueCount, in);
             if (firstRowIndex != -1) {
-                currentRow = firstRowIndex - 1;
+                currentRow = firstRowIndex;
+                targetRow = indexIter.hasNext() ? indexIter.peek() : Long.MAX_VALUE;
             }
             else {
-                currentRow = -1;
+                currentRow = 0;
+                targetRow = 0;
             }
             return valuesReader;
         }
@@ -414,17 +431,17 @@ public abstract class PrimitiveColumnReader
         }
     }
 
-    private boolean skipRL(int rl)
+    private boolean nextRow(int rl)
     {
         if (indexIter == null) {
             return false;
         }
 
         if (rl == 0) {
-            ++currentRow;
             if (currentRow > targetRow) {
-                targetRow = indexIter.hasNext() ? indexIter.nextLong() : Long.MAX_VALUE;
+                targetRow = indexIter.hasNext() ? indexIter.next() : Long.MAX_VALUE;
             }
+            return currentRow++ < targetRow;
         }
 
         return currentRow < targetRow;
