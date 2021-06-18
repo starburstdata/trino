@@ -32,6 +32,7 @@ import java.util.function.Supplier;
 
 import static com.google.common.collect.Iterators.singletonIterator;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+import static io.airlift.concurrent.MoreFutures.addSuccessCallback;
 import static io.airlift.concurrent.MoreFutures.getDone;
 import static java.util.Collections.emptyIterator;
 import static java.util.Objects.requireNonNull;
@@ -94,11 +95,39 @@ public class SpillingJoinProcessor
             // Closer is documented to mimic try-with-resource, which implies close will happen in reverse order.
             closer.register(afterClose::run);
 
+            closer.register(this::finishProbeGracefully);
             closer.register(sourcePagesJoiner);
             sourcePagesJoiner.getSpiller().ifPresent(closer::register);
         }
         catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    private void finishProbeGracefully()
+    {
+        if (partitionedConsumption == null) {
+            partitionedConsumption = lookupSourceFactory.finishProbeOperator(lookupJoinsCount);
+            addSuccessCallback(partitionedConsumption, this::finishProbeGracefully);
+            return;
+        }
+
+        if (lookupPartitions == null) {
+            lookupPartitions = getDone(partitionedConsumption).beginConsumption();
+        }
+
+        if (previousPartition != null) {
+            if (!previousPartitionLookupSource.isDone()) {
+                addSuccessCallback(previousPartitionLookupSource, this::finishProbeGracefully);
+                return;
+            }
+            previousPartition.release();
+        }
+
+        if (lookupPartitions.hasNext()) {
+            previousPartition = lookupPartitions.next();
+            previousPartitionLookupSource = previousPartition.load();
+            addSuccessCallback(previousPartitionLookupSource, this::finishProbeGracefully);
         }
     }
 

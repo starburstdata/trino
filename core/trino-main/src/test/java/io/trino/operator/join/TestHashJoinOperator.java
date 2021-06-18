@@ -37,6 +37,7 @@ import io.trino.operator.OperatorAssertion;
 import io.trino.operator.OperatorContext;
 import io.trino.operator.OperatorFactories;
 import io.trino.operator.OperatorFactory;
+import io.trino.operator.PipelineContext;
 import io.trino.operator.ProcessorContext;
 import io.trino.operator.TaskContext;
 import io.trino.operator.TrinoOperatorFactories;
@@ -263,6 +264,119 @@ public class TestHashJoinOperator
                 .build();
 
         assertOperatorEquals(joinOperatorFactory, taskContext.addPipelineContext(0, true, true, false).addDriverContext(), probeInput, expected, true, getHashChannels(probePages, buildPages));
+    }
+
+    @Test(timeOut = 30_000)
+    public void testInnerJoinWithSpillWithEarlyTermination()
+    {
+        TaskStateMachine taskStateMachine = new TaskStateMachine(new TaskId("query", 0, 0), executor);
+        TaskContext taskContext = TestingTaskContext.createTaskContext(executor, scheduledExecutor, TEST_SESSION, taskStateMachine);
+
+        PipelineContext joinPipelineContext = taskContext.addPipelineContext(2, true, true, false);
+        DriverContext joinDriverContext1 = joinPipelineContext.addDriverContext();
+        DriverContext joinDriverContext2 = joinPipelineContext.addDriverContext();
+
+        // build factory
+        RowPagesBuilder buildPages = rowPagesBuilder(ImmutableList.of(VARCHAR, BIGINT))
+                .addSequencePage(4, 20, 200)
+                .addSequencePage(4, 20, 200)
+                .addSequencePage(4, 30, 300)
+                .addSequencePage(4, 40, 400);
+
+        // force a yield for every match in LookupJoinOperator, set called to true after first
+        AtomicBoolean called = new AtomicBoolean(false);
+        InternalJoinFilterFunction filterFunction = new TestInternalJoinFilterFunction(
+                (leftPosition, leftPage, rightPosition, rightPage) -> {
+                    called.set(true);
+                    return true;
+                });
+
+        BuildSideSetup buildSideSetup = setupBuildSide(nodePartitioningManager, true, taskContext, Ints.asList(0), buildPages, Optional.of(filterFunction), true, SINGLE_STREAM_SPILLER_FACTORY);
+        JoinBridgeManager<PartitionedLookupSourceFactory> lookupSourceFactoryManager = buildSideSetup.getLookupSourceFactoryManager();
+
+        // probe factory
+        RowPagesBuilder probe1Pages = rowPagesBuilder(true, Ints.asList(0), ImmutableList.of(VARCHAR, BIGINT))
+                .row("no_match_1", 123_000L)
+                .row("no_match_2", 123_000L);
+        RowPagesBuilder probe2Pages = rowPagesBuilder(true, Ints.asList(0), ImmutableList.of(VARCHAR, BIGINT))
+                .row("20", 123_000L)
+                .row("20", 123_000L)
+                .pageBreak()
+                .addSequencePage(20, 0, 123_000)
+                .addSequencePage(10, 30, 123_000);
+        OperatorFactory joinOperatorFactory = innerJoinOperatorFactory(operatorFactories, lookupSourceFactoryManager, probe2Pages, PARTITIONING_SPILLER_FACTORY, false, false, OptionalInt.of(2));
+
+        // build drivers and operators
+        instantiateBuildDrivers(buildSideSetup, taskContext);
+        List<Driver> buildDrivers = buildSideSetup.getBuildDrivers();
+        int buildOperatorCount = buildDrivers.size();
+        LookupSourceFactory lookupSourceFactory = lookupSourceFactoryManager.getJoinBridge(Lifespan.taskWide());
+
+        Operator lookupOperator1 = joinOperatorFactory.createOperator(joinDriverContext1);
+        Operator lookupOperator2 = joinOperatorFactory.createOperator(joinDriverContext2);
+        joinOperatorFactory.noMoreOperators();
+
+        ListenableFuture<LookupSourceProvider> lookupSourceProvider = lookupSourceFactory.createLookupSourceProvider();
+        while (!lookupSourceProvider.isDone()) {
+            for (Driver buildDriver : buildDrivers) {
+                checkErrors(taskStateMachine);
+                buildDriver.process();
+            }
+        }
+        getFutureValue(lookupSourceProvider).close();
+
+        for (int i = 0; i < buildOperatorCount; i++) {
+            revokeMemory(buildSideSetup.getBuildOperators().get(i));
+        }
+
+        for (Driver buildDriver : buildDrivers) {
+            runDriverInThread(executor, buildDriver);
+        }
+
+        ValuesOperatorFactory valuesOperatorFactory1 = new ValuesOperatorFactory(17, new PlanNodeId("values1"), probe1Pages.build());
+        ValuesOperatorFactory valuesOperatorFactory2 = new ValuesOperatorFactory(18, new PlanNodeId("values2"), probe2Pages.build());
+        PageBuffer pageBuffer = new PageBuffer(10);
+        PageBufferOperatorFactory pageBufferOperatorFactory = new PageBufferOperatorFactory(19, new PlanNodeId("pageBuffer"), pageBuffer);
+
+        Driver joinDriver1 = Driver.createDriver(
+                joinDriverContext1,
+                valuesOperatorFactory1.createOperator(joinDriverContext1),
+                lookupOperator1,
+                pageBufferOperatorFactory.createOperator(joinDriverContext1));
+
+        Driver joinDriver2 = Driver.createDriver(
+                joinDriverContext2,
+                valuesOperatorFactory2.createOperator(joinDriverContext2),
+                lookupOperator2,
+                pageBufferOperatorFactory.createOperator(joinDriverContext2));
+
+        while (!called.get()) {
+            checkErrors(taskStateMachine);
+            processRow(joinDriver1, taskStateMachine);
+            processRow(joinDriver2, taskStateMachine);
+        }
+        joinDriver1.close();
+        joinDriver1.process();
+
+        while (!joinDriver2.isFinished()) {
+            processRow(joinDriver2, taskStateMachine);
+        }
+        checkErrors(taskStateMachine);
+
+        List<Page> pages = getPages(pageBuffer);
+
+        MaterializedResult expected = MaterializedResult.resultBuilder(taskContext.getSession(), concat(probe2Pages.getTypesWithoutHash(), buildPages.getTypesWithoutHash()))
+                .row("20", 123_000L, "20", 200L)
+                .row("20", 123_000L, "20", 200L)
+                .row("20", 123_000L, "20", 200L)
+                .row("20", 123_000L, "20", 200L)
+                .row("30", 123_000L, "30", 300L)
+                .row("31", 123_001L, "31", 301L)
+                .row("32", 123_002L, "32", 302L)
+                .row("33", 123_003L, "33", 303L)
+                .build();
+
+        assertEqualsIgnoreOrder(getProperColumns(lookupOperator1, concat(probe2Pages.getTypes(), buildPages.getTypes()), probe2Pages, pages).getMaterializedRows(), expected.getMaterializedRows());
     }
 
     @Test

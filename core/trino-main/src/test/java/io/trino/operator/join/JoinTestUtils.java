@@ -94,6 +94,25 @@ public final class JoinTestUtils
             boolean outputSingleMatch,
             boolean hasFilter)
     {
+        return innerJoinOperatorFactory(
+                operatorFactories,
+                lookupSourceFactoryManager,
+                probePages,
+                partitioningSpillerFactory,
+                outputSingleMatch,
+                hasFilter,
+                OptionalInt.of(1));
+    }
+
+    public static OperatorFactory innerJoinOperatorFactory(
+            OperatorFactories operatorFactories,
+            JoinBridgeManager<PartitionedLookupSourceFactory> lookupSourceFactoryManager,
+            RowPagesBuilder probePages,
+            PartitioningSpillerFactory partitioningSpillerFactory,
+            boolean outputSingleMatch,
+            boolean hasFilter,
+            OptionalInt totalOperatorsCount)
+    {
         return operatorFactories.innerJoin(
                 0,
                 new PlanNodeId("test"),
@@ -105,7 +124,7 @@ public final class JoinTestUtils
                 Ints.asList(0),
                 getHashChannelAsInt(probePages),
                 Optional.empty(),
-                OptionalInt.of(1),
+                totalOperatorsCount,
                 partitioningSpillerFactory,
                 TYPE_OPERATOR_FACTORY);
     }
