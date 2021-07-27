@@ -12,6 +12,8 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.runner.RunnerException;
 
+import java.lang.invoke.CallSite;
+import java.lang.invoke.LambdaMetafactory;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -35,6 +37,7 @@ public class BenchmarkFoo
     public int first;
     public int second;
     public final MethodHandle mhh;
+    private final SumInterface lambdaMetafactoryFunction;
     public MetaSum sumInterface;
 
     @Benchmark
@@ -65,6 +68,18 @@ public class BenchmarkFoo
     @Benchmark
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @BenchmarkMode(Mode.AverageTime)
+    public int lambdaMetafactory()
+    {
+        int result = 0;
+        for (int i = 0; i < 10_000; ++i) {
+            result += lambdaMetafactoryFunction.sum(first, result);
+        }
+        return result;
+    }
+
+    @Benchmark
+    @OutputTimeUnit(TimeUnit.NANOSECONDS)
+    @BenchmarkMode(Mode.AverageTime)
     public int interfaceSum()
             throws Throwable
     {
@@ -78,16 +93,28 @@ public class BenchmarkFoo
 
     public BenchmarkFoo()
     {
-        MethodHandle mhhh = null;
-
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
         try {
-            mhhh = MethodHandles.lookup().findStatic(IntSum.class, "sum", MethodType.methodType(int.class, int.class, int.class));
+            mhh = lookup.findStatic(IntSum.class, "sum", MethodType.methodType(int.class, int.class, int.class));
         }
         catch (NoSuchMethodException | IllegalAccessException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
 
-        mhh = mhhh;
+        // LambdaMetafactory setup
+        try {
+            CallSite site = LambdaMetafactory.metafactory(
+                    lookup,
+                    "sum",
+                    MethodType.methodType(SumInterface.class), //signature of lambda factory
+                    MethodType.methodType(int.class, int.class, int.class), // signature of method SumInterface#sum
+                    mhh,
+                    mhh.type());
+            lambdaMetafactoryFunction = (SumInterface) site.getTarget().invokeExact();
+        }
+        catch (Throwable throwable) {
+            throw new RuntimeException(throwable);
+        }
     }
 
     @Setup
