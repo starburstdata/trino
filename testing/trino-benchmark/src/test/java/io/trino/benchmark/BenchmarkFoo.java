@@ -36,42 +36,42 @@ public class BenchmarkFoo
 
     public int first;
     public int second;
-    public final MethodHandle mhh;
-    private final SumInterface lambdaMetafactoryFunction;
+    public MethodHandle mhh;
+    private SumInterface lambdaMetafactoryFunction;
     public MetaSum sumInterface;
 
-    @Benchmark
+    //@Benchmark
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @BenchmarkMode(Mode.AverageTime)
     public int directMethodCall()
     {
         int result = 0;
-        for (int i = 0; i < 10_000; i++) {
+        for (int i = 0; i < 50_000; i++) {
             result += IntSum.sum(first, result);
         }
         return result;
     }
 
-    @Benchmark
+    //@Benchmark
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @BenchmarkMode(Mode.AverageTime)
     public int finalMethodHandle()
             throws Throwable
     {
         int result = 0;
-        for (int i = 0; i < 10_000; ++i) {
+        for (int i = 0; i < 50_000; ++i) {
             result += (int) mhh.invokeExact(first, result);
         }
         return result;
     }
 
-    @Benchmark
+    //@Benchmark
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @BenchmarkMode(Mode.AverageTime)
     public int lambdaMetafactory()
     {
         int result = 0;
-        for (int i = 0; i < 10_000; ++i) {
+        for (int i = 0; i < 50_000; ++i) {
             result += lambdaMetafactoryFunction.sum(first, result);
         }
         return result;
@@ -85,17 +85,17 @@ public class BenchmarkFoo
     {
         //return sumInterface.sum(first, second);
         int result = 0;
-        for (int i = 0; i < 10_000; ++i) {
+        for (int i = 0; i < 50_000; ++i) {
             result += sumInterface.sum(first, result);
         }
         return result;
     }
 
-    public BenchmarkFoo()
+    private void setupMH(Class<?> clazz)
     {
         MethodHandles.Lookup lookup = MethodHandles.lookup();
         try {
-            mhh = lookup.findStatic(IntSum.class, "sum", MethodType.methodType(int.class, int.class, int.class));
+            mhh = lookup.findStatic(clazz, "sum", MethodType.methodType(int.class, int.class, int.class));
         }
         catch (NoSuchMethodException | IllegalAccessException e) {
             throw new RuntimeException(e);
@@ -131,7 +131,6 @@ public class BenchmarkFoo
         interfaceSum();
         sumInterface = new MetaSum(new SumInterfaceA());*/
 
-
         first = new MetaSum(new SumInterfaceB()).sum(first, 0);
         first = new MetaSum(new SumInterfaceC()).sum(first, 0);
         first = new MetaSum(new SumInterfaceD()).sum(first, 0);
@@ -143,6 +142,15 @@ public class BenchmarkFoo
         sumInterface = new MetaSum(new SumInterfaceA());
         interfaceSum();
         sumInterface = new MetaSum(new SumInterfaceA());
+
+        setupMH(IntSum2.class);
+        lambdaMetafactory();
+        setupMH(IntSum3.class);
+        lambdaMetafactory();
+        setupMH(IntSum4.class);
+        lambdaMetafactory();
+        setupMH(IntSum.class);
+        lambdaMetafactory();
     }
 
     public static void main(String[] args)
