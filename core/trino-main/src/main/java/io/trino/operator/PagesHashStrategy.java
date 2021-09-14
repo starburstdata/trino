@@ -15,6 +15,9 @@ package io.trino.operator;
 
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
+import io.trino.spi.block.Block;
+import io.trino.spi.type.BigintType;
+import io.trino.spi.type.Type;
 
 public interface PagesHashStrategy
 {

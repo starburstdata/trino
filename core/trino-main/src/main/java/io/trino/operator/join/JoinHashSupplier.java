@@ -18,6 +18,7 @@ import io.trino.Session;
 import io.trino.operator.PagesHashStrategy;
 import io.trino.spi.Page;
 import io.trino.spi.block.Block;
+import io.trino.spi.type.BigintType;
 import io.trino.sql.gen.JoinFilterFunctionCompiler.JoinFilterFunctionFactory;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 
@@ -43,6 +44,7 @@ public class JoinHashSupplier
     public JoinHashSupplier(
             Session session,
             PagesHashStrategy pagesHashStrategy,
+            HashChannels hashChannels,
             LongArrayList addresses,
             List<List<Block>> channels,
             Optional<JoinFilterFunctionFactory> filterFunctionFactory,
@@ -69,8 +71,16 @@ public class JoinHashSupplier
         }
 
         this.pages = channelsToPages(channels);
-        this.pagesHash = new PagesHash(addresses, pagesHashStrategy, positionLinksFactoryBuilder);
+        this.pagesHash = createPagesHash(pagesHashStrategy, hashChannels, addresses, positionLinksFactoryBuilder);
         this.positionLinks = positionLinksFactoryBuilder.isEmpty() ? Optional.empty() : Optional.of(positionLinksFactoryBuilder.build());
+    }
+
+    private PagesHash createPagesHash(PagesHashStrategy pagesHashStrategy, HashChannels hashChannels, LongArrayList addresses, PositionLinks.FactoryBuilder positionLinksFactoryBuilder)
+    {
+        if (hashChannels.isSingleHashOfType(BigintType.BIGINT)) {
+            return new BigIntPagesHash(addresses, pagesHashStrategy, positionLinksFactoryBuilder, hashChannels);
+        }
+        return new GenericPagesHash(addresses, pagesHashStrategy, positionLinksFactoryBuilder);
     }
 
     @Override

@@ -35,10 +35,11 @@ import io.airlift.bytecode.instruction.LabelNode;
 import io.airlift.jmx.CacheStatsMBean;
 import io.trino.Session;
 import io.trino.operator.PagesHashStrategy;
+import io.trino.operator.join.GenericPagesHash;
+import io.trino.operator.join.HashChannels;
 import io.trino.operator.join.JoinHash;
 import io.trino.operator.join.JoinHashSupplier;
 import io.trino.operator.join.LookupSourceSupplier;
-import io.trino.operator.join.PagesHash;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.block.Block;
@@ -169,7 +170,7 @@ public class JoinCompiler
                 LookupSourceSupplier.class,
                 JoinHashSupplier.class,
                 JoinHash.class,
-                PagesHash.class);
+                GenericPagesHash.class);
 
         return new LookupSourceSupplierFactory(joinHashSupplierClass, new PagesHashStrategyFactory(pagesHashStrategyClass));
     }
@@ -1019,7 +1020,7 @@ public class JoinCompiler
         {
             this.pagesHashStrategyFactory = pagesHashStrategyFactory;
             try {
-                constructor = joinHashSupplierClass.getConstructor(Session.class, PagesHashStrategy.class, LongArrayList.class, List.class, Optional.class, Optional.class, List.class);
+                constructor = joinHashSupplierClass.getConstructor(Session.class, PagesHashStrategy.class, HashChannels.class, LongArrayList.class, List.class, Optional.class, Optional.class, List.class);
             }
             catch (NoSuchMethodException e) {
                 throw new RuntimeException(e);
@@ -1033,11 +1034,12 @@ public class JoinCompiler
                 OptionalInt hashChannel,
                 Optional<JoinFilterFunctionFactory> filterFunctionFactory,
                 Optional<Integer> sortChannel,
-                List<JoinFilterFunctionFactory> searchFunctionFactories)
+                List<JoinFilterFunctionFactory> searchFunctionFactories,
+                HashChannels hashChannels)
         {
             PagesHashStrategy pagesHashStrategy = pagesHashStrategyFactory.createPagesHashStrategy(channels, hashChannel);
             try {
-                return constructor.newInstance(session, pagesHashStrategy, addresses, channels, filterFunctionFactory, sortChannel, searchFunctionFactories);
+                return constructor.newInstance(session, pagesHashStrategy, hashChannels, addresses, channels, filterFunctionFactory, sortChannel, searchFunctionFactories);
             }
             catch (ReflectiveOperationException e) {
                 throw new RuntimeException(e);

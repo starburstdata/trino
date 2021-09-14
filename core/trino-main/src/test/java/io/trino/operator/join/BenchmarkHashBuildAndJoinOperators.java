@@ -47,10 +47,15 @@ import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
-import org.openjdk.jmh.runner.RunnerException;
+import org.openjdk.jmh.profile.AsyncProfiler;
+import org.openjdk.jmh.runner.options.TimeValue;
 import org.testng.annotations.Test;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -474,8 +479,28 @@ public class BenchmarkHashBuildAndJoinOperators
     }
 
     public static void main(String[] args)
-            throws RunnerException
+            throws Exception
     {
-        benchmark(BenchmarkHashBuildAndJoinOperators.class).run();
+        String jmhDir = "jmh";
+        new File(jmhDir).mkdirs();
+        String jmhFile = String.valueOf(Files.list(Paths.get(jmhDir))
+                .map(path -> Integer.parseInt(path.getFileName().toString()) + 1)
+                .sorted(Comparator.reverseOrder())
+                .findFirst().orElse(0));
+        benchmark(BenchmarkHashBuildAndJoinOperators.class)
+                .withOptions(options -> options
+                        .addProfiler(AsyncProfiler.class, String.format("dir=%s/%s;output=text;output=flamegraph", jmhDir, jmhFile))
+                        .forks(1)
+                        .measurementTime(TimeValue.seconds(1))
+                        .param("buildHashEnabled", "true")
+                        .param("buildRowsRepetition", "1")
+                        .param("matchRate", "1")
+                        .param("hashColumns", "bigint")
+                        .param("outputColumns", "bigint")
+                        .param("partitionCount", "1")
+                        .exclude(".*benchmarkBuildHash.*")
+//                        .jvmArgsAppend("-XX:+UnlockDiagnosticVMOptions", "-XX:+TraceClassLoading", "-XX:+LogCompilation", "-XX:+DebugNonSafepoints", "-XX:+PrintAssembly", "-XX:+PrintInlining")
+                )
+                .run();
     }
 }

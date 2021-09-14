@@ -21,6 +21,7 @@ import io.airlift.units.DataSize;
 import io.trino.Session;
 import io.trino.geospatial.Rectangle;
 import io.trino.operator.SpatialIndexBuilderOperator.SpatialPredicate;
+import io.trino.operator.join.HashChannels;
 import io.trino.operator.join.JoinHashSupplier;
 import io.trino.operator.join.LookupSource;
 import io.trino.operator.join.LookupSourceSupplier;
@@ -499,6 +500,7 @@ public class PagesIndex
             Optional<List<Integer>> outputChannels)
     {
         List<List<Block>> channels = ImmutableList.copyOf(this.channels);
+        HashChannels hashChannels = new HashChannels(types, channels, joinChannels);
         if (!joinChannels.isEmpty()) {
             // todo compiled implementation of lookup join does not support when we are joining with empty join channels.
             // This code path will trigger only for OUTER joins. To fix that we need to add support for
@@ -512,7 +514,8 @@ public class PagesIndex
                     hashChannel,
                     filterFunctionFactory,
                     sortChannel,
-                    searchFunctionFactories);
+                    searchFunctionFactories,
+                    hashChannels);
         }
 
         // if compilation fails
@@ -528,6 +531,7 @@ public class PagesIndex
         return new JoinHashSupplier(
                 session,
                 hashStrategy,
+                hashChannels,
                 valueAddresses,
                 channels,
                 filterFunctionFactory,
