@@ -41,6 +41,7 @@ public final class PagesHash
 
     private final int mask;
     private final int[] key;
+    private final byte[] keyHashes;
     private final long size;
 
     // Native array of hashes for faster collisions resolution compared
@@ -63,6 +64,7 @@ public final class PagesHash
 
         mask = hashSize - 1;
         key = new int[hashSize];
+        keyHashes = new byte[hashSize];
         Arrays.fill(key, -1);
 
         positionToHashes = new byte[addresses.size()];
@@ -82,7 +84,7 @@ public final class PagesHash
             // to extracting hashes on the fly in the loop below.
             for (int position = 0; position < stepSize; position++) {
                 int realPosition = position + stepBeginPosition;
-                long hash = readHashPosition(realPosition);
+                long hash = readHashPosition((int) addresses.getLong(realPosition));
                 positionToFullHashes[position] = hash;
                 positionToHashes[realPosition] = (byte) hash;
             }
@@ -90,7 +92,7 @@ public final class PagesHash
             // index pages
             for (int position = 0; position < stepSize; position++) {
                 int realPosition = position + stepBeginPosition;
-                if (isPositionNull(realPosition)) {
+                if (isPositionNull((int) addresses.getLong(realPosition))) {
                     continue;
                 }
 
@@ -100,9 +102,10 @@ public final class PagesHash
                 // look for an empty slot or a slot containing this key
                 while (key[pos] != -1) {
                     int currentKey = key[pos];
-                    if (((byte) hash) == positionToHashes[currentKey] && positionEqualsPositionIgnoreNulls(currentKey, realPosition)) {
+                    if (((byte) hash) == keyHashes[pos] && positionEqualsPositionIgnoreNulls(currentKey, (int) addresses.getLong(realPosition))) {
                         // found a slot for this key
                         // link the new key position to the current key position
+                        System.err.println("DUPA");
                         realPosition = positionLinks.link(realPosition, currentKey);
 
                         // key[pos] updated outside of this loop
@@ -113,7 +116,9 @@ public final class PagesHash
                     hashCollisionsLocal++;
                 }
 
-                key[pos] = realPosition;
+                //key[pos] = realPosition;
+                key[pos] = (int) addresses.getLong(realPosition);
+                keyHashes[pos] = (byte) hash;
             }
         }
 
@@ -153,7 +158,7 @@ public final class PagesHash
         int pos = getHashPosition(rawHash, mask);
 
         while (key[pos] != -1) {
-            if (positionEqualsCurrentRowIgnoreNulls(key[pos], (byte) rawHash, rightPosition, hashChannelsPage)) {
+            if (positionEqualsCurrentRowIgnoreNulls(pos, key[pos], (byte) rawHash, rightPosition, hashChannelsPage)) {
                 return key[pos];
             }
             // increment position and mask to handler wrap around
@@ -164,7 +169,8 @@ public final class PagesHash
 
     public void appendTo(long position, PageBuilder pageBuilder, int outputChannelOffset)
     {
-        long pageAddress = addresses.getLong(toIntExact(position));
+        //long pageAddress = addresses.getLong(toIntExact(position));
+        long pageAddress = position;
         int blockIndex = decodeSliceIndex(pageAddress);
         int blockPosition = decodePosition(pageAddress);
 
@@ -173,7 +179,8 @@ public final class PagesHash
 
     private boolean isPositionNull(int position)
     {
-        long pageAddress = addresses.getLong(position);
+        //long pageAddress = addresses.getLong(position);
+        long pageAddress = position;
         int blockIndex = decodeSliceIndex(pageAddress);
         int blockPosition = decodePosition(pageAddress);
 
@@ -182,20 +189,22 @@ public final class PagesHash
 
     private long readHashPosition(int position)
     {
-        long pageAddress = addresses.getLong(position);
+        //long pageAddress = addresses.getLong(position);
+        long pageAddress = position;
         int blockIndex = decodeSliceIndex(pageAddress);
         int blockPosition = decodePosition(pageAddress);
 
         return pagesHashStrategy.hashPosition(blockIndex, blockPosition);
     }
 
-    private boolean positionEqualsCurrentRowIgnoreNulls(int leftPosition, byte rawHash, int rightPosition, Page rightPage)
+    private boolean positionEqualsCurrentRowIgnoreNulls(int leftIndex, int leftPosition, byte rawHash, int rightPosition, Page rightPage)
     {
-        if (positionToHashes[leftPosition] != rawHash) {
+        if (keyHashes[leftIndex] != rawHash) {
             return false;
         }
 
-        long pageAddress = addresses.getLong(leftPosition);
+        //long pageAddress = addresses.getLong(leftPosition);
+        long pageAddress = leftPosition;
         int blockIndex = decodeSliceIndex(pageAddress);
         int blockPosition = decodePosition(pageAddress);
 
@@ -204,11 +213,13 @@ public final class PagesHash
 
     private boolean positionEqualsPositionIgnoreNulls(int leftPosition, int rightPosition)
     {
-        long leftPageAddress = addresses.getLong(leftPosition);
+        //long leftPageAddress = addresses.getLong(leftPosition);
+        long leftPageAddress = leftPosition;
         int leftBlockIndex = decodeSliceIndex(leftPageAddress);
         int leftBlockPosition = decodePosition(leftPageAddress);
 
-        long rightPageAddress = addresses.getLong(rightPosition);
+        //long rightPageAddress = addresses.getLong(rightPosition);
+        long rightPageAddress = rightPosition;
         int rightBlockIndex = decodeSliceIndex(rightPageAddress);
         int rightBlockPosition = decodePosition(rightPageAddress);
 

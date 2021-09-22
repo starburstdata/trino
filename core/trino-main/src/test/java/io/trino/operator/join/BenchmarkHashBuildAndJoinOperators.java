@@ -86,7 +86,7 @@ import static org.openjdk.jmh.annotations.Mode.AverageTime;
 @Threads(Threads.MAX)
 @OutputTimeUnit(MILLISECONDS)
 @BenchmarkMode(AverageTime)
-@Fork(3)
+@Fork(1)
 @Warmup(iterations = 5)
 @Measurement(iterations = 10, time = 2, timeUnit = SECONDS)
 public class BenchmarkHashBuildAndJoinOperators
@@ -102,13 +102,13 @@ public class BenchmarkHashBuildAndJoinOperators
         protected static final int ROWS_PER_PAGE = 1024;
         protected static final int BUILD_ROWS_NUMBER = 8_000_000;
 
-        @Param({"varchar", "bigint", "all"})
+        @Param("bigint")
         protected String hashColumns = "bigint";
 
-        @Param({"false", "true"})
+        @Param("true")
         protected boolean buildHashEnabled;
 
-        @Param({"1", "5"})
+        @Param("1")
         protected int buildRowsRepetition = 1;
 
         protected ExecutorService executor;
@@ -191,7 +191,7 @@ public class BenchmarkHashBuildAndJoinOperators
     {
         protected static final int PROBE_ROWS_NUMBER = 1_400_000;
 
-        @Param({"0.1", "1", "2"})
+        @Param({"0.1", "1", "5"})
         protected double matchRate = 1;
 
         @Param({"bigint", "all"})
@@ -307,7 +307,7 @@ public class BenchmarkHashBuildAndJoinOperators
         }
     }
 
-    @Benchmark
+    @Test
     public JoinBridgeManager<PartitionedLookupSourceFactory> benchmarkBuildHash(BuildContext buildContext)
     {
         List<Integer> outputChannels = ImmutableList.of(0, 1, 2);
