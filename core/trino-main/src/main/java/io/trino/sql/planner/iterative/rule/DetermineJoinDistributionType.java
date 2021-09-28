@@ -37,6 +37,7 @@ import io.trino.sql.tree.Unnest;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.ToDoubleFunction;
 
 import static io.trino.SystemSessionProperties.getJoinDistributionType;
 import static io.trino.SystemSessionProperties.getJoinMaxBroadcastTableSize;
@@ -121,6 +122,32 @@ public class DetermineJoinDistributionType
         return sourceNodes.stream()
                 .mapToDouble(sourceNode -> statsProvider.getStats(sourceNode).getOutputSizeInBytes(sourceNode.getOutputSymbols(), typeProvider))
                 .sum();
+    }
+
+    public static double getSourceTablesRowCount(PlanNode node, Context context)
+    {
+        return getSourceTablesRowCount(node, context.getLookup(), context.getStatsProvider());
+    }
+
+    private static double getSourceTablesRowCount(PlanNode node, Lookup lookup, StatsProvider statsProvider)
+    {
+        return getSourceTablesTotal(node, lookup, statsProvider, PlanNodeStatsEstimate::getOutputRowCount);
+    }
+
+    private static double getSourceTablesTotal(PlanNode node, Lookup lookup, StatsProvider statsProvider, ToDoubleFunction<PlanNodeStatsEstimate> statsExtractor)
+    {
+        boolean hasExpandingNodes = PlanNodeSearcher.searchFrom(node, lookup)
+                .where(isInstanceOfAny(JoinNode.class, Unnest.class))
+                .matches();
+        if (hasExpandingNodes) {
+            return Double.NaN;
+        }
+
+        List<PlanNode> sourceNodes = PlanNodeSearcher.searchFrom(node, lookup)
+                .where(isInstanceOfAny(TableScanNode.class, ValuesNode.class))
+                .findAll();
+
+        return sourceNodes.stream().map(statsProvider::getStats).mapToDouble(statsExtractor).sum();
     }
 
     private PlanNode getCostBasedJoin(JoinNode joinNode, Context context)

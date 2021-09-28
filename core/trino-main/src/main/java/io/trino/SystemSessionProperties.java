@@ -143,6 +143,7 @@ public final class SystemSessionProperties
     public static final String MAX_UNACKNOWLEDGED_SPLITS_PER_TASK = "max_unacknowledged_splits_per_task";
     public static final String MERGE_PROJECT_WITH_VALUES = "merge_project_with_values";
     public static final String TIME_ZONE_ID = "time_zone_id";
+    public static final String BUILD_HASH_THREAD_COUNT = "build_hash_thread_count";
 
     private final List<PropertyMetadata<?>> sessionProperties;
 
@@ -660,7 +661,12 @@ public final class SystemSessionProperties
                                 getTimeZoneKey(value);
                             }
                         },
-                        true));
+                        true),
+                integerProperty(
+                        BUILD_HASH_THREAD_COUNT,
+                        "Default number of threads used to build hash for lookup join",
+                        taskManagerConfig.getTaskConcurrency(),
+                        false));
     }
 
     @Override
@@ -1172,5 +1178,10 @@ public final class SystemSessionProperties
     public static Optional<String> getTimeZoneId(Session session)
     {
         return Optional.ofNullable(session.getSystemProperty(TIME_ZONE_ID, String.class));
+    }
+
+    public static int getBuildHashThreadCount(Session session)
+    {
+        return session.getSystemProperty(BUILD_HASH_THREAD_COUNT, Integer.class);
     }
 }

@@ -26,7 +26,7 @@ import java.util.function.Function;
 
 import static java.util.Objects.requireNonNull;
 
-class PartitioningExchanger
+public class PartitioningExchanger
         implements LocalExchanger
 {
     private final List<Consumer<PageReference>> buffers;

@@ -46,6 +46,11 @@ public interface PositionLinks
          */
         int link(int left, int right);
 
+        default int link(int left, int right, long pos)
+        {
+            return link(left, right);
+        }
+
         Factory build();
 
         /**

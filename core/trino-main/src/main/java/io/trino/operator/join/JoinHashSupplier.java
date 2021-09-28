@@ -16,6 +16,7 @@ package io.trino.operator.join;
 import com.google.common.collect.ImmutableList;
 import io.trino.Session;
 import io.trino.operator.PagesHashStrategy;
+import io.trino.operator.join.ConcurrentArrayPositionLinks.ConcurrentFactoryBuilder;
 import io.trino.spi.Page;
 import io.trino.spi.block.Block;
 import io.trino.sql.gen.JoinFilterFunctionCompiler.JoinFilterFunctionFactory;
@@ -26,6 +27,7 @@ import java.util.Optional;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static io.trino.SystemSessionProperties.getBuildHashThreadCount;
 import static io.trino.operator.join.JoinUtils.channelsToPages;
 import static java.util.Objects.requireNonNull;
 
@@ -56,20 +58,30 @@ public class JoinHashSupplier
         requireNonNull(channels, "channels is null");
         requireNonNull(pagesHashStrategy, "pagesHashStrategy is null");
 
+        int pagesHashThreadCount = getBuildHashThreadCount(session);
         PositionLinks.FactoryBuilder positionLinksFactoryBuilder;
         if (sortChannel.isPresent()) {
             checkArgument(filterFunctionFactory.isPresent(), "filterFunctionFactory not set while sortChannel set");
-            positionLinksFactoryBuilder = SortedPositionLinks.builder(
-                    addresses.size(),
-                    pagesHashStrategy,
-                    addresses);
+            positionLinksFactoryBuilder = pagesHashThreadCount > 1 ?
+                    ConcurrentSortedPositionLinks.builder(
+                            addresses.size(),
+                            pagesHashStrategy,
+                            addresses) :
+                    SortedPositionLinks.builder(
+                            addresses.size(),
+                            pagesHashStrategy,
+                            addresses);
         }
         else {
-            positionLinksFactoryBuilder = ArrayPositionLinks.builder(addresses.size());
+            positionLinksFactoryBuilder = pagesHashThreadCount > 1 ?
+                    ConcurrentArrayPositionLinks.builder(addresses.size()) :
+                    ArrayPositionLinks.builder(addresses.size());
         }
 
         this.pages = channelsToPages(channels);
-        this.pagesHash = new PagesHash(addresses, pagesHashStrategy, positionLinksFactoryBuilder);
+        this.pagesHash = pagesHashThreadCount > 1 ?
+                ConcurrentPagesHash.create(pagesHashStrategy, addresses, pagesHashThreadCount, (ConcurrentFactoryBuilder) positionLinksFactoryBuilder) :
+                new SingleThreadedPagesHash(addresses, pagesHashStrategy, positionLinksFactoryBuilder);
         this.positionLinks = positionLinksFactoryBuilder.isEmpty() ? Optional.empty() : Optional.of(positionLinksFactoryBuilder.build());
     }
 

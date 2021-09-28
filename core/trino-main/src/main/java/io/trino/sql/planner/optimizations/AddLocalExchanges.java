@@ -73,6 +73,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static io.trino.SystemSessionProperties.getBuildHashThreadCount;
 import static io.trino.SystemSessionProperties.getTaskConcurrency;
 import static io.trino.SystemSessionProperties.getTaskWriterCount;
 import static io.trino.SystemSessionProperties.isDistributedSortEnabled;
@@ -727,7 +728,7 @@ public class AddLocalExchanges
             // this build consumes the input completely, so we do not pass through parent preferences
             List<Symbol> buildHashSymbols = Lists.transform(node.getCriteria(), JoinNode.EquiJoinClause::getRight);
             StreamPreferredProperties buildPreference;
-            if (getTaskConcurrency(session) > 1) {
+            if (getTaskConcurrency(session) > 1 && getBuildHashThreadCount(session) == 1) {
                 buildPreference = exactlyPartitionedOn(buildHashSymbols);
             }
             else {

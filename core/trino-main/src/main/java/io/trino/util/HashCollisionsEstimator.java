@@ -71,7 +71,7 @@ public final class HashCollisionsEstimator
 
     private HashCollisionsEstimator() {}
 
-    public static double estimateNumberOfHashCollisions(int numberOfValues, int hashSize)
+    public static double estimateNumberOfHashCollisions(int numberOfValues, long hashSize)
     {
         checkState(0 <= numberOfValues && numberOfValues <= hashSize);
 

@@ -24,7 +24,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
 @ThreadSafe
-final class PageReference
+public final class PageReference
 {
     private static final AtomicIntegerFieldUpdater<PageReference> REFERENCE_COUNT_UPDATER = AtomicIntegerFieldUpdater.newUpdater(PageReference.class, "referenceCount");
 

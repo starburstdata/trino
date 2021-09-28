@@ -34,6 +34,7 @@
     </scm>
 
     <properties>
+        <dep.jmh.version>1.32</dep.jmh.version>
         <air.main.basedir>${project.basedir}</air.main.basedir>
 
         <air.check.skip-spotbugs>true</air.check.skip-spotbugs>
@@ -1247,7 +1248,7 @@
             <dependency>
                 <groupId>it.unimi.dsi</groupId>
                 <artifactId>fastutil</artifactId>
-                <version>8.3.0</version>
+                <version>8.5.6</version>
             </dependency>
 
             <dependency>

@@ -15,9 +15,13 @@ package io.trino.operator.join;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Ints;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.Uninterruptibles;
 import io.airlift.units.DataSize;
 import io.trino.RowPagesBuilder;
+import io.trino.Session;
+import io.trino.client.ClientCapabilities;
 import io.trino.execution.Lifespan;
 import io.trino.operator.DriverContext;
 import io.trino.operator.InterpretedHashGenerator;
@@ -28,7 +32,10 @@ import io.trino.operator.PagesIndex;
 import io.trino.operator.PartitionFunction;
 import io.trino.operator.TaskContext;
 import io.trino.operator.TrinoOperatorFactories;
+import io.trino.operator.exchange.LocalExchangeMemoryManager;
 import io.trino.operator.exchange.LocalPartitionGenerator;
+import io.trino.operator.exchange.PageReference;
+import io.trino.operator.exchange.PartitioningExchanger;
 import io.trino.operator.join.HashBuilderOperator.HashBuilderOperatorFactory;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
@@ -46,34 +53,53 @@ import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
-import org.openjdk.jmh.runner.RunnerException;
+import org.openjdk.jmh.runner.options.TimeValue;
 import org.testng.annotations.Test;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Queue;
 import java.util.Random;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static io.airlift.concurrent.MoreFutures.getFutureValue;
 import static io.airlift.concurrent.Threads.daemonThreadsNamed;
 import static io.airlift.units.DataSize.Unit.GIGABYTE;
 import static io.trino.RowPagesBuilder.rowPagesBuilder;
-import static io.trino.SessionTestUtils.TEST_SESSION;
+import static io.trino.SystemSessionProperties.BUILD_HASH_THREAD_COUNT;
 import static io.trino.jmh.Benchmarks.benchmark;
 import static io.trino.operator.join.JoinBridgeManager.lookupAllAtOnce;
+import static io.trino.plugin.tpch.TpchMetadata.TINY_SCHEMA_NAME;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static io.trino.spiller.PartitioningSpillerFactory.unsupportedPartitioningSpillerFactory;
+import static io.trino.testing.TestingSession.testSessionBuilder;
 import static java.lang.String.format;
-import static java.util.concurrent.Executors.newCachedThreadPool;
+import static java.util.Arrays.stream;
 import static java.util.concurrent.Executors.newScheduledThreadPool;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -109,6 +135,15 @@ public class BenchmarkHashBuildAndJoinOperators
         @Param({"1", "5"})
         protected int buildRowsRepetition = 1;
 
+        @Param({"1", "2", "4", "6", "8"})
+        protected int threadCount;
+
+        @Param({"false", "true"})
+        protected boolean partitioned;
+
+        @Param({"false", "true"})
+        protected boolean sortChannel;
+
         protected ExecutorService executor;
         protected ScheduledExecutorService scheduledExecutor;
         protected List<Page> buildPages;
@@ -132,15 +167,34 @@ public class BenchmarkHashBuildAndJoinOperators
                 default:
                     throw new UnsupportedOperationException(format("Unknown hashColumns value [%s]", hashColumns));
             }
-            executor = newCachedThreadPool(daemonThreadsNamed(getClass().getSimpleName() + "-%s"));
+            executor = Executors.newFixedThreadPool(threadCount, daemonThreadsNamed(getClass().getSimpleName() + "-executor-%s"));
             scheduledExecutor = newScheduledThreadPool(2, daemonThreadsNamed(getClass().getSimpleName() + "-scheduledExecutor-%s"));
 
             initializeBuildPages();
         }
 
+        @TearDown
+        public void tearDown()
+        {
+            executor.shutdownNow();
+            scheduledExecutor.shutdownNow();
+        }
+
         public TaskContext createTaskContext()
         {
-            return TestingTaskContext.createTaskContext(executor, scheduledExecutor, TEST_SESSION, DataSize.of(2, GIGABYTE));
+            return TestingTaskContext.createTaskContext(executor, scheduledExecutor, getSession(), DataSize.of(50, GIGABYTE));
+        }
+
+        private Session getSession()
+        {
+            return testSessionBuilder()
+                    .setCatalog("tpch")
+                    .setSchema(TINY_SCHEMA_NAME)
+                    .setClientCapabilities(stream(ClientCapabilities.values())
+                            .map(ClientCapabilities::toString)
+                            .collect(toImmutableSet()))
+                    .setSystemProperty(BUILD_HASH_THREAD_COUNT, String.valueOf(partitioned ? 1 : threadCount))
+                    .build();
         }
 
         public OptionalInt getHashChannel()
@@ -165,7 +219,7 @@ public class BenchmarkHashBuildAndJoinOperators
 
         protected void initializeBuildPages()
         {
-            RowPagesBuilder buildPagesBuilder = rowPagesBuilder(buildHashEnabled, hashChannels, ImmutableList.of(VARCHAR, BIGINT, BIGINT));
+            RowPagesBuilder buildPagesBuilder = rowPagesBuilder(buildHashEnabled, hashChannels, ImmutableList.of(BIGINT, BIGINT, BIGINT));
 
             int maxValue = BUILD_ROWS_NUMBER / buildRowsRepetition + 40;
             int rows = 0;
@@ -194,9 +248,6 @@ public class BenchmarkHashBuildAndJoinOperators
 
         @Param({"bigint", "all"})
         protected String outputColumns = "bigint";
-
-        @Param({"1", "4"})
-        protected int partitionCount = 1;
 
         protected List<Page> probePages;
         protected List<Integer> outputChannels;
@@ -228,7 +279,7 @@ public class BenchmarkHashBuildAndJoinOperators
                     throw new UnsupportedOperationException(format("Unknown outputColumns value [%s]", hashColumns));
             }
 
-            JoinBridgeManager<PartitionedLookupSourceFactory> lookupSourceFactory = getLookupSourceFactoryManager(this, outputChannels, partitionCount);
+            JoinBridgeManager<PartitionedLookupSourceFactory> lookupSourceFactory = getLookupSourceFactoryManager(this, outputChannels, partitioned ? threadCount : 1);
             joinOperatorFactory = operatorFactories.innerJoin(
                     HASH_JOIN_OPERATOR_ID,
                     TEST_PLAN_NODE_ID,
@@ -243,8 +294,15 @@ public class BenchmarkHashBuildAndJoinOperators
                     OptionalInt.empty(),
                     unsupportedPartitioningSpillerFactory(),
                     TYPE_OPERATOR_FACTORY);
-            buildHash(this, lookupSourceFactory, outputChannels, partitionCount);
+            buildHash(this, lookupSourceFactory, outputChannels, partitioned ? threadCount : 1);
             initializeProbePages();
+        }
+
+        @TearDown
+        @Override
+        public void tearDown()
+        {
+            super.tearDown();
         }
 
         public OperatorFactory getJoinOperatorFactory()
@@ -309,8 +367,9 @@ public class BenchmarkHashBuildAndJoinOperators
     public JoinBridgeManager<PartitionedLookupSourceFactory> benchmarkBuildHash(BuildContext buildContext)
     {
         List<Integer> outputChannels = ImmutableList.of(0, 1, 2);
-        JoinBridgeManager<PartitionedLookupSourceFactory> joinBridgeManager = getLookupSourceFactoryManager(buildContext, outputChannels, 1);
-        buildHash(buildContext, joinBridgeManager, outputChannels, 1);
+        int partitionCount = buildContext.partitioned ? buildContext.threadCount : 1;
+        JoinBridgeManager<PartitionedLookupSourceFactory> joinBridgeManager = getLookupSourceFactoryManager(buildContext, outputChannels, partitionCount);
+        buildHash(buildContext, joinBridgeManager, outputChannels, partitionCount);
         return joinBridgeManager;
     }
 
@@ -338,9 +397,11 @@ public class BenchmarkHashBuildAndJoinOperators
                 outputChannels,
                 buildContext.getHashChannels(),
                 buildContext.getHashChannel(),
-                Optional.empty(),
-                Optional.empty(),
-                ImmutableList.of(),
+                buildContext.sortChannel ? Optional.of((session, addresses, pages) -> (leftPosition, rightPosition, rightPage) -> true) : Optional.empty(),
+                buildContext.sortChannel ? Optional.of(0) : Optional.empty(),
+                buildContext.sortChannel ?
+                        ImmutableList.of((session, addresses, pages) -> (leftPosition, rightPosition, rightPage) -> false) :
+                        ImmutableList.of(),
                 10_000,
                 new PagesIndex.TestingFactory(false),
                 false,
@@ -359,33 +420,74 @@ public class BenchmarkHashBuildAndJoinOperators
             }
         }
         else {
-            PartitionFunction partitionGenerator = new LocalPartitionGenerator(
-                    new InterpretedHashGenerator(
-                            buildContext.getHashChannels().stream()
-                                    .map(channel -> buildContext.getTypes().get(channel))
-                                    .collect(toImmutableList()),
-                            buildContext.getHashChannels(),
-                            TYPE_OPERATOR_FACTORY),
-                    partitionCount);
-
-            for (Page page : buildContext.getBuildPages()) {
-                Page[] partitionedPages = partitionPages(page, buildContext.getTypes(), partitionCount, partitionGenerator);
-
-                for (int i = 0; i < partitionCount; i++) {
-                    operators[i].addInput(partitionedPages[i]);
-                }
-            }
+            addInputPartitioned(buildContext, operators);
         }
-
         LookupSourceFactory lookupSourceFactory = lookupSourceFactoryManager.getJoinBridge(Lifespan.taskWide());
         ListenableFuture<LookupSourceProvider> lookupSourceProvider = lookupSourceFactory.createLookupSourceProvider();
-        for (Operator operator : operators) {
-            operator.finish();
-        }
+        List<? extends Future<?>> futures = Arrays.stream(operators).map(operator -> buildContext.executor.submit(operator::finish))
+                .collect(toImmutableList());
+        futures.forEach(Futures::getUnchecked);
         if (!lookupSourceProvider.isDone()) {
             throw new AssertionError("Expected lookup source provider to be ready");
         }
         getFutureValue(lookupSourceProvider).close();
+    }
+
+    private static void addInputPartitioned(BuildContext buildContext, Operator[] operators)
+    {
+        int partitionCount = operators.length;
+        PartitionFunction partitionGenerator = new LocalPartitionGenerator(
+                new InterpretedHashGenerator(
+                        buildContext.getHashChannels().stream()
+                                .map(channel -> buildContext.getTypes().get(channel))
+                                .collect(toImmutableList()),
+                        buildContext.getHashChannels(),
+                        TYPE_OPERATOR_FACTORY),
+                partitionCount);
+
+        List<BlockingQueue<PageReference>> queues = IntStream.range(0, partitionCount)
+                .mapToObj(i -> new ArrayBlockingQueue<PageReference>(buildContext.getBuildPages().size())).collect(toImmutableList());
+        List<Consumer<PageReference>> partitionConsumers = IntStream.range(0, partitionCount)
+                .mapToObj(i -> (Consumer<PageReference>) pageReference -> {
+                    try {
+                        queues.get(i).put(pageReference);
+                    }
+                    catch (InterruptedException e) {
+                        java.lang.Thread.currentThread().interrupt();
+                        throw new RuntimeException(e);
+                    }
+                }).collect(toImmutableList());
+
+        AtomicBoolean done = new AtomicBoolean(false);
+        // setup reading threads
+        IntStream.range(0, partitionCount)
+                .forEach(i -> {
+                    Operator operator = operators[i];
+                    buildContext.executor.submit(() -> {
+                        BlockingQueue<PageReference> queue = queues.get(i);
+                        while (!done.get()) {
+                            try {
+                                PageReference pageReference = queue.poll(10, MILLISECONDS);
+                                if (pageReference != null) {
+                                    operator.addInput(pageReference.removePage());
+                                }
+                            }
+                            catch (InterruptedException e) {
+                                java.lang.Thread.currentThread().interrupt();
+                                throw new RuntimeException(e);
+                            }
+                        }
+                    });
+                });
+        LocalExchangeMemoryManager memoryManager = new LocalExchangeMemoryManager(Long.MAX_VALUE);
+        PartitioningExchanger partitioningExchanger = new PartitioningExchanger(partitionConsumers, memoryManager, Function.identity(), partitionGenerator);
+        for (Page page : buildContext.getBuildPages()) {
+            partitioningExchanger.accept(page);
+        }
+        while (!queues.stream().allMatch(Queue::isEmpty)) {
+            Uninterruptibles.sleepUninterruptibly(Duration.ofMillis(1));
+        }
+        done.set(true);
     }
 
     private static Page[] partitionPages(Page page, List<Type> types, int partitionCount, PartitionFunction partitionGenerator)
@@ -474,8 +576,53 @@ public class BenchmarkHashBuildAndJoinOperators
     }
 
     public static void main(String[] args)
-            throws RunnerException
+            throws Exception
     {
-        benchmark(BenchmarkHashBuildAndJoinOperators.class).run();
+        benchmark(BenchmarkHashBuildAndJoinOperators.class)
+                .withOptions(options -> options
+//                                .addProfiler(AsyncProfiler.class, asyncProfilerProperties())
+                                .forks(1)
+                                .warmupTime(TimeValue.seconds(1))
+                                .measurementTime(TimeValue.seconds(1))
+                                .param("buildHashEnabled", "true")
+//                                .param("buildRowsRepetition", "1", "10", "100", "1000", "1000000")
+                                .param("buildRowsRepetition", "1", "100")
+                                .param("matchRate", "1")
+                                .param("hashColumns", "bigint")
+                                .param("outputColumns", "bigint")
+//                                .param("partitionCount", "1")
+//                                .param("threadCount", "1", "2", "4", "8")
+                                .param("threadCount", "1", "4", "8")
+                                .param("sortChannel", "false")
+//                                .param("partitioned", "true")
+//                                .exclude(".*benchmarkBuildHash.*")
+                                .exclude(".*benchmarkJoinHash.*")
+//                        .jvmArgsAppend("-XX:+UnlockDiagnosticVMOptions", "-XX:+TraceClassLoading", "-XX:+LogCompilation", "-XX:+DebugNonSafepoints", "-XX:+PrintAssembly", "-XX:+PrintInlining")
+                )
+                .run();
+    }
+
+    private static String asyncProfilerProperties()
+    {
+        String jmhDir = "jmh";
+        new File(jmhDir).mkdirs();
+        String jmhFile = null;
+        try {
+            jmhFile = String.valueOf(Files.list(Paths.get(jmhDir))
+                    .flatMap(path -> {
+                        try {
+                            return Stream.of(Integer.parseInt(path.getFileName().toString()) + 1);
+                        }
+                        catch (NumberFormatException e) {
+                            return Stream.empty();
+                        }
+                    })
+                    .sorted(Comparator.reverseOrder())
+                    .findFirst().orElse(0));
+        }
+        catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return String.format("dir=%s/%s;output=text;output=flamegraph", jmhDir, jmhFile);
     }
 }

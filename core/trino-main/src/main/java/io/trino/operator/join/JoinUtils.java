@@ -80,6 +80,13 @@ public final class JoinUtils
                 .matches();
     }
 
+    public static boolean isBuildSideLocalGatherExchange(PlanNode node)
+    {
+        checkArgument(isInstanceOfAny(JoinNode.class).test(node));
+
+        return JoinUtils.isLocalGatherExchange(((JoinNode) node).getRight());
+    }
+
     private static boolean isRemoteReplicatedExchange(PlanNode node)
     {
         if (!(node instanceof ExchangeNode)) {
