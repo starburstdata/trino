@@ -32,6 +32,7 @@ public class PageBuilder
     //
     // This could be any other small number.
     private static final int DEFAULT_INITIAL_EXPECTED_ENTRIES = 8;
+    private static final int MAX_POSITIONS = 8 * 1024;
 
     private final BlockBuilder[] blockBuilders;
     private final List<Type> types;
@@ -125,7 +126,7 @@ public class PageBuilder
 
     public boolean isFull()
     {
-        return declaredPositions == Integer.MAX_VALUE || pageBuilderStatus.isFull();
+        return declaredPositions >= MAX_POSITIONS || pageBuilderStatus.isFull();
     }
 
     public boolean isEmpty()
