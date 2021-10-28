@@ -15,7 +15,7 @@ package io.trino.spi.block;
 
 public class PageBuilderStatus
 {
-    public static final int DEFAULT_MAX_PAGE_SIZE_IN_BYTES = 1024 * 1024;
+    public static final int DEFAULT_MAX_PAGE_SIZE_IN_BYTES = 4 * 1024 * 1024;
 
     private final int maxPageSizeInBytes;
 
