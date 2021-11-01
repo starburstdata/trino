@@ -32,7 +32,7 @@ public class PageBuilder
     //
     // This could be any other small number.
     private static final int DEFAULT_INITIAL_EXPECTED_ENTRIES = 8;
-    private static final int MAX_POSITIONS = 8 * 1024;
+    private static final int MAX_POSITIONS = 32 * 1024;
 
     private final BlockBuilder[] blockBuilders;
     private final List<Type> types;
