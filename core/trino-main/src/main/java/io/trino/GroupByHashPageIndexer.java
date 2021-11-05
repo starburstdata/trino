@@ -27,6 +27,7 @@ import java.util.Optional;
 import java.util.stream.IntStream;
 
 import static com.google.common.base.Verify.verify;
+import static io.trino.operator.HashArraySizeSupplier.defaultHashArraySizeSupplier;
 import static io.trino.operator.UpdateMemory.NOOP;
 import static java.lang.Math.toIntExact;
 import static java.util.Objects.requireNonNull;
@@ -46,7 +47,8 @@ public class GroupByHashPageIndexer
                 false,
                 joinCompiler,
                 blockTypeOperators,
-                NOOP));
+                NOOP,
+                defaultHashArraySizeSupplier()));
     }
 
     public GroupByHashPageIndexer(GroupByHash hash)

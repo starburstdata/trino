@@ -37,12 +37,23 @@ public class IncrementalLoadFactorHashArraySizeSupplier
     @Override
     public int getHashArraySize(int expectedCount)
     {
+        return HashCommon.arraySize(expectedCount, getLoadFactor(expectedCount));
+    }
+
+    @Override
+    public int getHashArrayMaxFill(int expectedCount)
+    {
+        return HashCommon.maxFill(getHashArraySize(expectedCount), getLoadFactor(expectedCount));
+    }
+
+    private float getLoadFactor(int expectedCount)
+    {
         if (expectedCount <= THRESHOLD_25 * multiplier) {
-            return HashCommon.arraySize(expectedCount, 0.25f);
+            return 0.25f;
         }
         if (expectedCount <= THRESHOLD_50 * multiplier) {
-            return HashCommon.arraySize(expectedCount, 0.50f);
+            return 0.50f;
         }
-        return HashCommon.arraySize(expectedCount, 0.75f);
+        return 0.75f;
     }
 }

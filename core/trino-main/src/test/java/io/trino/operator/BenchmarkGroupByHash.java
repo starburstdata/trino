@@ -55,6 +55,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import static io.trino.jmh.Benchmarks.benchmark;
+import static io.trino.operator.HashArraySizeSupplier.defaultHashArraySizeSupplier;
 import static io.trino.operator.UpdateMemory.NOOP;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.VarcharType.VARCHAR;
@@ -80,7 +81,7 @@ public class BenchmarkGroupByHash
     @OperationsPerInvocation(POSITIONS)
     public Object groupByHashPreCompute(BenchmarkData data)
     {
-        GroupByHash groupByHash = new MultiChannelGroupByHash(data.getTypes(), data.getChannels(), data.getHashChannel(), EXPECTED_SIZE, false, getJoinCompiler(), TYPE_OPERATOR_FACTORY, NOOP);
+        GroupByHash groupByHash = new MultiChannelGroupByHash(data.getTypes(), data.getChannels(), data.getHashChannel(), EXPECTED_SIZE, false, getJoinCompiler(), TYPE_OPERATOR_FACTORY, NOOP, defaultHashArraySizeSupplier());
         addInputPagesToHash(groupByHash, data.getPages());
 
         ImmutableList.Builder<Page> pages = ImmutableList.builder();
@@ -117,7 +118,7 @@ public class BenchmarkGroupByHash
     @OperationsPerInvocation(POSITIONS)
     public Object addPagePreCompute(BenchmarkData data)
     {
-        GroupByHash groupByHash = new MultiChannelGroupByHash(data.getTypes(), data.getChannels(), data.getHashChannel(), EXPECTED_SIZE, false, getJoinCompiler(), TYPE_OPERATOR_FACTORY, NOOP);
+        GroupByHash groupByHash = new MultiChannelGroupByHash(data.getTypes(), data.getChannels(), data.getHashChannel(), EXPECTED_SIZE, false, getJoinCompiler(), TYPE_OPERATOR_FACTORY, NOOP, defaultHashArraySizeSupplier());
         addInputPagesToHash(groupByHash, data.getPages());
 
         ImmutableList.Builder<Page> pages = ImmutableList.builder();
@@ -138,7 +139,7 @@ public class BenchmarkGroupByHash
     @OperationsPerInvocation(POSITIONS)
     public Object bigintGroupByHash(SingleChannelBenchmarkData data)
     {
-        GroupByHash groupByHash = new BigintGroupByHash(0, data.getHashEnabled(), EXPECTED_SIZE, NOOP);
+        GroupByHash groupByHash = new BigintGroupByHash(0, data.getHashEnabled(), EXPECTED_SIZE, NOOP, defaultHashArraySizeSupplier());
         addInputPagesToHash(groupByHash, data.getPages());
 
         ImmutableList.Builder<Page> pages = ImmutableList.builder();

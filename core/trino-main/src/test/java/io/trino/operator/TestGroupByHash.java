@@ -43,6 +43,7 @@ import static io.trino.block.BlockAssertions.createLongSequenceBlock;
 import static io.trino.block.BlockAssertions.createLongsBlock;
 import static io.trino.block.BlockAssertions.createStringSequenceBlock;
 import static io.trino.operator.GroupByHash.createGroupByHash;
+import static io.trino.operator.HashArraySizeSupplier.defaultHashArraySizeSupplier;
 import static io.trino.operator.UpdateMemory.NOOP;
 import static io.trino.spi.block.DictionaryId.randomDictionaryId;
 import static io.trino.spi.type.BigintType.BIGINT;
@@ -338,7 +339,8 @@ public class TestGroupByHash
                 () -> {
                     rehashCount.incrementAndGet();
                     return true;
-                });
+                },
+                defaultHashArraySizeSupplier());
         groupByHash.addPage(new Page(valuesBlock, hashBlock)).process();
 
         // assert we call update memory every time we rehash; the rehash count = log2(length / FILL_RATIO)
@@ -374,7 +376,8 @@ public class TestGroupByHash
         int yields = 0;
 
         // test addPage
-        GroupByHash groupByHash = createGroupByHash(ImmutableList.of(type), new int[] {0}, Optional.of(1), 1, false, JOIN_COMPILER, TYPE_OPERATOR_FACTORY, updateMemory);
+        GroupByHash groupByHash = createGroupByHash(ImmutableList.of(type), new int[] {
+                0}, Optional.of(1), 1, false, JOIN_COMPILER, TYPE_OPERATOR_FACTORY, updateMemory, defaultHashArraySizeSupplier());
         boolean finish = false;
         Work<?> addPageWork = groupByHash.addPage(page);
         while (!finish) {
@@ -401,7 +404,8 @@ public class TestGroupByHash
         currentQuota.set(0);
         allowedQuota.set(3);
         yields = 0;
-        groupByHash = createGroupByHash(ImmutableList.of(type), new int[] {0}, Optional.of(1), 1, false, JOIN_COMPILER, TYPE_OPERATOR_FACTORY, updateMemory);
+        groupByHash = createGroupByHash(ImmutableList.of(type), new int[] {
+                0}, Optional.of(1), 1, false, JOIN_COMPILER, TYPE_OPERATOR_FACTORY, updateMemory, defaultHashArraySizeSupplier());
 
         finish = false;
         Work<GroupByIdBlock> getGroupIdsWork = groupByHash.getGroupIds(page);
@@ -449,7 +453,8 @@ public class TestGroupByHash
         int yields = 0;
 
         // test addPage
-        GroupByHash groupByHash = createGroupByHash(ImmutableList.of(VARCHAR), new int[] {0}, Optional.of(1), 1, true, JOIN_COMPILER, TYPE_OPERATOR_FACTORY, updateMemory);
+        GroupByHash groupByHash = createGroupByHash(ImmutableList.of(VARCHAR), new int[] {
+                0}, Optional.of(1), 1, true, JOIN_COMPILER, TYPE_OPERATOR_FACTORY, updateMemory, defaultHashArraySizeSupplier());
 
         boolean finish = false;
         Work<?> addPageWork = groupByHash.addPage(page);
@@ -477,7 +482,8 @@ public class TestGroupByHash
         currentQuota.set(0);
         allowedQuota.set(3);
         yields = 0;
-        groupByHash = createGroupByHash(ImmutableList.of(VARCHAR), new int[] {0}, Optional.of(1), 1, true, JOIN_COMPILER, TYPE_OPERATOR_FACTORY, updateMemory);
+        groupByHash = createGroupByHash(ImmutableList.of(VARCHAR), new int[] {
+                0}, Optional.of(1), 1, true, JOIN_COMPILER, TYPE_OPERATOR_FACTORY, updateMemory, defaultHashArraySizeSupplier());
 
         finish = false;
         Work<GroupByIdBlock> getGroupIdsWork = groupByHash.getGroupIds(page);

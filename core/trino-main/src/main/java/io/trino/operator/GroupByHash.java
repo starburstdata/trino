@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static io.trino.SystemSessionProperties.isDictionaryAggregationEnabled;
+import static io.trino.operator.HashArraySizeSupplier.incrementalLoadFactorHashArraySizeSupplier;
 import static io.trino.spi.type.BigintType.BIGINT;
 
 public interface GroupByHash
@@ -39,7 +40,7 @@ public interface GroupByHash
             BlockTypeOperators blockTypeOperators,
             UpdateMemory updateMemory)
     {
-        return createGroupByHash(hashTypes, hashChannels, inputHashChannel, expectedSize, isDictionaryAggregationEnabled(session), joinCompiler, blockTypeOperators, updateMemory);
+        return createGroupByHash(hashTypes, hashChannels, inputHashChannel, expectedSize, isDictionaryAggregationEnabled(session), joinCompiler, blockTypeOperators, updateMemory, incrementalLoadFactorHashArraySizeSupplier(session));
     }
 
     static GroupByHash createGroupByHash(
@@ -50,12 +51,13 @@ public interface GroupByHash
             boolean processDictionary,
             JoinCompiler joinCompiler,
             BlockTypeOperators blockTypeOperators,
-            UpdateMemory updateMemory)
+            UpdateMemory updateMemory,
+            HashArraySizeSupplier hashArraySizeSupplier)
     {
         if (hashTypes.size() == 1 && hashTypes.get(0).equals(BIGINT) && hashChannels.length == 1) {
-            return new BigintGroupByHash(hashChannels[0], inputHashChannel.isPresent(), expectedSize, updateMemory);
+            return new BigintGroupByHash(hashChannels[0], inputHashChannel.isPresent(), expectedSize, updateMemory, hashArraySizeSupplier);
         }
-        return new MultiChannelGroupByHash(hashTypes, hashChannels, inputHashChannel, expectedSize, processDictionary, joinCompiler, blockTypeOperators, updateMemory);
+        return new MultiChannelGroupByHash(hashTypes, hashChannels, inputHashChannel, expectedSize, processDictionary, joinCompiler, blockTypeOperators, updateMemory, hashArraySizeSupplier);
     }
 
     long getEstimatedSize();

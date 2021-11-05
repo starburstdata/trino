@@ -38,7 +38,6 @@ import static io.trino.spi.StandardErrorCode.GENERIC_INSUFFICIENT_RESOURCES;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.type.TypeUtils.NULL_HASH_CODE;
 import static io.trino.util.HashCollisionsEstimator.estimateNumberOfHashCollisions;
-import static it.unimi.dsi.fastutil.HashCommon.arraySize;
 import static it.unimi.dsi.fastutil.HashCommon.murmurHash3;
 import static java.lang.Math.toIntExact;
 import static java.util.Objects.requireNonNull;
@@ -48,12 +47,12 @@ public class BigintGroupByHash
 {
     private static final int INSTANCE_SIZE = ClassLayout.parseClass(BigintGroupByHash.class).instanceSize();
 
-    private static final float FILL_RATIO = 0.75f;
     private static final List<Type> TYPES = ImmutableList.of(BIGINT);
     private static final List<Type> TYPES_WITH_RAW_HASH = ImmutableList.of(BIGINT, BIGINT);
 
     private final int hashChannel;
     private final boolean outputRawHash;
+    private final HashArraySizeSupplier hashArraySizeSupplier;
 
     private int hashCapacity;
     private int maxFill;
@@ -79,17 +78,18 @@ public class BigintGroupByHash
     private long preallocatedMemoryInBytes;
     private long currentPageSizeInBytes;
 
-    public BigintGroupByHash(int hashChannel, boolean outputRawHash, int expectedSize, UpdateMemory updateMemory)
+    public BigintGroupByHash(int hashChannel, boolean outputRawHash, int expectedSize, UpdateMemory updateMemory, HashArraySizeSupplier hashArraySizeSupplier)
     {
         checkArgument(hashChannel >= 0, "hashChannel must be at least zero");
         checkArgument(expectedSize > 0, "expectedSize must be greater than zero");
 
         this.hashChannel = hashChannel;
         this.outputRawHash = outputRawHash;
+        this.hashArraySizeSupplier = requireNonNull(hashArraySizeSupplier, "hashArraySizeSupplier is null");
 
-        hashCapacity = arraySize(expectedSize, FILL_RATIO);
+        hashCapacity = hashArraySizeSupplier.getHashArraySize(expectedSize);
 
-        maxFill = calculateMaxFill(hashCapacity);
+        maxFill = hashArraySizeSupplier.getHashArrayMaxFill(expectedSize);
         mask = hashCapacity - 1;
         values = new LongBigArray();
         values.ensureCapacity(hashCapacity);
@@ -281,15 +281,17 @@ public class BigintGroupByHash
 
     private boolean tryRehash()
     {
-        long newCapacityLong = hashCapacity * 2L;
-        if (newCapacityLong > Integer.MAX_VALUE) {
-            throw new TrinoException(GENERIC_INSUFFICIENT_RESOURCES, "Size of hash table cannot exceed 1 billion entries");
+        long newExpectedSize = maxFill * 2L;
+        if (newExpectedSize > Integer.MAX_VALUE) {
+            throw new TrinoException(GENERIC_INSUFFICIENT_RESOURCES, "Number of expected groups cannot exceed " + Integer.MAX_VALUE);
         }
-        int newCapacity = toIntExact(newCapacityLong);
+
+        int newCapacity = hashArraySizeSupplier.getHashArraySize(toIntExact(newExpectedSize));
+        int newMaxFill = hashArraySizeSupplier.getHashArrayMaxFill(toIntExact(newExpectedSize));
 
         // An estimate of how much extra memory is needed before we can go ahead and expand the hash table.
         // This includes the new capacity for values, groupIds, and valuesByGroupId as well as the size of the current page
-        preallocatedMemoryInBytes = (newCapacity - hashCapacity) * (long) (Long.BYTES + Integer.BYTES) + (calculateMaxFill(newCapacity) - maxFill) * Long.BYTES + currentPageSizeInBytes;
+        preallocatedMemoryInBytes = (newCapacity - hashCapacity) * (long) (Long.BYTES + Integer.BYTES) + (long) (newMaxFill - maxFill) * Long.BYTES + currentPageSizeInBytes;
         if (!updateMemory.update()) {
             // reserved memory but has exceeded the limit
             return false;
@@ -324,7 +326,7 @@ public class BigintGroupByHash
 
         mask = newMask;
         hashCapacity = newCapacity;
-        maxFill = calculateMaxFill(hashCapacity);
+        maxFill = newMaxFill;
         values = newValues;
         groupIds = newGroupIds;
 
@@ -340,17 +342,6 @@ public class BigintGroupByHash
     private static long getHashPosition(long rawHash, int mask)
     {
         return murmurHash3(rawHash) & mask;
-    }
-
-    private static int calculateMaxFill(int hashSize)
-    {
-        checkArgument(hashSize > 0, "hashSize must be greater than 0");
-        int maxFill = (int) Math.ceil(hashSize * FILL_RATIO);
-        if (maxFill == hashSize) {
-            maxFill--;
-        }
-        checkArgument(hashSize > maxFill, "hashSize must be larger than maxFill");
-        return maxFill;
     }
 
     private void updateDictionaryLookBack(Block dictionary)

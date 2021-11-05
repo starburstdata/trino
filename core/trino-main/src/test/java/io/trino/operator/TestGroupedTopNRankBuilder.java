@@ -32,6 +32,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static io.trino.RowPageBuilder.rowPageBuilder;
 import static io.trino.RowPagesBuilder.rowPagesBuilder;
+import static io.trino.operator.HashArraySizeSupplier.defaultHashArraySizeSupplier;
 import static io.trino.operator.PageAssertions.assertPageEquals;
 import static io.trino.operator.UpdateMemory.NOOP;
 import static io.trino.spi.connector.SortOrder.ASC_NULLS_LAST;
@@ -260,7 +261,8 @@ public class TestGroupedTopNRankBuilder
                 false,
                 new JoinCompiler(typeOperators),
                 blockTypeOperators,
-                updateMemory);
+                updateMemory,
+                defaultHashArraySizeSupplier());
     }
 
     private static Page dropLastColumn(Page page)

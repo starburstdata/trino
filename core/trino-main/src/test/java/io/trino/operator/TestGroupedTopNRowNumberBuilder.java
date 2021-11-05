@@ -28,6 +28,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static io.trino.RowPagesBuilder.rowPagesBuilder;
+import static io.trino.operator.HashArraySizeSupplier.defaultHashArraySizeSupplier;
 import static io.trino.operator.PageAssertions.assertPageEquals;
 import static io.trino.operator.UpdateMemory.NOOP;
 import static io.trino.spi.connector.SortOrder.ASC_NULLS_LAST;
@@ -248,6 +249,7 @@ public class TestGroupedTopNRowNumberBuilder
                 false,
                 new JoinCompiler(typeOperators),
                 new BlockTypeOperators(typeOperators),
-                updateMemory);
+                updateMemory,
+                defaultHashArraySizeSupplier());
     }
 }

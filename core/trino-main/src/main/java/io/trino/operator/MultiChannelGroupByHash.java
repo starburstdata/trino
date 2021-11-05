@@ -46,7 +46,6 @@ import static io.trino.spi.StandardErrorCode.GENERIC_INSUFFICIENT_RESOURCES;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.sql.gen.JoinCompiler.PagesHashStrategyFactory;
 import static io.trino.util.HashCollisionsEstimator.estimateNumberOfHashCollisions;
-import static it.unimi.dsi.fastutil.HashCommon.arraySize;
 import static it.unimi.dsi.fastutil.HashCommon.murmurHash3;
 import static java.lang.Math.toIntExact;
 import static java.util.Objects.requireNonNull;
@@ -56,7 +55,6 @@ public class MultiChannelGroupByHash
         implements GroupByHash
 {
     private static final int INSTANCE_SIZE = ClassLayout.parseClass(MultiChannelGroupByHash.class).instanceSize();
-    private static final float FILL_RATIO = 0.75f;
     private final List<Type> types;
     private final List<Type> hashTypes;
     private final int[] channels;
@@ -67,6 +65,7 @@ public class MultiChannelGroupByHash
     private final HashGenerator hashGenerator;
     private final OptionalInt precomputedHashChannel;
     private final boolean processDictionary;
+    private final HashArraySizeSupplier hashArraySizeSupplier;
     private PageBuilder currentPageBuilder;
 
     private long completedPagesMemorySize;
@@ -98,7 +97,8 @@ public class MultiChannelGroupByHash
             boolean processDictionary,
             JoinCompiler joinCompiler,
             BlockTypeOperators blockTypeOperators,
-            UpdateMemory updateMemory)
+            UpdateMemory updateMemory,
+            HashArraySizeSupplier hashArraySizeSupplier)
     {
         this.hashTypes = ImmutableList.copyOf(requireNonNull(hashTypes, "hashTypes is null"));
 
@@ -113,6 +113,7 @@ public class MultiChannelGroupByHash
 
         this.hashGenerator = inputHashChannel.isPresent() ? new PrecomputedHashGenerator(inputHashChannel.get()) : new InterpretedHashGenerator(this.hashTypes, hashChannels, blockTypeOperators);
         this.processDictionary = processDictionary;
+        this.hashArraySizeSupplier = requireNonNull(hashArraySizeSupplier, "hashArraySizeSupplier is null");
 
         // For each hashed channel, create an appendable list to hold the blocks (builders).  As we
         // add new values we append them to the existing block builder until it fills up and then
@@ -137,9 +138,9 @@ public class MultiChannelGroupByHash
         startNewPage();
 
         // reserve memory for the arrays
-        hashCapacity = arraySize(expectedSize, FILL_RATIO);
+        hashCapacity = hashArraySizeSupplier.getHashArraySize(expectedSize);
 
-        maxFill = calculateMaxFill(hashCapacity);
+        maxFill = hashArraySizeSupplier.getHashArrayMaxFill(expectedSize);
         mask = hashCapacity - 1;
         groupAddressByHash = new long[hashCapacity];
         Arrays.fill(groupAddressByHash, -1);
@@ -363,16 +364,18 @@ public class MultiChannelGroupByHash
 
     private boolean tryRehash()
     {
-        long newCapacityLong = hashCapacity * 2L;
-        if (newCapacityLong > Integer.MAX_VALUE) {
-            throw new TrinoException(GENERIC_INSUFFICIENT_RESOURCES, "Size of hash table cannot exceed 1 billion entries");
+        long newExpectedSize = maxFill * 2L;
+        if (newExpectedSize > Integer.MAX_VALUE) {
+            throw new TrinoException(GENERIC_INSUFFICIENT_RESOURCES, "Number of expected groups cannot exceed " + Integer.MAX_VALUE);
         }
-        int newCapacity = toIntExact(newCapacityLong);
+
+        int newCapacity = hashArraySizeSupplier.getHashArraySize(toIntExact(newExpectedSize));
+        int newMaxFill = hashArraySizeSupplier.getHashArrayMaxFill(toIntExact(newExpectedSize));
 
         // An estimate of how much extra memory is needed before we can go ahead and expand the hash table.
         // This includes the new capacity for groupAddressByHash, rawHashByHashPosition, groupIdsByHash, and groupAddressByGroupId as well as the size of the current page
         preallocatedMemoryInBytes = (newCapacity - hashCapacity) * (long) (Long.BYTES + Integer.BYTES + Byte.BYTES) +
-                (calculateMaxFill(newCapacity) - maxFill) * Long.BYTES +
+                (long) (newMaxFill - maxFill) * Long.BYTES +
                 currentPageSizeInBytes;
         if (!updateMemory.update()) {
             // reserved memory but has exceeded the limit
@@ -415,7 +418,7 @@ public class MultiChannelGroupByHash
 
         this.mask = newMask;
         this.hashCapacity = newCapacity;
-        this.maxFill = calculateMaxFill(newCapacity);
+        this.maxFill = newMaxFill;
         this.groupAddressByHash = newKey;
         this.rawHashByHashPosition = rawHashes;
         this.groupIdsByHash = newValue;
@@ -449,17 +452,6 @@ public class MultiChannelGroupByHash
     private static long getHashPosition(long rawHash, int mask)
     {
         return murmurHash3(rawHash) & mask;
-    }
-
-    private static int calculateMaxFill(int hashSize)
-    {
-        checkArgument(hashSize > 0, "hashSize must be greater than 0");
-        int maxFill = (int) Math.ceil(hashSize * FILL_RATIO);
-        if (maxFill == hashSize) {
-            maxFill--;
-        }
-        checkArgument(hashSize > maxFill, "hashSize must be larger than maxFill");
-        return maxFill;
     }
 
     private void updateDictionaryLookBack(Block dictionary)

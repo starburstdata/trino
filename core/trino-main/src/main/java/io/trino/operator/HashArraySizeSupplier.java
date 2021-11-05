@@ -22,7 +22,25 @@ public interface HashArraySizeSupplier
 {
     static HashArraySizeSupplier defaultHashArraySizeSupplier()
     {
-        return expectedCount -> HashCommon.arraySize(expectedCount, 0.75f);
+        return new HashArraySizeSupplier()
+        {
+            @Override
+            public int getHashArraySize(int expectedCount)
+            {
+                return HashCommon.arraySize(expectedCount, 0.75f);
+            }
+
+            @Override
+            public int getHashArrayMaxFill(int expectedCount)
+            {
+                return HashCommon.maxFill(getHashArraySize(expectedCount), 0.75f);
+            }
+        };
+    }
+
+    static HashArraySizeSupplier incrementalLoadFactorHashArraySizeSupplier(Session session)
+    {
+        return incrementalLoadFactorHashArraySizeSupplier(session, 1);
     }
 
     static HashArraySizeSupplier incrementalLoadFactorHashArraySizeSupplier(
@@ -37,4 +55,6 @@ public interface HashArraySizeSupplier
     }
 
     int getHashArraySize(int expectedCount);
+
+    int getHashArrayMaxFill(int expectedCount);
 }
