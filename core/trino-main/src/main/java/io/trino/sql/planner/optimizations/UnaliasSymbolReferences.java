@@ -79,6 +79,7 @@ import io.trino.sql.planner.plan.UpdateNode;
 import io.trino.sql.planner.plan.ValuesNode;
 import io.trino.sql.planner.plan.WindowNode;
 import io.trino.sql.tree.Expression;
+import io.trino.sql.tree.FunctionCall;
 import io.trino.sql.tree.NullLiteral;
 import io.trino.sql.tree.Row;
 import io.trino.sql.tree.SymbolReference;
@@ -98,8 +99,13 @@ import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static io.trino.sql.DynamicFilters.getDescriptor;
+import static io.trino.sql.DynamicFilters.replaceDynamicFilterId;
+import static io.trino.sql.ExpressionUtils.combineConjuncts;
+import static io.trino.sql.ExpressionUtils.extractConjuncts;
 import static io.trino.sql.planner.optimizations.SymbolMapper.symbolMapper;
 import static io.trino.sql.planner.optimizations.SymbolMapper.symbolReallocator;
+import static io.trino.sql.planner.plan.ChildReplacer.replaceChildren;
 import static io.trino.sql.planner.plan.JoinNode.Type.INNER;
 import static java.util.Objects.requireNonNull;
 
@@ -996,15 +1002,27 @@ public class UnaliasSymbolReferences
             Optional<Symbol> newRightHashSymbol = node.getRightHashSymbol().map(mapper::map);
 
             // rewrite dynamic filters
-            Set<Symbol> added = new HashSet<>();
+            Map<Symbol, DynamicFilterId> canonicalDynamicFilters = new HashMap<>();
             ImmutableMap.Builder<DynamicFilterId, Symbol> filtersBuilder = ImmutableMap.builder();
+            ImmutableMap.Builder<DynamicFilterId, DynamicFilterId> dynamicFilterIdMapBuilder = ImmutableMap.builder();
             for (Map.Entry<DynamicFilterId, Symbol> entry : node.getDynamicFilters().entrySet()) {
                 Symbol canonical = mapper.map(entry.getValue());
-                if (added.add(canonical)) {
+                DynamicFilterId canonicalDynamicFilterId = canonicalDynamicFilters.putIfAbsent(canonical, entry.getKey());
+                if (canonicalDynamicFilterId == null) {
                     filtersBuilder.put(entry.getKey(), canonical);
+                }
+                else {
+                    dynamicFilterIdMapBuilder.put(entry.getKey(), canonicalDynamicFilterId);
                 }
             }
             Map<DynamicFilterId, Symbol> newDynamicFilters = filtersBuilder.build();
+
+            ImmutableMap<DynamicFilterId, DynamicFilterId> dynamicFilterIdMap = dynamicFilterIdMapBuilder.build();
+            if (!dynamicFilterIdMap.isEmpty()) {
+                // update dynamic filter ids on the probe side
+                PlanNode rewrittenLeftNode = rewrittenLeft.getRoot().accept(new DynamicFilterVisitor(metadata, dynamicFilterIdMap), null);
+                rewrittenLeft = new PlanAndMappings(rewrittenLeftNode, rewrittenLeft.getMappings());
+            }
 
             // derive new mappings from inner join equi criteria
             Map<Symbol, Symbol> newMapping = new HashMap<>();
@@ -1301,6 +1319,49 @@ public class UnaliasSymbolReferences
         public Map<Symbol, Symbol> getMappings()
         {
             return mappings;
+        }
+    }
+
+    private static class DynamicFilterVisitor
+            extends PlanVisitor<PlanNode, Void>
+    {
+        private final Metadata metadata;
+        private final Map<DynamicFilterId, DynamicFilterId> dynamicFilterIdMap;
+
+        private DynamicFilterVisitor(Metadata metadata, Map<DynamicFilterId, DynamicFilterId> dynamicFilterIdMap)
+        {
+            this.metadata = requireNonNull(metadata, "metadata is null");
+            this.dynamicFilterIdMap = requireNonNull(dynamicFilterIdMap, "dynamicFilterIdMap is null");
+        }
+
+        @Override
+        protected PlanNode visitPlan(PlanNode node, Void context)
+        {
+            List<PlanNode> newSources = node.getSources().stream()
+                    .map(source -> source.accept(this, context))
+                    .collect(toImmutableList());
+
+            return replaceChildren(node, newSources);
+        }
+
+        @Override
+        public PlanNode visitFilter(FilterNode node, Void context)
+        {
+            return new FilterNode(
+                    node.getId(),
+                    node.getSource().accept(this, context),
+                    updateDynamicFilterIds(dynamicFilterIdMap, node.getPredicate()));
+        }
+
+        private Expression updateDynamicFilterIds(Map<DynamicFilterId, DynamicFilterId> dynamicFilterIdMap, Expression predicate)
+        {
+            List<Expression> conjuncts = extractConjuncts(predicate);
+            List<Expression> mapped = conjuncts.stream().map(conjunct -> getDescriptor(conjunct)
+                            .map(descriptor -> dynamicFilterIdMap.get(descriptor.getId()))
+                            .map(mappedId -> replaceDynamicFilterId((FunctionCall) conjunct, mappedId))
+                            .orElse(conjunct))
+                    .collect(toImmutableList());
+            return combineConjuncts(metadata, mapped);
         }
     }
 }
