@@ -25,6 +25,7 @@ import javax.annotation.concurrent.ThreadSafe;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -127,6 +128,7 @@ public class StateMachine<T>
             }
 
             oldState = state;
+            log.info("[%s] TrySet to %s->%s", name, simpleState(state), simpleState(newState));
             state = newState;
 
             futureStateChange = this.futureStateChange.getAndSet(new FutureStateChange<>());
@@ -200,6 +202,7 @@ public class StateMachine<T>
 
             checkState(!isTerminalState(state), "%s cannot transition from %s to %s", name, state, newState);
 
+            log.info("[%s] CompareAndSet to %s->%s", name, simpleState(state), simpleState(newState));
             state = newState;
 
             futureStateChange = this.futureStateChange.getAndSet(new FutureStateChange<>());
@@ -213,6 +216,23 @@ public class StateMachine<T>
 
         fireStateChanged(newState, futureStateChange, stateChangeListeners);
         return true;
+    }
+
+    private Object simpleState(Object obj)
+    {
+        if (obj instanceof Optional && ((Optional<?>) obj).isPresent()) {
+            obj = ((Optional<?>) obj).get();
+        }
+        if (obj instanceof QueryInfo) {
+            obj = ((QueryInfo) obj).getState();
+        }
+        if (obj instanceof TaskInfo) {
+            obj = ((TaskInfo) obj).getTaskStatus().getState();
+        }
+        if (obj instanceof TaskStatus) {
+            obj = ((TaskStatus) obj).getState();
+        }
+        return obj;
     }
 
     private void fireStateChanged(T newState, FutureStateChange<T> futureStateChange, List<StateChangeListener<T>> stateChangeListeners)

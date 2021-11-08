@@ -18,6 +18,7 @@ import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
+import io.airlift.log.Logger;
 import io.airlift.stats.CounterStat;
 import io.airlift.units.Duration;
 import io.trino.Session;
@@ -63,6 +64,8 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  */
 public class OperatorContext
 {
+    private static final Logger log = Logger.get(OperatorContext.class);
+
     private final int operatorId;
     private final PlanNodeId planNodeId;
     private final String operatorType;
@@ -177,6 +180,7 @@ public class OperatorContext
      */
     public void recordPhysicalInputWithTiming(long sizeInBytes, long positions, long readNanos)
     {
+        log.warn(new Exception(), "[operator-%s] Record driver stats %s", driverContext.getTaskId(), sizeInBytes);
         physicalInputDataSize.update(sizeInBytes);
         physicalInputPositions.update(positions);
         addInputTiming.record(readNanos, 0);
@@ -534,6 +538,7 @@ public class OperatorContext
 
         long inputPositionsCount = inputPositions.getTotalCount();
 
+        log.info("[operator-%s] Creating operator %s@%s stats %s", driverContext.getTaskId(), this, hashCode(), physicalInputDataSize.getTotalCount());
         return new OperatorStats(
                 driverContext.getTaskId().getStageId().getId(),
                 driverContext.getPipelineContext().getPipelineId(),

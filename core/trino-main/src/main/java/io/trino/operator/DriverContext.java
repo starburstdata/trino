@@ -16,6 +16,7 @@ package io.trino.operator;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListenableFuture;
+import io.airlift.log.Logger;
 import io.airlift.stats.CounterStat;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
@@ -35,6 +36,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.toImmutableList;
@@ -52,6 +54,8 @@ import static java.util.stream.Collectors.toList;
  */
 public class DriverContext
 {
+    private static final Logger log = Logger.get(DriverContext.class);
+
     private final PipelineContext pipelineContext;
     private final Executor notificationExecutor;
     private final ScheduledExecutorService yieldExecutor;
@@ -343,6 +347,8 @@ public class DriverContext
         long outputPositions;
         if (inputOperator != null) {
             physicalInputDataSize = inputOperator.getPhysicalInputDataSize();
+            log.info("[driver-%s] Creating driver %s stats %s (%s)", pipelineContext.getTaskId(), toString(), physicalInputDataSize,
+                    operators.stream().map(OperatorStats::getOperatorType).collect(Collectors.toList()));
             physicalInputPositions = inputOperator.getPhysicalInputPositions();
             physicalInputReadTime = inputOperator.getAddInputWall();
 
@@ -362,6 +368,7 @@ public class DriverContext
             outputPositions = outputOperator.getOutputPositions();
         }
         else {
+            log.info("[driver-%s] Creating driver without input operator", pipelineContext.getTaskId());
             physicalInputDataSize = DataSize.ofBytes(0);
             physicalInputPositions = 0;
             physicalInputReadTime = new Duration(0, MILLISECONDS);

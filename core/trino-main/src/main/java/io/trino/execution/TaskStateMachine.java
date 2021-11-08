@@ -45,7 +45,7 @@ public class TaskStateMachine
     public TaskStateMachine(TaskId taskId, Executor executor)
     {
         this.taskId = requireNonNull(taskId, "taskId is null");
-        taskState = new StateMachine<>("task " + taskId, executor, TaskState.RUNNING, TERMINAL_TASK_STATES);
+        taskState = new StateMachine<>("task-" + taskId, executor, TaskState.RUNNING, TERMINAL_TASK_STATES);
         taskState.addStateChangeListener(newState -> log.debug("Task %s is %s", taskId, newState));
     }
 
@@ -113,6 +113,7 @@ public class TaskStateMachine
         requireNonNull(doneState, "doneState is null");
         checkArgument(doneState.isDone(), "doneState %s is not a done state", doneState);
 
+        log.warn(new Exception(), "[task-%s] Completing task %s", taskId, doneState);
         taskState.setIf(doneState, currentState -> !currentState.isDone());
     }
 

@@ -29,6 +29,7 @@ import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpUriBuilder;
 import io.airlift.http.client.Request;
 import io.airlift.json.JsonCodec;
+import io.airlift.json.JsonCodecFactory;
 import io.airlift.log.Logger;
 import io.airlift.units.Duration;
 import io.trino.Session;
@@ -621,6 +622,7 @@ public final class HttpRemoteTask
             stats.updateWithDynamicFilterBytes(taskUpdateRequestJson.length);
         }
 
+        log.info("[taskInfo-%s] Sending task update %s", taskId, taskUpdateRequestCodec.toJson(updateRequest));
         HttpUriBuilder uriBuilder = getHttpUriBuilder(taskStatus);
         Request request = preparePost()
                 .setUri(uriBuilder.build())
@@ -676,6 +678,8 @@ public final class HttpRemoteTask
             if (taskStatus.getState().isDone()) {
                 return;
             }
+
+            log.info("[taskInfo-%s] task not done, cancelling", taskId);
 
             // send cancel to task and ignore response
             HttpUriBuilder uriBuilder = getHttpUriBuilder(taskStatus).addParameter("abort", "false");
@@ -754,6 +758,7 @@ public final class HttpRemoteTask
             // Otherwise, we can get into an asynchronous recursion here. For example, when aborting a task after REMOTE_TASK_MISMATCH.
             return;
         }
+        log.info("[taskInfo-%s] Scheduling cleanup", taskId);
         doScheduleAsyncCleanupRequest(cleanupBackoff, request, action);
     }
 
@@ -764,6 +769,7 @@ public final class HttpRemoteTask
             @Override
             public void onSuccess(JsonResponse<TaskInfo> result)
             {
+                log.info("[taskInfo-%s] Cleanup complete %s", taskId, new JsonCodecFactory().jsonCodec(TaskInfo.class).toJson(result.getValue()));
                 try {
                     updateTaskInfo(result.getValue());
                 }
@@ -880,6 +886,7 @@ public final class HttpRemoteTask
         public void success(TaskInfo value)
         {
             try (SetThreadName ignored = new SetThreadName("UpdateResponseHandler-%s", taskId)) {
+                log.info("[taskInfo-%s] Task updated %s", taskId, new JsonCodecFactory().jsonCodec(TaskInfo.class).toJson(value));
                 try {
                     long currentRequestStartNanos;
                     synchronized (HttpRemoteTask.this) {
@@ -904,6 +911,7 @@ public final class HttpRemoteTask
         public void failed(Throwable cause)
         {
             try (SetThreadName ignored = new SetThreadName("UpdateResponseHandler-%s", taskId)) {
+                log.error(cause, "[taskInfo-%s] Error sending task update", taskId);
                 try {
                     long currentRequestStartNanos;
                     synchronized (HttpRemoteTask.this) {
@@ -938,6 +946,7 @@ public final class HttpRemoteTask
         public void fatal(Throwable cause)
         {
             try (SetThreadName ignored = new SetThreadName("UpdateResponseHandler-%s", taskId)) {
+                log.error(cause, "[taskInfo-%s] Fatal sending task update", taskId);
                 failTask(cause);
             }
         }

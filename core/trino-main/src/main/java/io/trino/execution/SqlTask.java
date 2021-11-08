@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.concurrent.SetThreadName;
+import io.airlift.json.JsonCodecFactory;
 import io.airlift.log.Logger;
 import io.airlift.stats.CounterStat;
 import io.airlift.units.DataSize;
@@ -139,6 +140,7 @@ public class SqlTask
                 () -> queryContext.getTaskContextByTaskId(taskId).localSystemMemoryContext(),
                 () -> notifyStatusChanged());
         taskStateMachine = new TaskStateMachine(taskId, taskNotificationExecutor);
+        log.info("[task-%s] Created task (holder %s)", taskId, taskHolderReference.get());
     }
 
     // this is a separate method to ensure that the `this` reference is not leaked during construction
@@ -169,6 +171,8 @@ public class SqlTask
                 }
 
                 if (taskHolderReference.compareAndSet(taskHolder, new TaskHolder(createTaskInfo(taskHolder), taskHolder.getIoStats()))) {
+                    log.info("[task-%s] Created final task info (old %s) %s", taskId, taskHolder,
+                            new JsonCodecFactory().jsonCodec(TaskInfo.class).toJson(taskHolderReference.get().getFinalTaskInfo()));
                     break;
                 }
             }
@@ -359,6 +363,8 @@ public class SqlTask
         if (taskExecution != null) {
             return taskExecution.getTaskContext().getTaskStats();
         }
+
+        log.info("[task-%s] No task execution to create stats", taskId);
         // if the task completed without creation, set end time
         DateTime endTime = taskStateMachine.getState().isDone() ? DateTime.now() : null;
         return new TaskStats(taskStateMachine.getCreatedTime(), endTime);
@@ -383,13 +389,17 @@ public class SqlTask
         Set<PlanNodeId> noMoreSplits = getNoMoreSplits(taskHolder);
 
         TaskStatus taskStatus = createTaskStatus(taskHolder);
-        return new TaskInfo(
+        TaskInfo taskInfo = new TaskInfo(
                 taskStatus,
                 lastHeartbeat.get(),
                 outputBuffer.getInfo(),
                 noMoreSplits,
                 taskStats,
                 needsPlan.get());
+        if (taskStatus.getState().isDone()) {
+            log.info("[task-%s] Created done task status: %s", taskId, new JsonCodecFactory().jsonCodec(TaskInfo.class).toJson(taskInfo));
+        }
+        return taskInfo;
     }
 
     public synchronized ListenableFuture<TaskStatus> getTaskStatus(long callersCurrentVersion)
@@ -440,6 +450,7 @@ public class SqlTask
                 taskExecution = taskHolder.getTaskExecution();
                 if (taskExecution == null) {
                     checkState(fragment.isPresent(), "fragment must be present");
+                    log.info("[task-%s] Creating task execution", taskId);
                     taskExecution = sqlTaskExecutionFactory.create(
                             session,
                             queryContext,
@@ -448,6 +459,7 @@ public class SqlTask
                             fragment.get(),
                             this::notifyStatusChanged);
                     taskHolderReference.compareAndSet(taskHolder, new TaskHolder(taskExecution));
+                    log.info("[task-%s] Created task holder %s -> %s", taskId, taskHolder, taskHolderReference.get());
                     needsPlan.set(false);
                 }
             }
@@ -465,7 +477,9 @@ public class SqlTask
             failed(e);
         }
 
-        return getTaskInfo();
+        TaskInfo taskInfo = getTaskInfo();
+        log.info("[task-%s] Responding to task update", taskId);
+        return taskInfo;
     }
 
     public ListenableFuture<BufferResult> getTaskResults(OutputBufferId bufferId, long startingSequenceId, DataSize maxSize)

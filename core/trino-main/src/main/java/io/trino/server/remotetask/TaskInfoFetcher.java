@@ -21,6 +21,8 @@ import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpUriBuilder;
 import io.airlift.http.client.Request;
 import io.airlift.json.JsonCodec;
+import io.airlift.json.JsonCodecFactory;
+import io.airlift.log.Logger;
 import io.airlift.units.Duration;
 import io.trino.execution.StateMachine;
 import io.trino.execution.StateMachine.StateChangeListener;
@@ -51,6 +53,8 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 public class TaskInfoFetcher
         implements SimpleHttpResponseCallback<TaskInfo>
 {
+    private static final Logger log = Logger.get(TaskInfoFetcher.class);
+
     private final TaskId taskId;
     private final Consumer<Throwable> onFail;
     private final StateMachine<TaskInfo> taskInfo;
@@ -99,8 +103,8 @@ public class TaskInfoFetcher
 
         this.taskId = initialTask.getTaskStatus().getTaskId();
         this.onFail = requireNonNull(onFail, "onFail is null");
-        this.taskInfo = new StateMachine<>("task " + taskId, executor, initialTask);
-        this.finalTaskInfo = new StateMachine<>("task-" + taskId, executor, Optional.empty());
+        this.taskInfo = new StateMachine<>("taskInfo-" + taskId, executor, initialTask);
+        this.finalTaskInfo = new StateMachine<>("finalTaskInfo-" + taskId, executor, Optional.empty());
         this.taskInfoCodec = requireNonNull(taskInfoCodec, "taskInfoCodec is null");
 
         this.updateIntervalMillis = requireNonNull(updateInterval, "updateInterval is null").toMillis();
@@ -200,6 +204,7 @@ public class TaskInfoFetcher
             return;
         }
 
+        log.info("[taskInfo-%s] Fetching task info", taskId);
         HttpUriBuilder httpUriBuilder = uriBuilderFrom(taskStatus.getSelf());
         URI uri = summarizeTaskInfo ? httpUriBuilder.addParameter("summarize").build() : httpUriBuilder.build();
         Request request = prepareGet()
@@ -236,6 +241,7 @@ public class TaskInfoFetcher
     public void success(TaskInfo newValue)
     {
         try (SetThreadName ignored = new SetThreadName("TaskInfoFetcher-%s", taskId)) {
+            log.info("[taskInfo-%s] Received task info %s", taskId, new JsonCodecFactory().jsonCodec(TaskInfo.class).toJson(newValue));
             lastUpdateNanos.set(System.nanoTime());
 
             long startNanos;
@@ -252,6 +258,7 @@ public class TaskInfoFetcher
     public void failed(Throwable cause)
     {
         try (SetThreadName ignored = new SetThreadName("TaskInfoFetcher-%s", taskId)) {
+            log.error(cause, "[taskInfo-%s] Error fetching task info", taskId);
             lastUpdateNanos.set(System.nanoTime());
 
             try {
@@ -274,6 +281,7 @@ public class TaskInfoFetcher
     public void fatal(Throwable cause)
     {
         try (SetThreadName ignored = new SetThreadName("TaskInfoFetcher-%s", taskId)) {
+            log.error(cause, "[taskInfo-%s] Fatal fetching task info", taskId);
             onFail.accept(cause);
         }
     }

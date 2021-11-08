@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import io.airlift.log.Logger;
 import io.airlift.units.Duration;
 import io.trino.Session;
 import io.trino.execution.StateMachine.StateChangeListener;
@@ -73,6 +74,8 @@ import static java.util.Objects.requireNonNull;
 @ThreadSafe
 public final class SqlStageExecution
 {
+    private static final Logger log = Logger.get(SqlStageExecution.class);
+
     private final StageStateMachine stateMachine;
     private final RemoteTaskFactory remoteTaskFactory;
     private final NodeTaskMap nodeTaskMap;
@@ -506,6 +509,7 @@ public final class SqlStageExecution
     {
         try {
             StageState stageState = getState();
+            log.info("[stage %s] updateTaskStatus %s/%s", stateMachine.getStageId(), stageState, taskStatus);
             if (stageState.isDone()) {
                 return;
             }
@@ -542,6 +546,7 @@ public final class SqlStageExecution
                 if (isFlushing()) {
                     stateMachine.transitionToFlushing();
                 }
+                log.info("[stage %s] updateTaskStatus finished %s of %s", stateMachine.getStageId(), finishedTasks, allTasks);
                 if (finishedTasks.containsAll(allTasks)) {
                     stateMachine.transitionToFinished();
                 }

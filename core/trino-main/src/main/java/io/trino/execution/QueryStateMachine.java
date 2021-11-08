@@ -1070,6 +1070,16 @@ public class QueryStateMachine
         }
 
         QueryInfo queryInfo = finalInfo.get();
+        StageInfo out = queryInfo.getOutputStage().get();
+        boolean alreadyPruned = out.getPlan() == null
+                && out.getTasks().isEmpty()
+                && out.getSubStages().isEmpty()
+                && out.getTables().isEmpty()
+                && queryInfo.getQueryStats().getOperatorSummaries().isEmpty();
+        if (alreadyPruned) {
+            return;
+        }
+
         Optional<StageInfo> prunedOutputStage = queryInfo.getOutputStage().map(outputStage -> new StageInfo(
                 outputStage.getStageId(),
                 outputStage.getState(),

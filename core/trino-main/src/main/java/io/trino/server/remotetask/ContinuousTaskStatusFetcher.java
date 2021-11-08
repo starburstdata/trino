@@ -20,6 +20,7 @@ import io.airlift.http.client.FullJsonResponseHandler;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.Request;
 import io.airlift.json.JsonCodec;
+import io.airlift.json.JsonCodecFactory;
 import io.airlift.log.Logger;
 import io.airlift.units.Duration;
 import io.trino.execution.StateMachine;
@@ -91,7 +92,7 @@ class ContinuousTaskStatusFetcher
 
         this.taskId = initialTaskStatus.getTaskId();
         this.onFail = requireNonNull(onFail, "onFail is null");
-        this.taskStatus = new StateMachine<>("task-" + taskId, executor, initialTaskStatus);
+        this.taskStatus = new StateMachine<>("taskStatus-" + taskId, executor, initialTaskStatus);
 
         this.refreshMaxWait = requireNonNull(refreshMaxWait, "refreshMaxWait is null");
         this.taskStatusCodec = requireNonNull(taskStatusCodec, "taskStatusCodec is null");
@@ -145,6 +146,7 @@ class ContinuousTaskStatusFetcher
             return;
         }
 
+        log.info("[taskStatus-%s] Fetching task status", taskId);
         Request request = prepareGet()
                 .setUri(uriBuilderFrom(taskStatus.getSelf()).appendPath("status").build())
                 .setHeader(CONTENT_TYPE, JSON_UTF_8.toString())
@@ -167,6 +169,7 @@ class ContinuousTaskStatusFetcher
     public void success(TaskStatus value)
     {
         try (SetThreadName ignored = new SetThreadName("ContinuousTaskStatusFetcher-%s", taskId)) {
+            log.info("[taskStatus-%s] Received task status %s", taskId, new JsonCodecFactory().jsonCodec(TaskStatus.class).toJson(value));
             updateStats(currentRequestStartNanos.get());
             try {
                 updateTaskStatus(value);
@@ -182,6 +185,7 @@ class ContinuousTaskStatusFetcher
     public void failed(Throwable cause)
     {
         try (SetThreadName ignored = new SetThreadName("ContinuousTaskStatusFetcher-%s", taskId)) {
+            log.error(cause, "[taskStatus-%s] Error fetching task status", taskId);
             updateStats(currentRequestStartNanos.get());
             try {
                 // if task not already done, record error
@@ -207,6 +211,7 @@ class ContinuousTaskStatusFetcher
     public void fatal(Throwable cause)
     {
         try (SetThreadName ignored = new SetThreadName("ContinuousTaskStatusFetcher-%s", taskId)) {
+            log.error(cause, "[taskStatus-%s] Fatal fetching task status", taskId);
             updateStats(currentRequestStartNanos.get());
             onFail.accept(cause);
         }

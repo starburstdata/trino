@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.AtomicDouble;
 import com.google.common.util.concurrent.ListenableFuture;
+import io.airlift.log.Logger;
 import io.airlift.stats.CounterStat;
 import io.airlift.stats.GcMonitor;
 import io.airlift.units.DataSize;
@@ -66,6 +67,8 @@ import static java.util.stream.Collectors.toList;
 @ThreadSafe
 public class TaskContext
 {
+    private static final Logger log = Logger.get(TaskContext.class);
+
     private final QueryContext queryContext;
     private final TaskStateMachine taskStateMachine;
     private final GcMonitor gcMonitor;
@@ -533,6 +536,8 @@ public class TaskContext
                 .collect(toImmutableSet());
 
         boolean fullyBlocked = !runningPipelineStats.isEmpty() && runningPipelineStats.stream().allMatch(PipelineStats::isFullyBlocked);
+
+        log.info("[task-%s] Creating task stats %s (%s)", getTaskId(), physicalInputDataSize, pipelineContexts);
 
         return new TaskStats(
                 taskStateMachine.getCreatedTime(),

@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import com.google.common.util.concurrent.ListenableFuture;
+import io.airlift.log.Logger;
 import io.airlift.stats.CounterStat;
 import io.airlift.stats.Distribution;
 import io.airlift.units.Duration;
@@ -46,7 +47,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static io.airlift.units.DataSize.succinctBytes;
@@ -57,6 +57,8 @@ import static java.util.stream.Collectors.toList;
 @ThreadSafe
 public class PipelineContext
 {
+    private static final Logger log = Logger.get(PipelineContext.class);
+
     private final TaskContext taskContext;
     private final Executor notificationExecutor;
     private final ScheduledExecutorService yieldExecutor;
@@ -210,6 +212,7 @@ public class PipelineContext
             operatorSummaries.merge(operator.getOperatorId(), operator, OperatorStats::add);
         }
 
+        log.info("[pipeline-%s] %s Driver %s finished +%s", taskContext.getTaskId(), pipelineId, driverContext, driverStats.getPhysicalInputDataSize().toBytes());
         physicalInputDataSize.update(driverStats.getPhysicalInputDataSize().toBytes());
         physicalInputPositions.update(driverStats.getPhysicalInputPositions());
         physicalInputReadTime.getAndAdd(driverStats.getPhysicalInputReadTime().roundTo(NANOSECONDS));
@@ -441,6 +444,8 @@ public class PipelineContext
                 .collect(toImmutableSet());
 
         boolean fullyBlocked = !runningDriverStats.isEmpty() && runningDriverStats.stream().allMatch(DriverStats::isFullyBlocked);
+
+        log.info("[pipeline-%s] Creating pipeline %s stats %s (%s)", taskContext.getTaskId(), pipelineId, physicalInputDataSize, driverContexts);
 
         return new PipelineStats(
                 pipelineId,

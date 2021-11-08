@@ -26,3 +26,5 @@ benchmark_outputs
 node_modules
 product-test-reports
 .vscode/
+.pmd
+.pmdruleset.xml
