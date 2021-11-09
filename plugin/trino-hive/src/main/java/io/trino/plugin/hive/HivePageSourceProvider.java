@@ -27,11 +27,15 @@ import io.trino.plugin.hive.HiveRecordCursorProvider.ReaderRecordCursorWithProje
 import io.trino.plugin.hive.HiveSplit.BucketConversion;
 import io.trino.plugin.hive.HiveSplit.BucketValidation;
 import io.trino.plugin.hive.acid.AcidTransaction;
+import io.trino.plugin.hive.cache.SplitSignature;
+import io.trino.plugin.hive.cache.WorkerCacheManager;
 import io.trino.plugin.hive.orc.OrcFileWriterFactory;
 import io.trino.plugin.hive.orc.OrcPageSource;
 import io.trino.plugin.hive.util.HiveBucketing.BucketingVersion;
+import io.trino.spi.HostAddress;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
+import io.trino.spi.connector.ConnectorPageSink;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.ConnectorPageSourceProvider;
 import io.trino.spi.connector.ConnectorSession;
@@ -103,6 +107,7 @@ public class HivePageSourceProvider
     private final Set<HivePageSourceFactory> pageSourceFactories;
     private final Set<HiveRecordCursorProvider> cursorProviders;
     private final Optional<OrcFileWriterFactory> orcFileWriterFactory;
+    private final WorkerCacheManager cacheManager;
 
     @Inject
     public HivePageSourceProvider(
@@ -112,9 +117,10 @@ public class HivePageSourceProvider
             Set<HivePageSourceFactory> pageSourceFactories,
             Set<HiveRecordCursorProvider> cursorProviders,
             GenericHiveRecordCursorProvider genericCursorProvider,
-            OrcFileWriterFactory orcFileWriterFactory)
+            OrcFileWriterFactory orcFileWriterFactory,
+            WorkerCacheManager cacheManager)
     {
-        this(typeManager, hdfsEnvironment, hiveConfig, pageSourceFactories, cursorProviders, genericCursorProvider, Optional.of(orcFileWriterFactory));
+        this(typeManager, hdfsEnvironment, hiveConfig, pageSourceFactories, cursorProviders, genericCursorProvider, Optional.of(orcFileWriterFactory), cacheManager);
     }
 
     public HivePageSourceProvider(
@@ -124,7 +130,8 @@ public class HivePageSourceProvider
             Set<HivePageSourceFactory> pageSourceFactories,
             Set<HiveRecordCursorProvider> cursorProviders,
             GenericHiveRecordCursorProvider genericCursorProvider,
-            Optional<OrcFileWriterFactory> orcFileWriterFactory)
+            Optional<OrcFileWriterFactory> orcFileWriterFactory,
+            WorkerCacheManager cacheManager)
     {
         this.typeManager = requireNonNull(typeManager, "typeManager is null");
         this.hdfsEnvironment = requireNonNull(hdfsEnvironment, "hdfsEnvironment is null");
@@ -135,6 +142,7 @@ public class HivePageSourceProvider
                 .add(genericCursorProvider) // generic should be last, as a fallback option
                 .build();
         this.orcFileWriterFactory = requireNonNull(orcFileWriterFactory, "orcFileWriterFactory is null");
+        this.cacheManager = requireNonNull(cacheManager, "cacheManager is null");
     }
 
     @Override
@@ -212,6 +220,7 @@ public class HivePageSourceProvider
                 hiveSplit.getStart(),
                 hiveSplit.getLength(),
                 hiveSplit.getEstimatedFileSize(),
+                hiveSplit.getFileModifiedTime(),
                 hiveSplit.getSchema(),
                 hiveTable.getCompactEffectivePredicate().intersect(simplifiedDynamicFilter),
                 hiveColumns,
@@ -222,7 +231,9 @@ public class HivePageSourceProvider
                 hiveSplit.getAcidInfo(),
                 originalFile,
                 hiveTable.getTransaction(),
-                columnMappings);
+                columnMappings,
+                hiveSplit.getAddresses(),
+                cacheManager);
 
         if (pageSource.isPresent()) {
             ConnectorPageSource source = pageSource.get();
@@ -273,6 +284,7 @@ public class HivePageSourceProvider
             long start,
             long length,
             long estimatedFileSize,
+            long fileModifiedTime,
             Properties schema,
             TupleDomain<HiveColumnHandle> effectivePredicate,
             List<HiveColumnHandle> columns,
@@ -283,7 +295,9 @@ public class HivePageSourceProvider
             Optional<AcidInfo> acidInfo,
             boolean originalFile,
             AcidTransaction transaction,
-            List<ColumnMapping> columnMappings)
+            List<ColumnMapping> columnMappings,
+            List<HostAddress> splitAddresses,
+            WorkerCacheManager cacheManager)
     {
         if (effectivePredicate.isNone()) {
             return Optional.of(new EmptyPageSource());
@@ -297,28 +311,47 @@ public class HivePageSourceProvider
         for (HivePageSourceFactory pageSourceFactory : pageSourceFactories) {
             List<HiveColumnHandle> desiredColumns = toColumnHandles(regularAndInterimColumnMappings, true, typeManager);
 
-            Optional<ReaderPageSource> readerWithProjections = pageSourceFactory.createPageSource(
-                    configuration,
-                    session,
-                    path,
-                    start,
-                    length,
-                    estimatedFileSize,
-                    schema,
-                    desiredColumns,
-                    effectivePredicate,
-                    acidInfo,
-                    bucketNumber,
-                    originalFile,
-                    transaction);
+            SplitSignature signature = new SplitSignature(path.toString(), start, length, fileModifiedTime);
+            // try to use cached data first
+            Optional<ReaderColumns> readerProjections = projectBaseColumns(columns);
+            List<ColumnHandle> readerColumns = readerProjections
+                    .map(ReaderColumns::get)
+                    // all columns are base columns
+                    .orElseGet(() -> desiredColumns.stream()
+                            .map(column -> (ColumnHandle) column)
+                            .collect(toImmutableList()));
 
-            if (readerWithProjections.isPresent()) {
-                ConnectorPageSource pageSource = readerWithProjections.get().get();
+            Optional<ConnectorPageSource> pageSource = cacheManager.getCachePageSource(session, signature, readerColumns);
+            boolean shouldCacheData = false;
+            if (pageSource.isEmpty()) {
+                shouldCacheData = cacheManager.shouldCacheData(session, splitAddresses, signature, readerColumns);
+                pageSource = pageSourceFactory.createPageSource(
+                        configuration,
+                        session,
+                        path,
+                        start,
+                        length,
+                        estimatedFileSize,
+                        schema,
+                        desiredColumns,
+                        readerProjections,
+                        // cached data should not be filtered
+                        shouldCacheData ? TupleDomain.all() : effectivePredicate,
+                        acidInfo,
+                        bucketNumber,
+                        originalFile,
+                        transaction);
+            }
 
-                Optional<ReaderColumns> readerProjections = readerWithProjections.get().getReaderColumns();
+            if (pageSource.isPresent()) {
                 Optional<ReaderProjectionsAdapter> adapter = Optional.empty();
                 if (readerProjections.isPresent()) {
                     adapter = Optional.of(hiveProjectionsAdapter(desiredColumns, readerProjections.get()));
+                }
+
+                Optional<ConnectorPageSink> cacheSink = Optional.empty();
+                if (shouldCacheData) {
+                    cacheSink = Optional.of(cacheManager.getCachePageSink(session, signature, readerColumns));
                 }
 
                 return Optional.of(new HivePageSource(
@@ -327,7 +360,8 @@ public class HivePageSourceProvider
                         bucketValidator,
                         adapter,
                         typeManager,
-                        pageSource));
+                        pageSource.get(),
+                        cacheSink));
             }
         }
 

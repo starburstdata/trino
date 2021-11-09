@@ -378,7 +378,8 @@ class HiveSplitSource
                     }
                 }
 
-                long remainingSplitBytes = maxSplitBytes.getAsLong() - split.map(HiveSplit::getChainLength).orElse(0L);
+                // make individual split sizes deterministic
+                long remainingSplitBytes = maxSplitBytes.getAsLong();
 
                 InternalHiveBlock block = internalSplit.currentBlock();
                 long splitBytes;

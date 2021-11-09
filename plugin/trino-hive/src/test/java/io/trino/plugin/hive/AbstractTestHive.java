@@ -32,6 +32,9 @@ import io.trino.plugin.hive.authentication.HiveIdentity;
 import io.trino.plugin.hive.authentication.NoHdfsAuthentication;
 import io.trino.plugin.hive.azure.HiveAzureConfig;
 import io.trino.plugin.hive.azure.TrinoAzureConfigurationInitializer;
+import io.trino.plugin.hive.cache.CacheConfig;
+import io.trino.plugin.hive.cache.CoordinatorCacheManager;
+import io.trino.plugin.hive.cache.WorkerCacheManager;
 import io.trino.plugin.hive.gcs.GoogleGcsConfigurationInitializer;
 import io.trino.plugin.hive.gcs.HiveGcsConfig;
 import io.trino.plugin.hive.metastore.Column;
@@ -122,6 +125,7 @@ import io.trino.spi.type.SqlDate;
 import io.trino.spi.type.SqlTimestamp;
 import io.trino.spi.type.SqlTimestampWithTimeZone;
 import io.trino.spi.type.SqlVarbinary;
+import io.trino.spi.type.TestingTypeManager;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeId;
 import io.trino.spi.type.TypeOperators;
@@ -878,7 +882,8 @@ public abstract class AbstractTestHive
                 hiveConfig.getSplitLoaderConcurrency(),
                 hiveConfig.getMaxSplitsPerSecond(),
                 false,
-                TESTING_TYPE_MANAGER);
+                TESTING_TYPE_MANAGER,
+                new CoordinatorCacheManager(new TestingNodeManager()));
         pageSinkProvider = new HivePageSinkProvider(
                 getDefaultHiveFileWriterFactories(hiveConfig, hdfsEnvironment),
                 hdfsEnvironment,
@@ -900,7 +905,8 @@ public abstract class AbstractTestHive
                 getDefaultHivePageSourceFactories(hdfsEnvironment, hiveConfig),
                 getDefaultHiveRecordCursorProviders(hiveConfig, hdfsEnvironment),
                 new GenericHiveRecordCursorProvider(hdfsEnvironment, hiveConfig),
-                Optional.empty());
+                Optional.empty(),
+                new WorkerCacheManager(new CacheConfig(), new TestingNodeManager(), new TestingTypeManager()));
         nodePartitioningProvider = new HiveNodePartitioningProvider(
                 new TestingNodeManager("fake-environment"),
                 TESTING_TYPE_MANAGER);

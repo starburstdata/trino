@@ -27,11 +27,15 @@ import io.trino.plugin.hive.HivePageSourceProvider;
 import io.trino.plugin.hive.HivePartitionKey;
 import io.trino.plugin.hive.NodeVersion;
 import io.trino.plugin.hive.TableToPartitionMapping;
+import io.trino.plugin.hive.cache.CacheConfig;
+import io.trino.plugin.hive.cache.WorkerCacheManager;
 import io.trino.spi.Page;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.TestingTypeManager;
+import io.trino.testing.TestingNodeManager;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapred.FileSplit;
 import org.testng.annotations.Test;
@@ -226,6 +230,7 @@ public class TestOrcPredicates
                 split.getStart(),
                 split.getLength(),
                 split.getLength(),
+                0L,
                 splitProperties,
                 predicate,
                 columnHandles,
@@ -236,7 +241,9 @@ public class TestOrcPredicates
                 Optional.empty(),
                 false,
                 NO_ACID_TRANSACTION,
-                columnMappings);
+                columnMappings,
+                ImmutableList.of(),
+                new WorkerCacheManager(new CacheConfig(), new TestingNodeManager(), new TestingTypeManager()));
 
         assertTrue(pageSource.isPresent());
         return pageSource.get();

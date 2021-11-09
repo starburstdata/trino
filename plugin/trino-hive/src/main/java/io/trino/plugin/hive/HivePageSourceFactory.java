@@ -14,6 +14,7 @@
 package io.trino.plugin.hive;
 
 import io.trino.plugin.hive.acid.AcidTransaction;
+import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.predicate.TupleDomain;
 import org.apache.hadoop.conf.Configuration;
@@ -26,7 +27,7 @@ import java.util.Properties;
 
 public interface HivePageSourceFactory
 {
-    Optional<ReaderPageSource> createPageSource(
+    Optional<ConnectorPageSource> createPageSource(
             Configuration configuration,
             ConnectorSession session,
             Path path,
@@ -35,6 +36,7 @@ public interface HivePageSourceFactory
             long estimatedFileSize,
             Properties schema,
             List<HiveColumnHandle> columns,
+            Optional<ReaderColumns> readerProjections,
             TupleDomain<HiveColumnHandle> effectivePredicate,
             Optional<AcidInfo> acidInfo,
             OptionalInt bucketNumber,

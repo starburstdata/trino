@@ -37,7 +37,6 @@ import io.trino.plugin.hive.HiveConfig;
 import io.trino.plugin.hive.HivePageSourceFactory;
 import io.trino.plugin.hive.HiveUpdateProcessor;
 import io.trino.plugin.hive.ReaderColumns;
-import io.trino.plugin.hive.ReaderPageSource;
 import io.trino.plugin.hive.acid.AcidSchema;
 import io.trino.plugin.hive.acid.AcidTransaction;
 import io.trino.plugin.hive.orc.OrcPageSource.ColumnAdaptation;
@@ -89,7 +88,6 @@ import static io.trino.plugin.hive.HiveErrorCode.HIVE_BAD_DATA;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_CANNOT_OPEN_SPLIT;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_FILE_MISSING_COLUMN_NAMES;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_MISSING_DATA;
-import static io.trino.plugin.hive.HivePageSourceProvider.projectBaseColumns;
 import static io.trino.plugin.hive.HiveSessionProperties.getOrcLazyReadSmallRanges;
 import static io.trino.plugin.hive.HiveSessionProperties.getOrcMaxBufferSize;
 import static io.trino.plugin.hive.HiveSessionProperties.getOrcMaxMergeDistance;
@@ -144,7 +142,7 @@ public class OrcPageSourceFactory
     }
 
     @Override
-    public Optional<ReaderPageSource> createPageSource(
+    public Optional<ConnectorPageSource> createPageSource(
             Configuration configuration,
             ConnectorSession session,
             Path path,
@@ -153,6 +151,7 @@ public class OrcPageSourceFactory
             long estimatedFileSize,
             Properties schema,
             List<HiveColumnHandle> columns,
+            Optional<ReaderColumns> readerProjections,
             TupleDomain<HiveColumnHandle> effectivePredicate,
             Optional<AcidInfo> acidInfo,
             OptionalInt bucketNumber,
@@ -163,11 +162,15 @@ public class OrcPageSourceFactory
             return Optional.empty();
         }
 
+        // per HIVE-13040 and ORC-162, empty files are allowed
+        if (estimatedFileSize == 0) {
+            return Optional.of(new EmptyPageSource());
+        }
+
         List<HiveColumnHandle> readerColumnHandles = columns;
 
-        Optional<ReaderColumns> readerColumns = projectBaseColumns(columns);
-        if (readerColumns.isPresent()) {
-            readerColumnHandles = readerColumns.get().get().stream()
+        if (readerProjections.isPresent()) {
+            readerColumnHandles = readerProjections.get().get().stream()
                     .map(HiveColumnHandle.class::cast)
                     .collect(toUnmodifiableList());
         }
@@ -201,7 +204,7 @@ public class OrcPageSourceFactory
                 transaction,
                 stats);
 
-        return Optional.of(new ReaderPageSource(orcPageSource, readerColumns));
+        return Optional.of(orcPageSource);
     }
 
     private static ConnectorPageSource createOrcPageSource(

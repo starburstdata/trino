@@ -19,6 +19,8 @@ import com.google.common.collect.ImmutableSet;
 import io.airlift.testing.TempFile;
 import io.trino.connector.CatalogName;
 import io.trino.metadata.TableHandle;
+import io.trino.plugin.hive.cache.CacheConfig;
+import io.trino.plugin.hive.cache.WorkerCacheManager;
 import io.trino.plugin.hive.metastore.Column;
 import io.trino.plugin.hive.orc.OrcReaderConfig;
 import io.trino.plugin.hive.orc.OrcWriterConfig;
@@ -31,7 +33,9 @@ import io.trino.spi.connector.DynamicFilter;
 import io.trino.spi.connector.EmptyPageSource;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.TestingTypeManager;
 import io.trino.testing.TestingConnectorSession;
+import io.trino.testing.TestingNodeManager;
 import org.testng.annotations.Test;
 
 import java.io.File;
@@ -164,7 +168,8 @@ public class TestNodeLocalDynamicSplitPruning
                 getDefaultHivePageSourceFactories(HDFS_ENVIRONMENT, hiveConfig),
                 getDefaultHiveRecordCursorProviders(hiveConfig, HDFS_ENVIRONMENT),
                 new GenericHiveRecordCursorProvider(HDFS_ENVIRONMENT, hiveConfig),
-                Optional.empty());
+                Optional.empty(),
+                new WorkerCacheManager(new CacheConfig(), new TestingNodeManager(), new TestingTypeManager()));
 
         return provider.createPageSource(
                 transaction,

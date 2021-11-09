@@ -22,6 +22,7 @@ import io.airlift.concurrent.BoundedExecutor;
 import io.airlift.stats.CounterStat;
 import io.airlift.units.DataSize;
 import io.trino.plugin.hive.authentication.HiveIdentity;
+import io.trino.plugin.hive.cache.CoordinatorCacheManager;
 import io.trino.plugin.hive.metastore.Column;
 import io.trino.plugin.hive.metastore.Partition;
 import io.trino.plugin.hive.metastore.SemiTransactionalHiveMetastore;
@@ -76,6 +77,7 @@ import static io.trino.plugin.hive.HiveSessionProperties.isUseOrcColumnNames;
 import static io.trino.plugin.hive.HiveSessionProperties.isUseParquetColumnNames;
 import static io.trino.plugin.hive.HiveStorageFormat.getHiveStorageFormat;
 import static io.trino.plugin.hive.TableToPartitionMapping.mapColumnsByIndex;
+import static io.trino.plugin.hive.cache.CacheSessionProperties.isCacheEnabled;
 import static io.trino.plugin.hive.metastore.MetastoreUtil.getProtectMode;
 import static io.trino.plugin.hive.metastore.MetastoreUtil.makePartitionName;
 import static io.trino.plugin.hive.metastore.MetastoreUtil.verifyOnline;
@@ -111,6 +113,7 @@ public class HiveSplitManager
     private final boolean recursiveDfsWalkerEnabled;
     private final CounterStat highMemorySplitSourceCounter;
     private final TypeManager typeManager;
+    private CoordinatorCacheManager cacheManager;
 
     @Inject
     public HiveSplitManager(
@@ -122,7 +125,8 @@ public class HiveSplitManager
             DirectoryLister directoryLister,
             ExecutorService executorService,
             VersionEmbedder versionEmbedder,
-            TypeManager typeManager)
+            TypeManager typeManager,
+            CoordinatorCacheManager cacheManager)
     {
         this(
                 metastoreProvider,
@@ -140,7 +144,8 @@ public class HiveSplitManager
                 hiveConfig.getSplitLoaderConcurrency(),
                 hiveConfig.getMaxSplitsPerSecond(),
                 hiveConfig.getRecursiveDirWalkerEnabled(),
-                typeManager);
+                typeManager,
+                cacheManager);
     }
 
     public HiveSplitManager(
@@ -159,7 +164,8 @@ public class HiveSplitManager
             int splitLoaderConcurrency,
             @Nullable Integer maxSplitsPerSecond,
             boolean recursiveDfsWalkerEnabled,
-            TypeManager typeManager)
+            TypeManager typeManager,
+            CoordinatorCacheManager cacheManager)
     {
         this.metastoreProvider = requireNonNull(metastoreProvider, "metastoreProvider is null");
         this.partitionManager = requireNonNull(partitionManager, "partitionManager is null");
@@ -178,6 +184,7 @@ public class HiveSplitManager
         this.maxSplitsPerSecond = firstNonNull(maxSplitsPerSecond, Integer.MAX_VALUE);
         this.recursiveDfsWalkerEnabled = recursiveDfsWalkerEnabled;
         this.typeManager = requireNonNull(typeManager, "typeManager is null");
+        this.cacheManager = requireNonNull(cacheManager, "cacheManager is null");
     }
 
     @Override
@@ -251,6 +258,12 @@ public class HiveSplitManager
                         .map(validTxnWriteIdList -> validTxnWriteIdList.getTableValidWriteIdList(table.getDatabaseName() + "." + table.getTableName())),
                 hiveTable.getMaxScannedFileSize());
 
+        int maxInitialSplits = this.maxInitialSplits;
+        if (isCacheEnabled(session)) {
+            // make split generation deterministic
+            maxInitialSplits = 0;
+        }
+
         HiveSplitSource splitSource;
         switch (splitSchedulingStrategy) {
             case UNGROUPED_SCHEDULING:
@@ -286,7 +299,7 @@ public class HiveSplitManager
         }
         hiveSplitLoader.start(splitSource);
 
-        return splitSource;
+        return cacheManager.getCacheSplitSource(session, splitSource);
     }
 
     @Managed

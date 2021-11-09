@@ -27,6 +27,9 @@ import io.trino.plugin.hive.AbstractTestHive.Transaction;
 import io.trino.plugin.hive.HdfsEnvironment.HdfsContext;
 import io.trino.plugin.hive.authentication.HiveIdentity;
 import io.trino.plugin.hive.authentication.NoHdfsAuthentication;
+import io.trino.plugin.hive.cache.CacheConfig;
+import io.trino.plugin.hive.cache.CoordinatorCacheManager;
+import io.trino.plugin.hive.cache.WorkerCacheManager;
 import io.trino.plugin.hive.metastore.Column;
 import io.trino.plugin.hive.metastore.Database;
 import io.trino.plugin.hive.metastore.HiveMetastore;
@@ -59,6 +62,7 @@ import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.ConnectorIdentity;
+import io.trino.spi.type.TestingTypeManager;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
 import io.trino.sql.gen.JoinCompiler;
@@ -239,7 +243,8 @@ public abstract class AbstractTestHiveFileSystem
                 config.getSplitLoaderConcurrency(),
                 config.getMaxSplitsPerSecond(),
                 config.getRecursiveDirWalkerEnabled(),
-                TESTING_TYPE_MANAGER);
+                TESTING_TYPE_MANAGER,
+                new CoordinatorCacheManager(new TestingNodeManager()));
         TypeOperators typeOperators = new TypeOperators();
         BlockTypeOperators blockTypeOperators = new BlockTypeOperators(typeOperators);
         pageSinkProvider = new HivePageSinkProvider(
@@ -263,7 +268,8 @@ public abstract class AbstractTestHiveFileSystem
                 getDefaultHivePageSourceFactories(hdfsEnvironment, config),
                 getDefaultHiveRecordCursorProviders(config, hdfsEnvironment),
                 new GenericHiveRecordCursorProvider(hdfsEnvironment, config),
-                Optional.empty());
+                Optional.empty(),
+                new WorkerCacheManager(new CacheConfig(), new TestingNodeManager(), new TestingTypeManager()));
 
         onSetupComplete();
     }

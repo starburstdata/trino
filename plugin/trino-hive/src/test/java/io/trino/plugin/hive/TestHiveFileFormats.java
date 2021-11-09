@@ -20,6 +20,8 @@ import io.airlift.compress.lzo.LzoCodec;
 import io.airlift.compress.lzo.LzopCodec;
 import io.trino.orc.OrcReaderOptions;
 import io.trino.orc.OrcWriterOptions;
+import io.trino.plugin.hive.cache.CacheConfig;
+import io.trino.plugin.hive.cache.WorkerCacheManager;
 import io.trino.plugin.hive.orc.OrcFileWriterFactory;
 import io.trino.plugin.hive.orc.OrcPageSourceFactory;
 import io.trino.plugin.hive.orc.OrcReaderConfig;
@@ -34,8 +36,10 @@ import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.RecordCursor;
 import io.trino.spi.connector.RecordPageSource;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.TestingTypeManager;
 import io.trino.spi.type.Type;
 import io.trino.testing.TestingConnectorSession;
+import io.trino.testing.TestingNodeManager;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.common.type.HiveVarchar;
 import org.apache.hadoop.hive.ql.io.SymlinkTextInputFormat;
@@ -946,6 +950,7 @@ public class TestHiveFileFormats
                 split.getStart(),
                 split.getLength(),
                 fileSize,
+                0L,
                 splitProperties,
                 TupleDomain.all(),
                 columnHandles,
@@ -956,7 +961,9 @@ public class TestHiveFileFormats
                 Optional.empty(),
                 false,
                 NO_ACID_TRANSACTION,
-                columnMappings);
+                columnMappings,
+                ImmutableList.of(),
+                new WorkerCacheManager(new CacheConfig(), new TestingNodeManager(), new TestingTypeManager()));
 
         return pageSource.get();
     }
@@ -1024,6 +1031,7 @@ public class TestHiveFileFormats
                 split.getStart(),
                 split.getLength(),
                 fileSize,
+                0L,
                 splitProperties,
                 TupleDomain.all(),
                 columnHandles,
@@ -1034,7 +1042,9 @@ public class TestHiveFileFormats
                 Optional.empty(),
                 false,
                 NO_ACID_TRANSACTION,
-                columnMappings);
+                columnMappings,
+                ImmutableList.of(),
+                new WorkerCacheManager(new CacheConfig(), new TestingNodeManager(), new TestingTypeManager()));
 
         assertTrue(pageSource.isPresent());
 

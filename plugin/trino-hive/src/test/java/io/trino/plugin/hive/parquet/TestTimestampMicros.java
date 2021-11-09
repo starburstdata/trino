@@ -19,7 +19,6 @@ import io.trino.plugin.hive.HivePageSourceFactory;
 import io.trino.plugin.hive.HiveStorageFormat;
 import io.trino.plugin.hive.HiveTimestampPrecision;
 import io.trino.plugin.hive.HiveType;
-import io.trino.plugin.hive.ReaderPageSource;
 import io.trino.plugin.hive.acid.AcidTransaction;
 import io.trino.plugin.hive.benchmark.StandardFileFormats;
 import io.trino.spi.connector.ConnectorPageSource;
@@ -108,7 +107,7 @@ public class TestTimestampMicros
         Properties schema = new Properties();
         schema.setProperty(SERIALIZATION_LIB, HiveStorageFormat.PARQUET.getSerDe());
 
-        ReaderPageSource pageSourceWithProjections = pageSourceFactory.createPageSource(
+        return pageSourceFactory.createPageSource(
                 new Configuration(false),
                 session,
                 new Path(parquetFile.toURI()),
@@ -117,16 +116,12 @@ public class TestTimestampMicros
                 parquetFile.length(),
                 schema,
                 List.of(createBaseColumn(columnName, 0, columnHiveType, columnType, REGULAR, Optional.empty())),
+                Optional.empty(),
                 TupleDomain.all(),
                 Optional.empty(),
                 OptionalInt.empty(),
                 false,
                 AcidTransaction.NO_ACID_TRANSACTION)
                 .orElseThrow();
-
-        pageSourceWithProjections.getReaderColumns()
-                .ifPresent(projections -> { throw new IllegalStateException("Unexpected projections: " + projections); });
-
-        return pageSourceWithProjections.get();
     }
 }

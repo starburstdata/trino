@@ -36,6 +36,7 @@ import io.trino.plugin.base.jmx.MBeanServerModule;
 import io.trino.plugin.base.session.SessionPropertiesProvider;
 import io.trino.plugin.hive.authentication.HdfsAuthenticationModule;
 import io.trino.plugin.hive.azure.HiveAzureModule;
+import io.trino.plugin.hive.cache.CacheModule;
 import io.trino.plugin.hive.gcs.HiveGcsModule;
 import io.trino.plugin.hive.metastore.HiveMetastore;
 import io.trino.plugin.hive.metastore.HiveMetastoreModule;
@@ -105,6 +106,7 @@ public final class InternalHiveConnectorFactory
                     new HdfsAuthenticationModule(),
                     new HiveProcedureModule(),
                     new MBeanServerModule(),
+                    new CacheModule(context),
                     binder -> {
                         binder.bind(NodeVersion.class).toInstance(new NodeVersion(context.getNodeManager().getCurrentNode().getVersion()));
                         binder.bind(NodeManager.class).toInstance(context.getNodeManager());

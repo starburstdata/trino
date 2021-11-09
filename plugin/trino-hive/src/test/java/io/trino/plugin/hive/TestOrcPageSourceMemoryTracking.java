@@ -30,6 +30,8 @@ import io.trino.operator.TableScanOperator.TableScanOperatorFactory;
 import io.trino.operator.project.CursorProcessor;
 import io.trino.operator.project.PageProcessor;
 import io.trino.orc.OrcReaderOptions;
+import io.trino.plugin.hive.cache.CacheConfig;
+import io.trino.plugin.hive.cache.WorkerCacheManager;
 import io.trino.plugin.hive.orc.OrcPageSourceFactory;
 import io.trino.plugin.hive.orc.OrcReaderConfig;
 import io.trino.plugin.hive.orc.OrcWriterConfig;
@@ -43,12 +45,14 @@ import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.DynamicFilter;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.TestingTypeManager;
 import io.trino.spi.type.Type;
 import io.trino.sql.gen.ExpressionCompiler;
 import io.trino.sql.gen.PageFunctionCompiler;
 import io.trino.sql.planner.plan.PlanNodeId;
 import io.trino.sql.relational.RowExpression;
 import io.trino.testing.TestingConnectorSession;
+import io.trino.testing.TestingNodeManager;
 import io.trino.testing.TestingSplit;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -574,6 +578,7 @@ public class TestOrcPageSourceMemoryTracking
                     fileSplit.getStart(),
                     fileSplit.getLength(),
                     fileSplit.getLength(),
+                    0L,
                     schema,
                     TupleDomain.all(),
                     columns,
@@ -584,7 +589,9 @@ public class TestOrcPageSourceMemoryTracking
                     Optional.empty(),
                     false,
                     NO_ACID_TRANSACTION,
-                    columnMappings).orElseThrow();
+                    columnMappings,
+                    ImmutableList.of(),
+                    new WorkerCacheManager(new CacheConfig(), new TestingNodeManager(), new TestingTypeManager())).orElseThrow();
         }
 
         public SourceOperator newTableScanOperator(DriverContext driverContext)

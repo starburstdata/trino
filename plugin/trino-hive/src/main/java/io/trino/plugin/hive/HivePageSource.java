@@ -35,6 +35,7 @@ import io.trino.spi.block.LazyBlock;
 import io.trino.spi.block.LazyBlockLoader;
 import io.trino.spi.block.RowBlock;
 import io.trino.spi.block.RunLengthEncodedBlock;
+import io.trino.spi.connector.ConnectorPageSink;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.RecordCursor;
 import io.trino.spi.metrics.Metrics;
@@ -104,6 +105,7 @@ public class HivePageSource
     private final Optional<ReaderProjectionsAdapter> projectionsAdapter;
 
     private final ConnectorPageSource delegate;
+    private Optional<ConnectorPageSink> cacheSink;
 
     public HivePageSource(
             List<ColumnMapping> columnMappings,
@@ -111,12 +113,14 @@ public class HivePageSource
             Optional<BucketValidator> bucketValidator,
             Optional<ReaderProjectionsAdapter> projectionsAdapter,
             TypeManager typeManager,
-            ConnectorPageSource delegate)
+            ConnectorPageSource delegate,
+            Optional<ConnectorPageSink> cacheSink)
     {
         requireNonNull(columnMappings, "columnMappings is null");
         requireNonNull(typeManager, "typeManager is null");
 
         this.delegate = requireNonNull(delegate, "delegate is null");
+        this.cacheSink = requireNonNull(cacheSink, "cacheSink is null");
         this.columnMappings = columnMappings;
         this.bucketAdapter = bucketAdaptation.map(BucketAdapter::new);
         this.bucketValidator = requireNonNull(bucketValidator, "bucketValidator is null");
@@ -196,6 +200,8 @@ public class HivePageSource
                 return null;
             }
 
+            appendPageToCache(dataPage);
+
             if (projectionsAdapter.isPresent()) {
                 dataPage = projectionsAdapter.get().adaptPage(dataPage);
             }
@@ -255,6 +261,8 @@ public class HivePageSource
     @Override
     public void close()
     {
+        // TODO: this could throw
+        closeCache();
         try {
             delegate.close();
         }
@@ -298,6 +306,30 @@ public class HivePageSource
     public ConnectorPageSource getPageSource()
     {
         return delegate;
+    }
+
+    private void appendPageToCache(Page dataPage)
+    {
+        if (cacheSink.isEmpty()) {
+            return;
+        }
+
+        cacheSink.get().appendPage(dataPage);
+    }
+
+    private void closeCache()
+    {
+        if (cacheSink.isEmpty()) {
+            return;
+        }
+
+        if (delegate.isFinished()) {
+            cacheSink.get().finish();
+        }
+        else {
+            cacheSink.get().abort();
+        }
+        cacheSink = Optional.empty();
     }
 
     private static Optional<Function<Block, Block>> createCoercer(TypeManager typeManager, HiveType fromHiveType, HiveType toHiveType)

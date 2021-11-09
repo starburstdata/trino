@@ -21,6 +21,8 @@ import io.airlift.json.JsonCodec;
 import io.airlift.slice.Slices;
 import io.trino.operator.GroupByHashPageIndexerFactory;
 import io.trino.plugin.hive.authentication.HiveIdentity;
+import io.trino.plugin.hive.cache.CacheConfig;
+import io.trino.plugin.hive.cache.WorkerCacheManager;
 import io.trino.plugin.hive.metastore.HiveMetastore;
 import io.trino.plugin.hive.metastore.HivePageSinkMetadata;
 import io.trino.spi.Page;
@@ -33,6 +35,7 @@ import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.DynamicFilter;
 import io.trino.spi.connector.SchemaTableName;
+import io.trino.spi.type.TestingTypeManager;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
 import io.trino.sql.gen.JoinCompiler;
@@ -254,7 +257,8 @@ public class TestHivePageSink
                 getDefaultHivePageSourceFactories(HDFS_ENVIRONMENT, config),
                 getDefaultHiveRecordCursorProviders(config, HDFS_ENVIRONMENT),
                 new GenericHiveRecordCursorProvider(HDFS_ENVIRONMENT, config),
-                Optional.empty());
+                Optional.empty(),
+                new WorkerCacheManager(new CacheConfig(), new TestingNodeManager(), new TestingTypeManager()));
         return provider.createPageSource(transaction, getHiveSession(config), split, table, ImmutableList.copyOf(getColumnHandles()), DynamicFilter.EMPTY);
     }
 

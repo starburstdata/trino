@@ -26,7 +26,6 @@ import io.trino.plugin.hive.HiveConfig;
 import io.trino.plugin.hive.HivePageSourceFactory;
 import io.trino.plugin.hive.HiveTimestampPrecision;
 import io.trino.plugin.hive.ReaderColumns;
-import io.trino.plugin.hive.ReaderPageSource;
 import io.trino.plugin.hive.acid.AcidTransaction;
 import io.trino.plugin.hive.util.FSDataInputStreamTail;
 import io.trino.rcfile.AircompressorCodecFactory;
@@ -71,9 +70,7 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_BAD_DATA;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_CANNOT_OPEN_SPLIT;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_MISSING_DATA;
-import static io.trino.plugin.hive.HivePageSourceProvider.projectBaseColumns;
 import static io.trino.plugin.hive.HiveSessionProperties.getTimestampPrecision;
-import static io.trino.plugin.hive.ReaderPageSource.noProjectionAdaptation;
 import static io.trino.plugin.hive.util.HiveUtil.getDeserializerClassName;
 import static io.trino.rcfile.text.TextRcFileEncoding.DEFAULT_NULL_SEQUENCE;
 import static io.trino.rcfile.text.TextRcFileEncoding.DEFAULT_SEPARATORS;
@@ -113,7 +110,7 @@ public class RcFilePageSourceFactory
     }
 
     @Override
-    public Optional<ReaderPageSource> createPageSource(
+    public Optional<ConnectorPageSource> createPageSource(
             Configuration configuration,
             ConnectorSession session,
             Path path,
@@ -122,6 +119,7 @@ public class RcFilePageSourceFactory
             long estimatedFileSize,
             Properties schema,
             List<HiveColumnHandle> columns,
+            Optional<ReaderColumns> readerProjections,
             TupleDomain<HiveColumnHandle> effectivePredicate,
             Optional<AcidInfo> acidInfo,
             OptionalInt bucketNumber,
@@ -143,7 +141,6 @@ public class RcFilePageSourceFactory
         checkArgument(acidInfo.isEmpty(), "Acid is not supported");
 
         List<HiveColumnHandle> projectedReaderColumns = columns;
-        Optional<ReaderColumns> readerProjections = projectBaseColumns(columns);
 
         if (readerProjections.isPresent()) {
             projectedReaderColumns = readerProjections.get().get().stream()
@@ -181,7 +178,7 @@ public class RcFilePageSourceFactory
         length = min(dataSource.getSize() - start, length);
         // Split may be empty now that the correct file size is known
         if (length <= 0) {
-            return Optional.of(noProjectionAdaptation(new EmptyPageSource()));
+            return Optional.of(new EmptyPageSource());
         }
 
         try {
@@ -201,7 +198,7 @@ public class RcFilePageSourceFactory
                     BUFFER_SIZE);
 
             ConnectorPageSource pageSource = new RcFilePageSource(rcFileReader, projectedReaderColumns);
-            return Optional.of(new ReaderPageSource(pageSource, readerProjections));
+            return Optional.of(pageSource);
         }
         catch (Throwable e) {
             try {

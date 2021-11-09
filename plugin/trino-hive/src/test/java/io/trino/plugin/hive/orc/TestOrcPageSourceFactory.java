@@ -20,7 +20,6 @@ import io.trino.plugin.hive.FileFormatDataSourceStats;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.HiveConfig;
 import io.trino.plugin.hive.HivePageSourceFactory;
-import io.trino.plugin.hive.ReaderPageSource;
 import io.trino.spi.Page;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.predicate.Domain;
@@ -229,7 +228,7 @@ public class TestOrcPageSourceFactory
                 .map(HiveColumnHandle::getName)
                 .collect(toImmutableList());
 
-        Optional<ReaderPageSource> pageSourceWithProjections = PAGE_SOURCE_FACTORY.createPageSource(
+        Optional<ConnectorPageSource> pageSourceOptional = PAGE_SOURCE_FACTORY.createPageSource(
                 new JobConf(new Configuration(false)),
                 SESSION,
                 new Path(filePath),
@@ -238,17 +237,16 @@ public class TestOrcPageSourceFactory
                 fileSize,
                 createSchema(),
                 columnHandles,
+                Optional.empty(),
                 tupleDomain,
                 acidInfo,
                 OptionalInt.empty(),
                 false,
                 NO_ACID_TRANSACTION);
 
-        checkArgument(pageSourceWithProjections.isPresent());
-        checkArgument(pageSourceWithProjections.get().getReaderColumns().isEmpty(),
-                "projected columns not expected here");
+        checkArgument(pageSourceOptional.isPresent());
 
-        ConnectorPageSource pageSource = pageSourceWithProjections.get().get();
+        ConnectorPageSource pageSource = pageSourceOptional.get();
 
         int nationKeyColumn = columnNames.indexOf("n_nationkey");
         int nameColumn = columnNames.indexOf("n_name");

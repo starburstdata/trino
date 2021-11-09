@@ -34,7 +34,6 @@ import io.trino.plugin.hive.HiveConfig;
 import io.trino.plugin.hive.HivePageSourceFactory;
 import io.trino.plugin.hive.HiveType;
 import io.trino.plugin.hive.ReaderColumns;
-import io.trino.plugin.hive.ReaderPageSource;
 import io.trino.plugin.hive.acid.AcidTransaction;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorPageSource;
@@ -87,7 +86,6 @@ import static io.trino.plugin.hive.HiveColumnHandle.ColumnType.REGULAR;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_BAD_DATA;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_CANNOT_OPEN_SPLIT;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_MISSING_DATA;
-import static io.trino.plugin.hive.HivePageSourceProvider.projectBaseColumns;
 import static io.trino.plugin.hive.HivePageSourceProvider.projectSufficientColumns;
 import static io.trino.plugin.hive.HiveSessionProperties.getParquetMaxReadBlockSize;
 import static io.trino.plugin.hive.HiveSessionProperties.isParquetIgnoreStatistics;
@@ -140,7 +138,7 @@ public class ParquetPageSourceFactory
     }
 
     @Override
-    public Optional<ReaderPageSource> createPageSource(
+    public Optional<ConnectorPageSource> createPageSource(
             Configuration configuration,
             ConnectorSession session,
             Path path,
@@ -149,6 +147,7 @@ public class ParquetPageSourceFactory
             long estimatedFileSize,
             Properties schema,
             List<HiveColumnHandle> columns,
+            Optional<ReaderColumns> readerProjections,
             TupleDomain<HiveColumnHandle> effectivePredicate,
             Optional<AcidInfo> acidInfo,
             OptionalInt bucketNumber,
@@ -167,6 +166,7 @@ public class ParquetPageSourceFactory
                 length,
                 estimatedFileSize,
                 columns,
+                readerProjections,
                 effectivePredicate,
                 isUseParquetColumnNames(session),
                 hdfsEnvironment,
@@ -182,12 +182,13 @@ public class ParquetPageSourceFactory
     /**
      * This method is available for other callers to use directly.
      */
-    public static ReaderPageSource createPageSource(
+    public static ConnectorPageSource createPageSource(
             Path path,
             long start,
             long length,
             long estimatedFileSize,
             List<HiveColumnHandle> columns,
+            Optional<ReaderColumns> readerProjections,
             TupleDomain<HiveColumnHandle> effectivePredicate,
             boolean useColumnNames,
             HdfsEnvironment hdfsEnvironment,
@@ -288,11 +289,10 @@ public class ParquetPageSourceFactory
             throw new TrinoException(HIVE_CANNOT_OPEN_SPLIT, message, e);
         }
 
-        Optional<ReaderColumns> readerProjections = projectBaseColumns(columns);
         List<HiveColumnHandle> baseColumns = readerProjections.map(projection ->
-                projection.get().stream()
-                        .map(HiveColumnHandle.class::cast)
-                        .collect(toUnmodifiableList()))
+                        projection.get().stream()
+                                .map(HiveColumnHandle.class::cast)
+                                .collect(toUnmodifiableList()))
                 .orElse(columns);
 
         for (HiveColumnHandle column : baseColumns) {
@@ -322,7 +322,7 @@ public class ParquetPageSourceFactory
                 trinoTypes.build(),
                 rowIndexColumns.build(),
                 internalFields.build());
-        return new ReaderPageSource(parquetPageSource, readerProjections);
+        return parquetPageSource;
     }
 
     public static Optional<org.apache.parquet.schema.Type> getParquetType(GroupType groupType, boolean useParquetColumnNames, HiveColumnHandle column)

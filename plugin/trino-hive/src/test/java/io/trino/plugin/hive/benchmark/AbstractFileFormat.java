@@ -29,8 +29,9 @@ import io.trino.plugin.hive.HiveStorageFormat;
 import io.trino.plugin.hive.HiveTableHandle;
 import io.trino.plugin.hive.HiveType;
 import io.trino.plugin.hive.HiveTypeName;
-import io.trino.plugin.hive.ReaderPageSource;
 import io.trino.plugin.hive.TableToPartitionMapping;
+import io.trino.plugin.hive.cache.CacheConfig;
+import io.trino.plugin.hive.cache.WorkerCacheManager;
 import io.trino.spi.SplitWeight;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorPageSource;
@@ -38,8 +39,10 @@ import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.DynamicFilter;
 import io.trino.spi.connector.RecordPageSource;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.TestingTypeManager;
 import io.trino.spi.type.Type;
 import io.trino.sql.planner.TestingConnectorTransactionHandle;
+import io.trino.testing.TestingNodeManager;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
@@ -130,7 +133,8 @@ public abstract class AbstractFileFormat
                 getHivePageSourceFactory(hdfsEnvironment).map(ImmutableSet::of).orElse(ImmutableSet.of()),
                 getHiveRecordCursorProvider(hdfsEnvironment).map(ImmutableSet::of).orElse(ImmutableSet.of()),
                 new GenericHiveRecordCursorProvider(hdfsEnvironment, new HiveConfig()),
-                Optional.empty());
+                Optional.empty(),
+                new WorkerCacheManager(new CacheConfig(), new TestingNodeManager(), new TestingTypeManager()));
 
         Properties schema = createSchema(getFormat(), schemaColumnNames, schemaColumnTypes);
 
@@ -215,7 +219,7 @@ public abstract class AbstractFileFormat
         List<HiveColumnHandle> readColumns = getBaseColumns(columnNames, columnTypes);
 
         Properties schema = createSchema(format, columnNames, columnTypes);
-        Optional<ReaderPageSource> readerPageSourceWithProjections = pageSourceFactory
+        Optional<ConnectorPageSource> pageSource = pageSourceFactory
                 .createPageSource(
                         conf,
                         session,
@@ -225,15 +229,15 @@ public abstract class AbstractFileFormat
                         targetFile.length(),
                         schema,
                         readColumns,
+                        Optional.empty(),
                         TupleDomain.all(),
                         Optional.empty(),
                         OptionalInt.empty(),
                         false,
                         NO_ACID_TRANSACTION);
 
-        checkState(readerPageSourceWithProjections.isPresent(), "readerPageSourceWithProjections is not present");
-        checkState(readerPageSourceWithProjections.get().getReaderColumns().isEmpty(), "projection should not be required");
-        return readerPageSourceWithProjections.get().get();
+        checkState(pageSource.isPresent(), "readerPageSourceWithProjections is not present");
+        return pageSource.get();
     }
 
     static List<HiveColumnHandle> getBaseColumns(List<String> columnNames, List<Type> columnTypes)
