@@ -139,7 +139,8 @@ public class UnaliasSymbolReferences
         requireNonNull(symbolAllocator, "symbolAllocator is null");
         requireNonNull(idAllocator, "idAllocator is null");
 
-        return plan.accept(new Visitor(metadata, SymbolMapper::symbolMapper), UnaliasContext.empty()).getRoot();
+        PlanAndMappings result = plan.accept(new Visitor(metadata, SymbolMapper::symbolMapper), UnaliasContext.empty());
+        return updateDynamicFilterIds(result);
     }
 
     /**
@@ -155,7 +156,17 @@ public class UnaliasSymbolReferences
         requireNonNull(symbolAllocator, "symbolAllocator is null");
 
         PlanAndMappings result = plan.accept(new Visitor(metadata, mapping -> symbolReallocator(mapping, symbolAllocator)), UnaliasContext.empty());
-        return new NodeAndMappings(result.getRoot(), symbolMapper(result.getMappings()).map(fields));
+        return new NodeAndMappings(updateDynamicFilterIds(result), symbolMapper(result.getMappings()).map(fields));
+    }
+
+    private PlanNode updateDynamicFilterIds(PlanAndMappings result)
+    {
+        Map<DynamicFilterId, DynamicFilterId> dynamicFilterIdMap = result.getDynamicFilterIdMap();
+        PlanNode resultNode = result.getRoot();
+        if (!dynamicFilterIdMap.isEmpty()) {
+            resultNode = resultNode.accept(new DynamicFilterVisitor(metadata, dynamicFilterIdMap), null);
+        }
+        return resultNode;
     }
 
     private static class Visitor
@@ -190,7 +201,7 @@ public class UnaliasSymbolReferences
 
             AggregationNode rewrittenAggregation = mapper.map(node, rewrittenSource.getRoot());
 
-            return new PlanAndMappings(rewrittenAggregation, mapping);
+            return rewrittenSource.with(rewrittenAggregation, mapping);
         }
 
         @Override
@@ -202,7 +213,7 @@ public class UnaliasSymbolReferences
 
             GroupIdNode rewrittenGroupId = mapper.map(node, rewrittenSource.getRoot());
 
-            return new PlanAndMappings(rewrittenGroupId, mapping);
+            return rewrittenSource.with(rewrittenGroupId, mapping);
         }
 
         @Override
@@ -215,7 +226,7 @@ public class UnaliasSymbolReferences
             Symbol newOutputSymbol = mapper.map(node.getOutputSymbol());
             List<Symbol> actualOutputs = mapper.map(node.getActualOutputs());
 
-            return new PlanAndMappings(
+            return rewrittenSource.with(
                     new ExplainAnalyzeNode(node.getId(), rewrittenSource.getRoot(), newOutputSymbol, actualOutputs, node.isVerbose()),
                     mapping);
         }
@@ -231,7 +242,7 @@ public class UnaliasSymbolReferences
             List<Symbol> newDistinctSymbols = mapper.mapAndDistinct(node.getDistinctSymbols());
             Optional<Symbol> newHashSymbol = node.getHashSymbol().map(mapper::map);
 
-            return new PlanAndMappings(
+            return rewrittenSource.with(
                     new MarkDistinctNode(
                             node.getId(),
                             rewrittenSource.getRoot(),
@@ -258,7 +269,7 @@ public class UnaliasSymbolReferences
             Optional<Symbol> newOrdinalitySymbol = node.getOrdinalitySymbol().map(mapper::map);
             Optional<Expression> newFilter = node.getFilter().map(mapper::map);
 
-            return new PlanAndMappings(
+            return rewrittenSource.with(
                     new UnnestNode(
                             node.getId(),
                             rewrittenSource.getRoot(),
@@ -279,7 +290,7 @@ public class UnaliasSymbolReferences
 
             WindowNode rewrittenWindow = mapper.map(node, rewrittenSource.getRoot());
 
-            return new PlanAndMappings(rewrittenWindow, mapping);
+            return rewrittenSource.with(rewrittenWindow, mapping);
         }
 
         @Override
@@ -291,7 +302,7 @@ public class UnaliasSymbolReferences
 
             PatternRecognitionNode rewrittenPatternRecognition = mapper.map(node, rewrittenSource.getRoot());
 
-            return new PlanAndMappings(rewrittenPatternRecognition, mapping);
+            return rewrittenSource.with(rewrittenPatternRecognition, mapping);
         }
 
         @Override
@@ -330,11 +341,14 @@ public class UnaliasSymbolReferences
         {
             ImmutableList.Builder<PlanNode> rewrittenChildren = ImmutableList.builder();
             ImmutableList.Builder<List<Symbol>> rewrittenInputsBuilder = ImmutableList.builder();
-
+            ImmutableList.Builder<Map<DynamicFilterId, DynamicFilterId>> dynamicFilterIdMaps = ImmutableList.builder();
             // rewrite child and map corresponding input list accordingly to the child's mapping
             for (int i = 0; i < node.getSources().size(); i++) {
                 PlanAndMappings rewrittenChild = node.getSources().get(i).accept(this, context);
                 rewrittenChildren.add(rewrittenChild.getRoot());
+                if (!rewrittenChild.getDynamicFilterIdMap().isEmpty()) {
+                    dynamicFilterIdMaps.add(rewrittenChild.getDynamicFilterIdMap());
+                }
                 SymbolMapper mapper = symbolMapper(new HashMap<>(rewrittenChild.getMappings()));
                 rewrittenInputsBuilder.add(mapper.map(node.getInputs().get(i)));
             }
@@ -427,7 +441,8 @@ public class UnaliasSymbolReferences
                             rewrittenChildren.build(),
                             newInputs,
                             newOrderingScheme),
-                    outputMapping);
+                    outputMapping,
+                    merge(dynamicFilterIdMaps.build()));
         }
 
         @Override
@@ -454,7 +469,7 @@ public class UnaliasSymbolReferences
         {
             PlanAndMappings rewrittenSource = node.getSource().accept(this, context);
 
-            return new PlanAndMappings(
+            return rewrittenSource.with(
                     node.replaceChildren(ImmutableList.of(rewrittenSource.getRoot())),
                     rewrittenSource.getMappings());
         }
@@ -468,7 +483,7 @@ public class UnaliasSymbolReferences
 
             LimitNode rewrittenLimit = mapper.map(node, rewrittenSource.getRoot());
 
-            return new PlanAndMappings(rewrittenLimit, mapping);
+            return rewrittenSource.with(rewrittenLimit, mapping);
         }
 
         @Override
@@ -480,7 +495,7 @@ public class UnaliasSymbolReferences
 
             DistinctLimitNode rewrittenDistinctLimit = mapper.map(node, rewrittenSource.getRoot());
 
-            return new PlanAndMappings(rewrittenDistinctLimit, mapping);
+            return rewrittenSource.with(rewrittenDistinctLimit, mapping);
         }
 
         @Override
@@ -488,7 +503,7 @@ public class UnaliasSymbolReferences
         {
             PlanAndMappings rewrittenSource = node.getSource().accept(this, context);
 
-            return new PlanAndMappings(
+            return rewrittenSource.with(
                     node.replaceChildren(ImmutableList.of(rewrittenSource.getRoot())),
                     rewrittenSource.getMappings());
         }
@@ -583,7 +598,7 @@ public class UnaliasSymbolReferences
             Symbol newRowId = mapper.map(node.getRowId());
             List<Symbol> newOutputs = mapper.map(node.getOutputSymbols());
 
-            return new PlanAndMappings(
+            return rewrittenSource.with(
                     new DeleteNode(
                             node.getId(),
                             rewrittenSource.getRoot(),
@@ -604,7 +619,7 @@ public class UnaliasSymbolReferences
             List<Symbol> newColumnValueSymbols = mapper.map(node.getColumnValueAndRowIdSymbols());
             List<Symbol> newOutputs = mapper.map(node.getOutputSymbols());
 
-            return new PlanAndMappings(
+            return rewrittenSource.with(
                     new UpdateNode(
                             node.getId(),
                             rewrittenSource.getRoot(),
@@ -624,7 +639,7 @@ public class UnaliasSymbolReferences
 
             TableExecuteNode rewrittenTableExecute = mapper.map(node, rewrittenSource.getRoot());
 
-            return new PlanAndMappings(rewrittenTableExecute, mapping);
+            return rewrittenSource.with(rewrittenTableExecute, mapping);
         }
 
         @Override
@@ -636,7 +651,7 @@ public class UnaliasSymbolReferences
 
             StatisticsWriterNode rewrittenStatisticsWriter = mapper.map(node, rewrittenSource.getRoot());
 
-            return new PlanAndMappings(rewrittenStatisticsWriter, mapping);
+            return rewrittenSource.with(rewrittenStatisticsWriter, mapping);
         }
 
         @Override
@@ -654,7 +669,7 @@ public class UnaliasSymbolReferences
 
             TableWriterNode rewrittenTableWriter = mapper.map(node, rewrittenSource.getRoot());
 
-            return new PlanAndMappings(rewrittenTableWriter, mapping);
+            return rewrittenSource.with(rewrittenTableWriter, mapping);
         }
 
         @Override
@@ -666,7 +681,7 @@ public class UnaliasSymbolReferences
 
             TableFinishNode rewrittenTableFinish = mapper.map(node, rewrittenSource.getRoot());
 
-            return new PlanAndMappings(rewrittenTableFinish, mapping);
+            return rewrittenSource.with(rewrittenTableFinish, mapping);
         }
 
         @Override
@@ -678,7 +693,7 @@ public class UnaliasSymbolReferences
 
             RowNumberNode rewrittenRowNumber = mapper.map(node, rewrittenSource.getRoot());
 
-            return new PlanAndMappings(rewrittenRowNumber, mapping);
+            return rewrittenSource.with(rewrittenRowNumber, mapping);
         }
 
         @Override
@@ -690,7 +705,7 @@ public class UnaliasSymbolReferences
 
             TopNRankingNode rewrittenTopNRanking = mapper.map(node, rewrittenSource.getRoot());
 
-            return new PlanAndMappings(rewrittenTopNRanking, mapping);
+            return rewrittenSource.with(rewrittenTopNRanking, mapping);
         }
 
         @Override
@@ -702,7 +717,7 @@ public class UnaliasSymbolReferences
 
             TopNNode rewrittenTopN = mapper.map(node, rewrittenSource.getRoot());
 
-            return new PlanAndMappings(rewrittenTopN, mapping);
+            return rewrittenSource.with(rewrittenTopN, mapping);
         }
 
         @Override
@@ -714,7 +729,7 @@ public class UnaliasSymbolReferences
 
             OrderingScheme newOrderingScheme = mapper.map(node.getOrderingScheme());
 
-            return new PlanAndMappings(
+            return rewrittenSource.with(
                     new SortNode(node.getId(), rewrittenSource.getRoot(), newOrderingScheme, node.isPartial()),
                     mapping);
         }
@@ -728,7 +743,7 @@ public class UnaliasSymbolReferences
 
             Expression newPredicate = mapper.map(node.getPredicate());
 
-            return new PlanAndMappings(
+            return rewrittenSource.with(
                     new FilterNode(node.getId(), rewrittenSource.getRoot(), newPredicate),
                     mapping);
         }
@@ -796,7 +811,7 @@ public class UnaliasSymbolReferences
                 newAssignments.put(mapper.map(assignment.getKey()), assignment.getValue());
             }
 
-            return new PlanAndMappings(
+            return rewrittenSource.with(
                     new ProjectNode(node.getId(), rewrittenSource.getRoot(), newAssignments.build()),
                     outputMapping);
         }
@@ -841,7 +856,7 @@ public class UnaliasSymbolReferences
 
             List<Symbol> newOutputs = mapper.map(node.getOutputSymbols());
 
-            return new PlanAndMappings(
+            return rewrittenSource.with(
                     new OutputNode(node.getId(), rewrittenSource.getRoot(), node.getColumnNames(), newOutputs),
                     mapping);
         }
@@ -851,7 +866,7 @@ public class UnaliasSymbolReferences
         {
             PlanAndMappings rewrittenSource = node.getSource().accept(this, context);
 
-            return new PlanAndMappings(
+            return rewrittenSource.with(
                     node.replaceChildren(ImmutableList.of(rewrittenSource.getRoot())),
                     rewrittenSource.getMappings());
         }
@@ -865,7 +880,7 @@ public class UnaliasSymbolReferences
 
             Symbol newUnique = mapper.map(node.getIdColumn());
 
-            return new PlanAndMappings(
+            return rewrittenSource.with(
                     new AssignUniqueId(node.getId(), rewrittenSource.getRoot(), newUnique),
                     mapping);
         }
@@ -932,7 +947,10 @@ public class UnaliasSymbolReferences
 
             return new PlanAndMappings(
                     new ApplyNode(node.getId(), rewrittenInput.getRoot(), rewrittenSubquery.getRoot(), newAssignments.build(), rewrittenCorrelation, node.getOriginSubquery()),
-                    assignmentsOutputMapping);
+                    assignmentsOutputMapping,
+                    merge(
+                            rewrittenInput.getDynamicFilterIdMap(),
+                            rewrittenSubquery.getDynamicFilterIdMap()));
         }
 
         @Override
@@ -974,7 +992,10 @@ public class UnaliasSymbolReferences
 
             return new PlanAndMappings(
                     new CorrelatedJoinNode(node.getId(), rewrittenInput.getRoot(), rewrittenSubquery.getRoot(), rewrittenCorrelation, node.getType(), newFilter, node.getOriginSubquery()),
-                    resultMapping);
+                    resultMapping,
+                    merge(
+                            rewrittenInput.getDynamicFilterIdMap(),
+                            rewrittenSubquery.getDynamicFilterIdMap()));
         }
 
         @Override
@@ -1005,6 +1026,8 @@ public class UnaliasSymbolReferences
             Map<Symbol, DynamicFilterId> canonicalDynamicFilters = new HashMap<>();
             ImmutableMap.Builder<DynamicFilterId, Symbol> filtersBuilder = ImmutableMap.builder();
             ImmutableMap.Builder<DynamicFilterId, DynamicFilterId> dynamicFilterIdMapBuilder = ImmutableMap.builder();
+            dynamicFilterIdMapBuilder.putAll(rewrittenLeft.getDynamicFilterIdMap());
+            dynamicFilterIdMapBuilder.putAll(rewrittenRight.getDynamicFilterIdMap());
             for (Map.Entry<DynamicFilterId, Symbol> entry : node.getDynamicFilters().entrySet()) {
                 Symbol canonical = mapper.map(entry.getValue());
                 DynamicFilterId canonicalDynamicFilterId = canonicalDynamicFilters.putIfAbsent(canonical, entry.getKey());
@@ -1016,13 +1039,6 @@ public class UnaliasSymbolReferences
                 }
             }
             Map<DynamicFilterId, Symbol> newDynamicFilters = filtersBuilder.build();
-
-            ImmutableMap<DynamicFilterId, DynamicFilterId> dynamicFilterIdMap = dynamicFilterIdMapBuilder.build();
-            if (!dynamicFilterIdMap.isEmpty()) {
-                // update dynamic filter ids on the probe side
-                PlanNode rewrittenLeftNode = rewrittenLeft.getRoot().accept(new DynamicFilterVisitor(metadata, dynamicFilterIdMap), null);
-                rewrittenLeft = new PlanAndMappings(rewrittenLeftNode, rewrittenLeft.getMappings());
-            }
 
             // derive new mappings from inner join equi criteria
             Map<Symbol, Symbol> newMapping = new HashMap<>();
@@ -1064,7 +1080,8 @@ public class UnaliasSymbolReferences
                             node.isSpillable(),
                             newDynamicFilters,
                             node.getReorderJoinStatsAndCost()),
-                    outputMapping);
+                    outputMapping,
+                    dynamicFilterIdMapBuilder.build());
         }
 
         @Override
@@ -1098,7 +1115,10 @@ public class UnaliasSymbolReferences
                             newFilteringSourceHashSymbol,
                             node.getDistributionType(),
                             node.getDynamicFilterId()),
-                    outputMapping);
+                    outputMapping,
+                    merge(
+                            rewrittenSource.getDynamicFilterIdMap(),
+                            rewrittenFilteringSource.getDynamicFilterIdMap()));
         }
 
         @Override
@@ -1121,7 +1141,10 @@ public class UnaliasSymbolReferences
 
             return new PlanAndMappings(
                     new SpatialJoinNode(node.getId(), node.getType(), rewrittenLeft.getRoot(), rewrittenRight.getRoot(), newOutputSymbols, newFilter, newLeftPartitionSymbol, newRightPartitionSymbol, node.getKdbTree()),
-                    outputMapping);
+                    outputMapping,
+                    merge(
+                            rewrittenLeft.getDynamicFilterIdMap(),
+                            rewrittenRight.getDynamicFilterIdMap()));
         }
 
         @Override
@@ -1149,7 +1172,10 @@ public class UnaliasSymbolReferences
 
             return new PlanAndMappings(
                     new IndexJoinNode(node.getId(), node.getType(), rewrittenProbe.getRoot(), rewrittenIndex.getRoot(), newEquiCriteria, newProbeHashSymbol, newIndexHashSymbol),
-                    outputMapping);
+                    outputMapping,
+                    merge(
+                            rewrittenProbe.getDynamicFilterIdMap(),
+                            rewrittenIndex.getDynamicFilterIdMap()));
         }
 
         @Override
@@ -1197,7 +1223,8 @@ public class UnaliasSymbolReferences
                                     .collect(toImmutableList()),
                             newOutputToInputs,
                             newOutputs),
-                    mapping);
+                    mapping,
+                    mergeDynamicFilterIdMap(rewrittenSources));
         }
 
         @Override
@@ -1226,7 +1253,8 @@ public class UnaliasSymbolReferences
                             newOutputToInputs,
                             newOutputs,
                             node.isDistinct()),
-                    mapping);
+                    mapping,
+                    mergeDynamicFilterIdMap(rewrittenSources));
         }
 
         @Override
@@ -1255,7 +1283,8 @@ public class UnaliasSymbolReferences
                             newOutputToInputs,
                             newOutputs,
                             node.isDistinct()),
-                    mapping);
+                    mapping,
+                    mergeDynamicFilterIdMap(rewrittenSources));
         }
 
         private ListMultimap<Symbol, Symbol> rewriteOutputToInputsMap(ListMultimap<Symbol, Symbol> oldMapping, SymbolMapper outputMapper, List<SymbolMapper> inputMappers)
@@ -1300,15 +1329,90 @@ public class UnaliasSymbolReferences
         }
     }
 
+    private static Map<DynamicFilterId, DynamicFilterId> merge(List<Map<DynamicFilterId, DynamicFilterId>> dynamicFilterIdMaps)
+    {
+        if (dynamicFilterIdMaps.isEmpty()) {
+            return ImmutableMap.of();
+        }
+        if (dynamicFilterIdMaps.size() == 1) {
+            return dynamicFilterIdMaps.get(0);
+        }
+        if (dynamicFilterIdMaps.size() == 2) {
+            return merge(dynamicFilterIdMaps.get(0), dynamicFilterIdMaps.get(1));
+        }
+
+        ImmutableMap.Builder<DynamicFilterId, DynamicFilterId> result = null;
+        for (Map<DynamicFilterId, DynamicFilterId> dynamicFilterIdMap : dynamicFilterIdMaps) {
+            if (!dynamicFilterIdMap.isEmpty()) {
+                if (result == null) {
+                    result = ImmutableMap.builder();
+                }
+                result.putAll(dynamicFilterIdMap);
+            }
+        }
+        return result == null ? ImmutableMap.of() : result.build();
+    }
+
+    private static Map<DynamicFilterId, DynamicFilterId> mergeDynamicFilterIdMap(List<PlanAndMappings> rewrittenSources)
+    {
+        if (rewrittenSources.isEmpty()) {
+            return ImmutableMap.of();
+        }
+        if (rewrittenSources.size() == 1) {
+            return rewrittenSources.get(0).getDynamicFilterIdMap();
+        }
+        if (rewrittenSources.size() == 2) {
+            return merge(
+                    rewrittenSources.get(0).getDynamicFilterIdMap(),
+                    rewrittenSources.get(1).getDynamicFilterIdMap());
+        }
+
+        ImmutableMap.Builder<DynamicFilterId, DynamicFilterId> result = null;
+        for (PlanAndMappings rewrittenSource : rewrittenSources) {
+            if (!rewrittenSource.getDynamicFilterIdMap().isEmpty()) {
+                if (result == null) {
+                    result = ImmutableMap.builder();
+                }
+                result.putAll(rewrittenSource.getDynamicFilterIdMap());
+            }
+        }
+        return result == null ? ImmutableMap.of() : result.build();
+    }
+
+    private static Map<DynamicFilterId, DynamicFilterId> merge(
+            Map<DynamicFilterId, DynamicFilterId> first,
+            Map<DynamicFilterId, DynamicFilterId> second)
+    {
+        if (first.isEmpty()) {
+            return second;
+        }
+
+        if (second.isEmpty()) {
+            return first;
+        }
+
+        return ImmutableMap.<DynamicFilterId, DynamicFilterId>builder()
+                .putAll(first)
+                .putAll(second)
+                .build();
+    }
+
     private static class PlanAndMappings
     {
         private final PlanNode root;
         private final Map<Symbol, Symbol> mappings;
+        private final Map<DynamicFilterId, DynamicFilterId> dynamicFilterIdMap;
 
         public PlanAndMappings(PlanNode root, Map<Symbol, Symbol> mappings)
         {
+            this(root, mappings, ImmutableMap.of());
+        }
+
+        public PlanAndMappings(PlanNode root, Map<Symbol, Symbol> mappings, Map<DynamicFilterId, DynamicFilterId> dynamicFilterIdMap)
+        {
             this.root = requireNonNull(root, "root is null");
             this.mappings = ImmutableMap.copyOf(requireNonNull(mappings, "mappings is null"));
+            this.dynamicFilterIdMap = requireNonNull(dynamicFilterIdMap, "dynamicFilterIdMap is null");
         }
 
         public PlanNode getRoot()
@@ -1319,6 +1423,16 @@ public class UnaliasSymbolReferences
         public Map<Symbol, Symbol> getMappings()
         {
             return mappings;
+        }
+
+        public Map<DynamicFilterId, DynamicFilterId> getDynamicFilterIdMap()
+        {
+            return dynamicFilterIdMap;
+        }
+
+        public PlanAndMappings with(PlanNode root, Map<Symbol, Symbol> mappings)
+        {
+            return new PlanAndMappings(root, mappings, dynamicFilterIdMap);
         }
     }
 
