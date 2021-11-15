@@ -11,9 +11,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-FROM azul/zulu-openjdk-centos:11
+FROM azul/zulu-openjdk-centos:17
 
-ENV JAVA_HOME /usr/lib/jvm/zulu11
+ENV JAVA_HOME /usr/lib/jvm/zulu17
 RUN \
     set -xeu && \
     yum -y -q install less && \
