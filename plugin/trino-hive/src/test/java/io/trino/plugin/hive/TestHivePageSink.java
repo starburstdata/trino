@@ -244,7 +244,8 @@ public class TestHivePageSink
                 false,
                 Optional.empty(),
                 0,
-                SplitWeight.standard());
+                SplitWeight.standard(),
+                Optional.empty());
         ConnectorTableHandle table = new HiveTableHandle(SCHEMA_NAME, TABLE_NAME, ImmutableMap.of(), ImmutableList.of(), ImmutableList.of(), Optional.empty());
         HivePageSourceProvider provider = new HivePageSourceProvider(
                 TESTING_TYPE_MANAGER,

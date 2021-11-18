@@ -164,6 +164,8 @@ public class HiveConfig
     private boolean sizeBasedSplitWeightsEnabled = true;
     private double minimumAssignedSplitWeight = 0.05;
 
+    private boolean mergeSplits = true;
+
     public int getMaxInitialSplits()
     {
         return maxInitialSplits;
@@ -1149,5 +1151,17 @@ public class HiveConfig
     public double getMinimumAssignedSplitWeight()
     {
         return minimumAssignedSplitWeight;
+    }
+
+    @Config("hive.merge-splits")
+    public HiveConfig setMergeSplits(boolean mergeSplits)
+    {
+        this.mergeSplits = mergeSplits;
+        return this;
+    }
+
+    public boolean isMergeSplits()
+    {
+        return mergeSplits;
     }
 }

@@ -137,7 +137,8 @@ public class TestNodeLocalDynamicSplitPruning
                 false,
                 Optional.empty(),
                 0,
-                SplitWeight.standard());
+                SplitWeight.standard(),
+                Optional.empty());
 
         TableHandle tableHandle = new TableHandle(
                 new CatalogName(HIVE_CATALOG_NAME),

@@ -116,6 +116,7 @@ public final class HiveSessionProperties
     public static final String SIZE_BASED_SPLIT_WEIGHTS_ENABLED = "size_based_split_weights_enabled";
     public static final String MINIMUM_ASSIGNED_SPLIT_WEIGHT = "minimum_assigned_split_weight";
     public static final String NON_TRANSACTIONAL_OPTIMIZE_ENABLED = "non_transactional_optimize_enabled";
+    public static final String MERGE_SPLITS = "merge_splits";
 
     private final List<PropertyMetadata<?>> sessionProperties;
 
@@ -491,6 +492,11 @@ public final class HiveSessionProperties
                         NON_TRANSACTIONAL_OPTIMIZE_ENABLED,
                         "Enable OPTIMIZE table procedure",
                         false,
+                        false),
+                booleanProperty(
+                        MERGE_SPLITS,
+                        "merge splits",
+                        hiveConfig.isMergeSplits(),
                         false));
     }
 
@@ -817,5 +823,10 @@ public final class HiveSessionProperties
     public static boolean isNonTransactionalOptimizeEnabled(ConnectorSession session)
     {
         return session.getProperty(NON_TRANSACTIONAL_OPTIMIZE_ENABLED, Boolean.class);
+    }
+
+    public static boolean isMergeSplits(ConnectorSession session)
+    {
+        return session.getProperty(MERGE_SPLITS, Boolean.class);
     }
 }

@@ -84,7 +84,8 @@ public class TestHiveSplit
                 false,
                 Optional.of(acidInfo),
                 555534,
-                SplitWeight.fromProportion(2.0)); // some non-standard value
+                SplitWeight.fromProportion(2.0),
+                Optional.empty()); // some non-standard value
 
         String json = codec.toJson(expected);
         HiveSplit actual = codec.fromJson(json);

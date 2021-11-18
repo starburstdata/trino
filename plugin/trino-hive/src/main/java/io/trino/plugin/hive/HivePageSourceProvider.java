@@ -146,6 +146,16 @@ public class HivePageSourceProvider
             List<ColumnHandle> columns,
             DynamicFilter dynamicFilter)
     {
+        return new ChainedHivePageSource(this, session, tableHandle, columns, dynamicFilter, split);
+    }
+
+    public ConnectorPageSource createSingleSplitPageSource(
+            ConnectorSession session,
+            ConnectorSplit split,
+            ConnectorTableHandle tableHandle,
+            List<ColumnHandle> columns,
+            DynamicFilter dynamicFilter)
+    {
         HiveTableHandle hiveTable = (HiveTableHandle) tableHandle;
         HiveSplit hiveSplit = (HiveSplit) split;
 

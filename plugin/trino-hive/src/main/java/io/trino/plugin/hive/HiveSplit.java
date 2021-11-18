@@ -62,6 +62,8 @@ public class HiveSplit
     private final Optional<AcidInfo> acidInfo;
     private final long splitNumber;
     private final SplitWeight splitWeight;
+    private final Optional<HiveSplit> nextSplit;
+    private final long chainLength;
 
     @JsonCreator
     public HiveSplit(
@@ -85,7 +87,8 @@ public class HiveSplit
             @JsonProperty("s3SelectPushdownEnabled") boolean s3SelectPushdownEnabled,
             @JsonProperty("acidInfo") Optional<AcidInfo> acidInfo,
             @JsonProperty("splitNumber") long splitNumber,
-            @JsonProperty("splitWeight") SplitWeight splitWeight)
+            @JsonProperty("splitWeight") SplitWeight splitWeight,
+            @JsonProperty("nextSplit") Optional<HiveSplit> nextSplit)
     {
         checkArgument(start >= 0, "start must be positive");
         checkArgument(length >= 0, "length must be positive");
@@ -124,6 +127,8 @@ public class HiveSplit
         this.acidInfo = acidInfo;
         this.splitNumber = splitNumber;
         this.splitWeight = requireNonNull(splitWeight, "splitWeight is null");
+        this.nextSplit = requireNonNull(nextSplit, "nextSplit is null");
+        this.chainLength = length + nextSplit.map(HiveSplit::getChainLength).orElse(0L);
     }
 
     @JsonProperty
@@ -258,6 +263,17 @@ public class HiveSplit
     public SplitWeight getSplitWeight()
     {
         return splitWeight;
+    }
+
+    @JsonProperty
+    public Optional<HiveSplit> getNextSplit()
+    {
+        return nextSplit;
+    }
+
+    public long getChainLength()
+    {
+        return chainLength;
     }
 
     @Override

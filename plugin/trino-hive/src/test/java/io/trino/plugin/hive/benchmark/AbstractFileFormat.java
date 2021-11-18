@@ -155,7 +155,8 @@ public abstract class AbstractFileFormat
                 false,
                 Optional.empty(),
                 0,
-                SplitWeight.standard());
+                SplitWeight.standard(),
+                Optional.empty());
 
         return factory.createPageSource(
                 TestingConnectorTransactionHandle.INSTANCE,
