@@ -164,7 +164,7 @@ public class HiveConfig
     private boolean sizeBasedSplitWeightsEnabled = true;
     private double minimumAssignedSplitWeight = 0.05;
 
-    private boolean mergeSplits = true;
+    private boolean mergeSplits;
 
     public int getMaxInitialSplits()
     {
