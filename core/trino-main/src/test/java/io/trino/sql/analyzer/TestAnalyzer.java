@@ -2176,6 +2176,8 @@ public class TestAnalyzer
     public void testExplainAnalyze()
     {
         analyze("EXPLAIN ANALYZE SELECT * FROM t1");
+        analyze("EXPLAIN ANALYZE (FORMAT JSON) SELECT * FROM t1");
+        analyze("EXPLAIN ANALYZE (FORMAT TEXT) SELECT * FROM t1");
     }
 
     @Test

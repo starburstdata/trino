@@ -105,6 +105,7 @@ import io.trino.sql.planner.plan.UpdateNode;
 import io.trino.sql.planner.plan.ValuesNode;
 import io.trino.sql.planner.plan.WindowNode;
 import io.trino.sql.planner.plan.WindowNode.Specification;
+import io.trino.sql.tree.ExplainAnalyzeFormat;
 import io.trino.sql.tree.Expression;
 import io.trino.sql.tree.FunctionCall;
 import io.trino.sql.tree.NullLiteral;
@@ -175,7 +176,8 @@ public class PlanBuilder
                 source,
                 output,
                 actualOutputs,
-                false);
+                false,
+                ExplainAnalyzeFormat.Type.TEXT);
     }
 
     public OutputNode output(Consumer<OutputBuilder> outputBuilderConsumer)

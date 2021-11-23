@@ -78,6 +78,8 @@ import io.trino.sql.tree.Execute;
 import io.trino.sql.tree.ExistsPredicate;
 import io.trino.sql.tree.Explain;
 import io.trino.sql.tree.ExplainAnalyze;
+import io.trino.sql.tree.ExplainAnalyzeFormat;
+import io.trino.sql.tree.ExplainAnalyzeOption;
 import io.trino.sql.tree.ExplainFormat;
 import io.trino.sql.tree.ExplainOption;
 import io.trino.sql.tree.ExplainType;
@@ -1195,7 +1197,8 @@ class AstBuilder
     @Override
     public Node visitExplainAnalyze(SqlBaseParser.ExplainAnalyzeContext context)
     {
-        return new ExplainAnalyze(getLocation(context), context.VERBOSE() != null, (Statement) visit(context.statement()));
+        return new ExplainAnalyze(getLocation(context), context.VERBOSE() != null, (Statement) visit(context.statement()),
+                visitIfPresent(context.explainAnalyzeOption(), ExplainAnalyzeOption.class));
     }
 
     @Override
@@ -1228,6 +1231,19 @@ class AstBuilder
         }
 
         throw new IllegalArgumentException("Unsupported EXPLAIN type: " + context.value.getText());
+    }
+
+    @Override
+    public Node visitExplainAnalyzeFormat(SqlBaseParser.ExplainAnalyzeFormatContext context)
+    {
+        switch (context.value.getType()) {
+            case SqlBaseLexer.TEXT:
+                return new ExplainAnalyzeFormat(getLocation(context), ExplainAnalyzeFormat.Type.TEXT);
+            case SqlBaseLexer.JSON:
+                return new ExplainAnalyzeFormat(getLocation(context), ExplainAnalyzeFormat.Type.JSON);
+        }
+
+        throw new IllegalArgumentException("Unsupported EXPLAIN ANALYZE type: " + context.value.getText());
     }
 
     @Override
