@@ -29,6 +29,7 @@ import io.trino.execution.executor.TaskExecutor;
 import io.trino.memory.MemoryPool;
 import io.trino.memory.QueryContext;
 import io.trino.operator.TaskContext;
+import io.trino.operator.cache.DriverResultCache;
 import io.trino.spi.QueryId;
 import io.trino.spi.memory.MemoryPoolId;
 import io.trino.spi.predicate.Domain;
@@ -350,7 +351,8 @@ public class TestSqlTask
                 taskNotificationExecutor,
                 driverYieldExecutor,
                 DataSize.of(1, MEGABYTE),
-                new SpillSpaceTracker(DataSize.of(1, GIGABYTE)));
+                new SpillSpaceTracker(DataSize.of(1, GIGABYTE)),
+                new DriverResultCache());
 
         queryContext.addTaskContext(new TaskStateMachine(taskId, taskNotificationExecutor), testSessionBuilder().build(), () -> {}, false, false);
 

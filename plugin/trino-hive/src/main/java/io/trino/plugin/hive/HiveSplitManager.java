@@ -173,7 +173,7 @@ public class HiveSplitManager
         this.maxOutstandingSplitsSize = maxOutstandingSplitsSize;
         this.minPartitionBatchSize = minPartitionBatchSize;
         this.maxPartitionBatchSize = maxPartitionBatchSize;
-        this.maxInitialSplits = maxInitialSplits;
+        this.maxInitialSplits = 0;
         this.splitLoaderConcurrency = splitLoaderConcurrency;
         this.maxSplitsPerSecond = firstNonNull(maxSplitsPerSecond, Integer.MAX_VALUE);
         this.recursiveDfsWalkerEnabled = recursiveDfsWalkerEnabled;
@@ -250,6 +250,7 @@ public class HiveSplitManager
                 metastore.getValidWriteIds(session, hiveTable)
                         .map(validTxnWriteIdList -> validTxnWriteIdList.getTableValidWriteIdList(table.getDatabaseName() + "." + table.getTableName())),
                 hiveTable.getMaxScannedFileSize());
+
 
         HiveSplitSource splitSource;
         switch (splitSchedulingStrategy) {

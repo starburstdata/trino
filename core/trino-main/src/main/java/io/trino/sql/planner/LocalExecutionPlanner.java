@@ -530,6 +530,7 @@ public class LocalExecutionPlanner
                 .collect(toImmutableList());
 
         context.addDriverFactory(
+                plan,
                 context.isInputDriver(),
                 true,
                 new PhysicalOperation(
@@ -591,7 +592,7 @@ public class LocalExecutionPlanner
             this.nextPipelineId = nextPipelineId;
         }
 
-        public void addDriverFactory(boolean inputDriver, boolean outputDriver, PhysicalOperation physicalOperation, OptionalInt driverInstances)
+        public void addDriverFactory(PlanNode plan, boolean inputDriver, boolean outputDriver, PhysicalOperation physicalOperation, OptionalInt driverInstances)
         {
             List<OperatorFactoryWithTypes> operatorFactoriesWithTypes = physicalOperation.getOperatorFactoriesWithTypes();
             validateFirstOperatorFactory(inputDriver, operatorFactoriesWithTypes.get(0).getOperatorFactory(), physicalOperation.getPipelineExecutionStrategy());
@@ -603,7 +604,7 @@ public class LocalExecutionPlanner
             else {
                 operatorFactories = toOperatorFactories(operatorFactoriesWithTypes);
             }
-            driverFactories.add(new DriverFactory(getNextPipelineId(), inputDriver, outputDriver, operatorFactories, driverInstances, physicalOperation.getPipelineExecutionStrategy()));
+            driverFactories.add(new DriverFactory(plan, getNextPipelineId(), inputDriver, outputDriver, operatorFactories, driverInstances, physicalOperation.getPipelineExecutionStrategy()));
         }
 
         private List<OperatorFactory> handleLateMaterialization(List<OperatorFactoryWithTypes> operatorFactories)
@@ -2299,6 +2300,7 @@ public class LocalExecutionPlanner
             }
 
             context.addDriverFactory(
+                    node,
                     buildContext.isInputDriver(),
                     false,
                     new PhysicalOperation(nestedLoopBuildOperatorFactory, buildSource),
@@ -2430,6 +2432,7 @@ public class LocalExecutionPlanner
                     pagesIndexFactory);
 
             context.addDriverFactory(
+                    node,
                     buildContext.isInputDriver(),
                     false,
                     new PhysicalOperation(builderOperatorFactory, buildSource),
@@ -2584,6 +2587,7 @@ public class LocalExecutionPlanner
                             taskConcurrency / partitionCount));
 
             context.addDriverFactory(
+                    buildNode,
                     buildContext.isInputDriver(),
                     false,
                     new PhysicalOperation(hashBuilderOperatorFactory, buildSource),
@@ -2859,6 +2863,7 @@ public class LocalExecutionPlanner
                     blockTypeOperators);
             SetSupplier setProvider = setBuilderOperatorFactory.getSetProvider();
             context.addDriverFactory(
+                    node,
                     buildContext.isInputDriver(),
                     false,
                     new PhysicalOperation(setBuilderOperatorFactory, buildSource),
@@ -3190,6 +3195,7 @@ public class LocalExecutionPlanner
             List<Symbol> expectedLayout = node.getInputs().get(0);
             Function<Page, Page> pagePreprocessor = enforceLoadedLayoutProcessor(expectedLayout, source.getLayout());
             context.addDriverFactory(
+                    node,
                     subContext.isInputDriver(),
                     false,
                     new PhysicalOperation(
@@ -3248,7 +3254,7 @@ public class LocalExecutionPlanner
 
                 LocalExecutionPlanContext subContext = context.createSubContext();
                 PhysicalOperation source = sourceNode.accept(this, subContext);
-                driverFactoryParametersList.add(new DriverFactoryParameters(subContext, source));
+                driverFactoryParametersList.add(new DriverFactoryParameters(sourceNode, subContext, source));
 
                 if (source.getPipelineExecutionStrategy() == UNGROUPED_EXECUTION) {
                     exchangeSourcePipelineExecutionStrategy = UNGROUPED_EXECUTION;
@@ -3275,6 +3281,7 @@ public class LocalExecutionPlanner
                 Function<Page, Page> pagePreprocessor = enforceLoadedLayoutProcessor(expectedLayout, source.getLayout());
 
                 context.addDriverFactory(
+                        driverFactoryParameters.getPlan(),
                         subContext.isInputDriver(),
                         false,
                         new PhysicalOperation(
@@ -3813,13 +3820,20 @@ public class LocalExecutionPlanner
 
     private static class DriverFactoryParameters
     {
+        private final PlanNode plan;
         private final LocalExecutionPlanContext subContext;
         private final PhysicalOperation source;
 
-        public DriverFactoryParameters(LocalExecutionPlanContext subContext, PhysicalOperation source)
+        public DriverFactoryParameters(PlanNode plan, LocalExecutionPlanContext subContext, PhysicalOperation source)
         {
+            this.plan = plan;
             this.subContext = subContext;
             this.source = source;
+        }
+
+        public PlanNode getPlan()
+        {
+            return plan;
         }
 
         public LocalExecutionPlanContext getSubContext()

@@ -15,6 +15,7 @@ package io.trino.sql.planner.plan;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -107,6 +108,21 @@ public class AggregationNode
     public GroupingSetDescriptor getGroupingSets()
     {
         return groupingSets;
+    }
+
+    @Override
+    public String toString()
+    {
+        return MoreObjects.toStringHelper(this)
+                .add("source", source)
+                .add("aggregations", aggregations)
+                .add("groupingSets", groupingSets)
+                .add("preGroupedSymbols", preGroupedSymbols)
+                .add("step", step)
+                .add("hashSymbol", hashSymbol)
+                .add("groupIdSymbol", groupIdSymbol)
+                .add("outputs", outputs)
+                .toString();
     }
 
     /**
@@ -320,6 +336,25 @@ public class AggregationNode
         public Set<Integer> getGlobalGroupingSets()
         {
             return globalGroupingSets;
+        }
+
+        @Override
+        public boolean equals(Object o)
+        {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            GroupingSetDescriptor that = (GroupingSetDescriptor) o;
+            return groupingSetCount == that.groupingSetCount && groupingKeys.equals(that.groupingKeys) && globalGroupingSets.equals(that.globalGroupingSets);
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hash(groupingKeys, groupingSetCount, globalGroupingSets);
         }
     }
 

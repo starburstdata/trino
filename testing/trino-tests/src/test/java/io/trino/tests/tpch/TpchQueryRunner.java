@@ -32,6 +32,7 @@ public final class TpchQueryRunner
                         .put("sql.default-catalog", "tpch")
                         .put("sql.default-schema", "tiny")
                         .build())
+                .setNodeCount(3)
                 .build();
         Thread.sleep(10);
         Logger log = Logger.get(TpchQueryRunner.class);

@@ -16,6 +16,8 @@ package io.trino.operator;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
 import io.trino.execution.Lifespan;
+import io.trino.operator.cache.PlanSignatureNode;
+import io.trino.sql.planner.plan.PlanNode;
 import io.trino.sql.planner.plan.PlanNodeId;
 
 import java.util.HashSet;
@@ -32,6 +34,7 @@ import static java.util.Objects.requireNonNull;
 
 public class DriverFactory
 {
+    private final Optional<PlanSignatureNode> planSignature;
     private final int pipelineId;
     private final boolean inputDriver;
     private final boolean outputDriver;
@@ -46,6 +49,17 @@ public class DriverFactory
 
     public DriverFactory(int pipelineId, boolean inputDriver, boolean outputDriver, List<OperatorFactory> operatorFactories, OptionalInt driverInstances, PipelineExecutionStrategy pipelineExecutionStrategy)
     {
+        this(Optional.empty(), pipelineId, inputDriver, outputDriver, operatorFactories, driverInstances, pipelineExecutionStrategy);
+    }
+
+    public DriverFactory(PlanNode plan, int pipelineId, boolean inputDriver, boolean outputDriver, List<OperatorFactory> operatorFactories, OptionalInt driverInstances, PipelineExecutionStrategy pipelineExecutionStrategy)
+    {
+        this(PlanSignatureNode.from(plan), pipelineId, inputDriver, outputDriver, operatorFactories, driverInstances, pipelineExecutionStrategy);
+    }
+
+    public DriverFactory(Optional<PlanSignatureNode> planSignature, int pipelineId, boolean inputDriver, boolean outputDriver, List<OperatorFactory> operatorFactories, OptionalInt driverInstances, PipelineExecutionStrategy pipelineExecutionStrategy)
+    {
+        this.planSignature = planSignature;
         this.pipelineId = pipelineId;
         this.inputDriver = inputDriver;
         this.outputDriver = outputDriver;
@@ -114,7 +128,7 @@ public class DriverFactory
             Operator operator = operatorFactory.createOperator(driverContext);
             operators.add(operator);
         }
-        return Driver.createDriver(driverContext, operators.build());
+        return Driver.createDriver(driverContext, planSignature, operators.build());
     }
 
     public synchronized void noMoreDrivers(Lifespan lifespan)

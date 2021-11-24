@@ -40,6 +40,7 @@ import io.trino.memory.MemoryPoolAssignment;
 import io.trino.memory.MemoryPoolAssignmentsRequest;
 import io.trino.memory.NodeMemoryConfig;
 import io.trino.memory.QueryContext;
+import io.trino.operator.cache.DriverResultCache;
 import io.trino.spi.QueryId;
 import io.trino.spi.TrinoException;
 import io.trino.spi.VersionEmbedder;
@@ -111,6 +112,7 @@ public class SqlTaskManager
 
     private final long queryMaxMemoryPerNode;
     private final long queryMaxTotalMemoryPerNode;
+    private final DriverResultCache driverResultCache;
 
     @GuardedBy("this")
     private long currentMemoryPoolAssignmentVersion;
@@ -133,8 +135,10 @@ public class SqlTaskManager
             NodeMemoryConfig nodeMemoryConfig,
             LocalSpillManager localSpillManager,
             NodeSpillConfig nodeSpillConfig,
-            GcMonitor gcMonitor)
+            GcMonitor gcMonitor,
+            DriverResultCache driverResultCache)
     {
+        this.driverResultCache = driverResultCache;
         requireNonNull(nodeInfo, "nodeInfo is null");
         requireNonNull(config, "config is null");
         infoCacheTime = config.getInfoMaxAge();
@@ -195,7 +199,8 @@ public class SqlTaskManager
                 taskNotificationExecutor,
                 driverYieldExecutor,
                 maxQuerySpillPerNode,
-                localSpillManager.getSpillSpaceTracker());
+                localSpillManager.getSpillSpaceTracker(),
+                driverResultCache);
     }
 
     @Override

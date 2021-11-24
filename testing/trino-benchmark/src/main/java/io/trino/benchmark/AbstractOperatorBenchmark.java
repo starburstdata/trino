@@ -38,6 +38,7 @@ import io.trino.operator.OperatorFactory;
 import io.trino.operator.PageSourceOperator;
 import io.trino.operator.TaskContext;
 import io.trino.operator.TaskStats;
+import io.trino.operator.cache.DriverResultCache;
 import io.trino.operator.project.InputPageProjection;
 import io.trino.operator.project.PageProcessor;
 import io.trino.operator.project.PageProjection;
@@ -295,7 +296,8 @@ public abstract class AbstractOperatorBenchmark
                 localQueryRunner.getExecutor(),
                 localQueryRunner.getScheduler(),
                 DataSize.of(256, MEGABYTE),
-                spillSpaceTracker)
+                spillSpaceTracker,
+                new DriverResultCache())
                 .addTaskContext(new TaskStateMachine(new TaskId("query", 0, 0), localQueryRunner.getExecutor()),
                         session,
                         () -> {},

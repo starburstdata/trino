@@ -22,6 +22,7 @@ import io.trino.execution.TaskStateMachine;
 import io.trino.memory.MemoryPool;
 import io.trino.memory.QueryContext;
 import io.trino.operator.TaskContext;
+import io.trino.operator.cache.DriverResultCache;
 import io.trino.spi.QueryId;
 import io.trino.spi.memory.MemoryPoolId;
 import io.trino.spiller.SpillSpaceTracker;
@@ -148,7 +149,8 @@ public final class TestingTaskContext
                     notificationExecutor,
                     yieldExecutor,
                     queryMaxSpillSize,
-                    spillSpaceTracker);
+                    spillSpaceTracker,
+                    new DriverResultCache());
 
             return createTaskContext(queryContext, session, taskStateMachine);
         }
