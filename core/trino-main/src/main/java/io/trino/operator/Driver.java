@@ -26,8 +26,9 @@ import io.airlift.units.Duration;
 import io.trino.execution.ScheduledSplit;
 import io.trino.execution.TaskSource;
 import io.trino.metadata.Split;
-import io.trino.operator.cache.DriverResultCache;
-import io.trino.operator.cache.PlanSignatureNode;
+import io.trino.operator.cache.PipelineResultCache;
+import io.trino.operator.cache.PipelineResultCacheSessionProperties;
+import io.trino.operator.cache.PlanNodeSignature;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.UpdatablePageSource;
@@ -73,7 +74,7 @@ public class Driver
 
     private final DriverContext driverContext;
     private final List<Operator> activeOperators;
-    private final Optional<PlanSignatureNode> planSignature;
+    private final Optional<PlanNodeSignature> planSignature;
     // this is present only for debugging
     @SuppressWarnings("unused")
     private final List<Operator> allOperators;
@@ -98,21 +99,20 @@ public class Driver
 
     private final AtomicReference<SettableFuture<Void>> driverBlockedFuture = new AtomicReference<>();
 
-    private final DriverResultCache resultCache;
+    private final PipelineResultCache resultCache;
     private final Queue<Page> results = new ArrayDeque<>();
 
     @Nullable
     private List<Page> onlySplitResult;
     @Nullable
     private Split onlySplit;
-    private final boolean cacheEnabled = true;
 
     private enum State
     {
         ALIVE, NEED_DESTRUCTION, DESTROYED
     }
 
-    public static Driver createDriver(DriverContext driverContext, Optional<PlanSignatureNode> planSignature, List<Operator> operators)
+    public static Driver createDriver(DriverContext driverContext, Optional<PlanNodeSignature> planSignature, List<Operator> operators)
     {
         requireNonNull(driverContext, "driverContext is null");
         requireNonNull(operators, "operators is null");
@@ -134,7 +134,7 @@ public class Driver
         return createDriver(driverContext, Optional.empty(), operators);
     }
 
-    private Driver(DriverContext driverContext, Optional<PlanSignatureNode> planSignature, List<Operator> operators)
+    private Driver(DriverContext driverContext, Optional<PlanNodeSignature> planSignature, List<Operator> operators)
     {
         this.driverContext = requireNonNull(driverContext, "driverContext is null");
         this.planSignature = requireNonNull(planSignature, "planSignature is null");
@@ -276,7 +276,7 @@ public class Driver
             Split split = newSplit.getSplit();
 
             Optional<List<Page>> cachedResult = planSignature.flatMap(plan -> resultCache.get(plan, split));
-            if (cachedResult.isPresent() && cacheEnabled) {
+            if (cachedResult.isPresent() && isPipelineResultCacheEnabled()) {
                 // cache hit, add cached result to the queue to be processed next time #processInternal is invoked
                 results.addAll(cachedResult.get());
                 // TODO lysy: do we have to handle deleteOperator, updateOperator?
@@ -516,7 +516,7 @@ public class Driver
     // because once split is added to the source operator there is no way of matching output page to the input split
     private void setupOutputCache(Split split)
     {
-        if (onlySplit == null && planSignature.isPresent() && cacheEnabled) {
+        if (onlySplit == null && planSignature.isPresent() && isPipelineResultCacheEnabled()) {
             // if this is the first split and the caching can be done,
             // create output cache for this split assuming it will be the only one
             onlySplit = split;
@@ -530,12 +530,20 @@ public class Driver
 
     private void updateResultCache()
     {
-        if (planSignature.isPresent() && onlySplitResult != null && (activeOperators.isEmpty() || activeOperators.get(0).isFinished())) {
+        if (planSignature.isPresent()
+                && isPipelineResultCacheEnabled()
+                && onlySplitResult != null
+                && (activeOperators.isEmpty() || activeOperators.get(0).isFinished())) {
             // if Driver is finished updated result cache
             resultCache.put(planSignature.get(), onlySplit, ImmutableList.copyOf(onlySplitResult));
             onlySplitResult = null;
             onlySplit = null;
         }
+    }
+
+    private boolean isPipelineResultCacheEnabled()
+    {
+        return PipelineResultCacheSessionProperties.isPipelineResultCacheEnabled(driverContext.getSession());
     }
 
     private void processCachedResults(OperationTimer operationTimer)

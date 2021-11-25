@@ -34,7 +34,7 @@ import io.trino.memory.context.LocalMemoryContext;
 import io.trino.metadata.InternalNode;
 import io.trino.operator.ExchangeClient;
 import io.trino.operator.ExchangeClientSupplier;
-import io.trino.operator.cache.DriverResultCache;
+import io.trino.operator.cache.PipelineResultCache;
 import io.trino.spi.QueryId;
 import io.trino.spiller.LocalSpillManager;
 import io.trino.spiller.NodeSpillConfig;
@@ -311,7 +311,7 @@ public class TestSqlTaskManager
                 localSpillManager,
                 new NodeSpillConfig(),
                 new TestingGcMonitor(),
-                new DriverResultCache());
+                new PipelineResultCache());
     }
 
     private TaskInfo createTask(SqlTaskManager sqlTaskManager, TaskId taskId, ImmutableSet<ScheduledSplit> splits, OutputBuffers outputBuffers)

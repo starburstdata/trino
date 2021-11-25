@@ -16,7 +16,7 @@ package io.trino.operator;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
 import io.trino.execution.Lifespan;
-import io.trino.operator.cache.PlanSignatureNode;
+import io.trino.operator.cache.PlanNodeSignature;
 import io.trino.sql.planner.plan.PlanNode;
 import io.trino.sql.planner.plan.PlanNodeId;
 
@@ -34,7 +34,7 @@ import static java.util.Objects.requireNonNull;
 
 public class DriverFactory
 {
-    private final Optional<PlanSignatureNode> planSignature;
+    private final Optional<PlanNodeSignature> planSignature;
     private final int pipelineId;
     private final boolean inputDriver;
     private final boolean outputDriver;
@@ -54,10 +54,10 @@ public class DriverFactory
 
     public DriverFactory(PlanNode plan, int pipelineId, boolean inputDriver, boolean outputDriver, List<OperatorFactory> operatorFactories, OptionalInt driverInstances, PipelineExecutionStrategy pipelineExecutionStrategy)
     {
-        this(PlanSignatureNode.from(plan), pipelineId, inputDriver, outputDriver, operatorFactories, driverInstances, pipelineExecutionStrategy);
+        this(PlanNodeSignature.from(plan), pipelineId, inputDriver, outputDriver, operatorFactories, driverInstances, pipelineExecutionStrategy);
     }
 
-    public DriverFactory(Optional<PlanSignatureNode> planSignature, int pipelineId, boolean inputDriver, boolean outputDriver, List<OperatorFactory> operatorFactories, OptionalInt driverInstances, PipelineExecutionStrategy pipelineExecutionStrategy)
+    public DriverFactory(Optional<PlanNodeSignature> planSignature, int pipelineId, boolean inputDriver, boolean outputDriver, List<OperatorFactory> operatorFactories, OptionalInt driverInstances, PipelineExecutionStrategy pipelineExecutionStrategy)
     {
         this.planSignature = planSignature;
         this.pipelineId = pipelineId;

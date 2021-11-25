@@ -23,7 +23,7 @@ import io.trino.execution.TaskStateMachine;
 import io.trino.memory.context.MemoryReservationHandler;
 import io.trino.memory.context.MemoryTrackingContext;
 import io.trino.operator.TaskContext;
-import io.trino.operator.cache.DriverResultCache;
+import io.trino.operator.cache.PipelineResultCache;
 import io.trino.spi.QueryId;
 import io.trino.spiller.SpillSpaceTracker;
 
@@ -88,7 +88,7 @@ public class QueryContext
     @GuardedBy("this")
     private long spillUsed;
 
-    private final DriverResultCache driverResultCache;
+    private final PipelineResultCache pipelineResultCache;
 
     public QueryContext(
             QueryId queryId,
@@ -100,7 +100,7 @@ public class QueryContext
             ScheduledExecutorService yieldExecutor,
             DataSize maxSpill,
             SpillSpaceTracker spillSpaceTracker,
-            DriverResultCache driverResultCache)
+            PipelineResultCache pipelineResultCache)
     {
         this.queryId = requireNonNull(queryId, "queryId is null");
         this.maxUserMemory = requireNonNull(maxUserMemory, "maxUserMemory is null").toBytes();
@@ -111,7 +111,7 @@ public class QueryContext
         this.yieldExecutor = requireNonNull(yieldExecutor, "yieldExecutor is null");
         this.maxSpill = requireNonNull(maxSpill, "maxSpill is null").toBytes();
         this.spillSpaceTracker = requireNonNull(spillSpaceTracker, "spillSpaceTracker is null");
-        this.driverResultCache = driverResultCache;
+        this.pipelineResultCache = pipelineResultCache;
         this.queryMemoryContext = new MemoryTrackingContext(
                 newRootAggregatedMemoryContext(new QueryMemoryReservationHandler(this::updateUserMemory, this::tryUpdateUserMemory), GUARANTEED_MEMORY),
                 newRootAggregatedMemoryContext(new QueryMemoryReservationHandler(this::updateRevocableMemory, this::tryReserveMemoryNotSupported), 0L),
@@ -404,8 +404,8 @@ public class QueryContext
         return format("%s, Top Consumers: %s", additionalInfo, topConsumers);
     }
 
-    public DriverResultCache getDriverResultCache()
+    public PipelineResultCache getDriverResultCache()
     {
-        return driverResultCache;
+        return pipelineResultCache;
     }
 }

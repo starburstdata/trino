@@ -19,7 +19,7 @@ import io.airlift.units.DataSize;
 import io.trino.RowPagesBuilder;
 import io.trino.memory.MemoryPool;
 import io.trino.memory.QueryContext;
-import io.trino.operator.cache.DriverResultCache;
+import io.trino.operator.cache.PipelineResultCache;
 import io.trino.spi.Page;
 import io.trino.spi.QueryId;
 import io.trino.spi.memory.MemoryPoolId;
@@ -90,7 +90,7 @@ public final class GroupByHashYieldAssertion
                 SCHEDULED_EXECUTOR,
                 DataSize.of(512, MEGABYTE),
                 new SpillSpaceTracker(DataSize.of(512, MEGABYTE)),
-                new DriverResultCache());
+                new PipelineResultCache());
 
         DriverContext driverContext = createTaskContext(queryContext, EXECUTOR, TEST_SESSION)
                 .addPipelineContext(0, true, true, false)

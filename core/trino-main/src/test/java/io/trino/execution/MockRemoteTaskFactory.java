@@ -37,7 +37,7 @@ import io.trino.metadata.InternalNode;
 import io.trino.metadata.Split;
 import io.trino.operator.TaskContext;
 import io.trino.operator.TaskStats;
-import io.trino.operator.cache.DriverResultCache;
+import io.trino.operator.cache.PipelineResultCache;
 import io.trino.spi.SplitWeight;
 import io.trino.spi.memory.MemoryPoolId;
 import io.trino.spiller.SpillSpaceTracker;
@@ -203,7 +203,7 @@ public class MockRemoteTaskFactory
                     scheduledExecutor,
                     DataSize.of(1, MEGABYTE),
                     spillSpaceTracker,
-                    new DriverResultCache());
+                    new PipelineResultCache());
             this.taskContext = queryContext.addTaskContext(taskStateMachine, TEST_SESSION, () -> {}, true, true);
 
             this.location = URI.create("fake://task/" + taskId);

@@ -15,6 +15,8 @@ package io.trino.plugin.hive;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import com.google.common.hash.HashCode;
+import com.google.common.hash.Hashing;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.log.Logger;
@@ -25,6 +27,7 @@ import io.trino.plugin.hive.util.AsyncQueue;
 import io.trino.plugin.hive.util.AsyncQueue.BorrowResult;
 import io.trino.plugin.hive.util.SizeBasedSplitWeightProvider;
 import io.trino.plugin.hive.util.ThrottledAsyncQueue;
+import io.trino.spi.Node;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorPartitionHandle;
 import io.trino.spi.connector.ConnectorSession;
@@ -36,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -45,6 +49,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
@@ -96,6 +101,7 @@ class HiveSplitSource
 
     private final boolean recordScannedFiles;
     private final ImmutableList.Builder<Object> scannedFilePaths = ImmutableList.builder();
+    private final Supplier<List<Node>> orderedWorkerNodes;
 
     private HiveSplitSource(
             ConnectorSession session,
@@ -107,8 +113,10 @@ class HiveSplitSource
             HiveSplitLoader splitLoader,
             AtomicReference<State> stateReference,
             CounterStat highMemorySplitSourceCounter,
-            boolean recordScannedFiles)
+            boolean recordScannedFiles,
+            Supplier<List<Node>> orderedWorkerNodes)
     {
+        this.orderedWorkerNodes = orderedWorkerNodes;
         requireNonNull(session, "session is null");
         this.queryId = session.getQueryId();
         this.databaseName = requireNonNull(databaseName, "databaseName is null");
@@ -139,6 +147,23 @@ class HiveSplitSource
             Executor executor,
             CounterStat highMemorySplitSourceCounter,
             boolean recordScannedFiles)
+    {
+        return allAtOnce(session, databaseName, tableName, maxInitialSplits, maxOutstandingSplits, maxOutstandingSplitsSize, maxSplitsPerSecond, splitLoader, executor, highMemorySplitSourceCounter, recordScannedFiles, ImmutableList::of);
+    }
+
+    public static HiveSplitSource allAtOnce(
+            ConnectorSession session,
+            String databaseName,
+            String tableName,
+            int maxInitialSplits,
+            int maxOutstandingSplits,
+            DataSize maxOutstandingSplitsSize,
+            int maxSplitsPerSecond,
+            HiveSplitLoader splitLoader,
+            Executor executor,
+            CounterStat highMemorySplitSourceCounter,
+            boolean recordScannedFiles,
+            Supplier<List<Node>> orderedWorkerNodes)
     {
         AtomicReference<State> stateReference = new AtomicReference<>(State.initial());
         return new HiveSplitSource(
@@ -181,7 +206,9 @@ class HiveSplitSource
                 splitLoader,
                 stateReference,
                 highMemorySplitSourceCounter,
-                recordScannedFiles);
+                recordScannedFiles,
+                orderedWorkerNodes
+        );
     }
 
     public static HiveSplitSource bucketed(
@@ -196,6 +223,23 @@ class HiveSplitSource
             Executor executor,
             CounterStat highMemorySplitSourceCounter,
             boolean recordScannedFiles)
+    {
+        return bucketed(session, databaseName, tableName, estimatedOutstandingSplitsPerBucket, maxInitialSplits, maxOutstandingSplitsSize, maxSplitsPerSecond, splitLoader, executor, highMemorySplitSourceCounter, recordScannedFiles, ImmutableList::of);
+    }
+
+    public static HiveSplitSource bucketed(
+            ConnectorSession session,
+            String databaseName,
+            String tableName,
+            int estimatedOutstandingSplitsPerBucket,
+            int maxInitialSplits,
+            DataSize maxOutstandingSplitsSize,
+            int maxSplitsPerSecond,
+            HiveSplitLoader splitLoader,
+            Executor executor,
+            CounterStat highMemorySplitSourceCounter,
+            boolean recordScannedFiles,
+            Supplier<List<Node>> orderedWorkerNodes)
     {
         AtomicReference<State> stateReference = new AtomicReference<>(State.initial());
         return new HiveSplitSource(
@@ -258,7 +302,8 @@ class HiveSplitSource
                 splitLoader,
                 stateReference,
                 highMemorySplitSourceCounter,
-                recordScannedFiles);
+                recordScannedFiles,
+                orderedWorkerNodes);
     }
 
     /**
@@ -354,7 +399,10 @@ class HiveSplitSource
             ImmutableList.Builder<ConnectorSplit> resultBuilder = ImmutableList.builder();
             int removedEstimatedSizeInBytes = 0;
             int removedSplitCount = 0;
+            OptionalLong maxSplitBytes = OptionalLong.empty();
+            System.out.println("Start");
             for (InternalHiveSplit internalSplit : internalSplits) {
+                System.out.println("internal split " + internalSplit);
                 // Dynamic filter may not have been ready when partition was loaded in BackgroundHiveSplitLoader.
                 // Perform one more dynamic filter check immediately before split is returned to the engine
                 if (!internalSplit.getPartitionMatchSupplier().getAsBoolean()) {
@@ -363,32 +411,38 @@ class HiveSplitSource
                     continue;
                 }
 
-                long maxSplitBytes = maxSplitSize.toBytes();
-                if (remainingInitialSplits.get() > 0) {
-                    if (remainingInitialSplits.getAndDecrement() > 0) {
-                        maxSplitBytes = maxInitialSplitSize.toBytes();
+                if (maxSplitBytes.isEmpty()) {
+                    maxSplitBytes = OptionalLong.of(maxSplitSize.toBytes());
+                    if (remainingInitialSplits.get() > 0) {
+                        if (remainingInitialSplits.getAndDecrement() > 0) {
+                            maxSplitBytes = OptionalLong.of(maxInitialSplitSize.toBytes());
+                        }
                     }
                 }
+
+                // make individual split sizes deterministic
+                long remainingSplitBytes = maxSplitBytes.getAsLong();
+
                 InternalHiveBlock block = internalSplit.currentBlock();
                 long splitBytes;
                 if (internalSplit.isSplittable()) {
                     long remainingBlockBytes = block.getEnd() - internalSplit.getStart();
-                    if (remainingBlockBytes <= maxSplitBytes) {
+                    if (remainingBlockBytes <= remainingSplitBytes) {
                         splitBytes = remainingBlockBytes;
                     }
-                    else if (maxSplitBytes * 2 >= remainingBlockBytes) {
+                    else if (remainingSplitBytes * 2 >= remainingBlockBytes) {
                         //  Second to last split in this block, generate two evenly sized splits
                         splitBytes = remainingBlockBytes / 2;
                     }
                     else {
-                        splitBytes = maxSplitBytes;
+                        splitBytes = remainingSplitBytes;
                     }
                 }
                 else {
                     splitBytes = internalSplit.getEnd() - internalSplit.getStart();
                 }
 
-                resultBuilder.add(new HiveSplit(
+                HiveSplit hiveSplit = new HiveSplit(
                         databaseName,
                         tableName,
                         internalSplit.getPartitionName(),
@@ -409,7 +463,9 @@ class HiveSplitSource
                         internalSplit.isS3SelectPushdownEnabled(),
                         internalSplit.getAcidInfo(),
                         numberOfProcessedSplits.getAndIncrement(),
-                        splitWeightProvider.weightForSplitSizeInBytes(splitBytes)));
+                        splitWeightProvider.weightForSplitSizeInBytes(splitBytes));
+                resultBuilder.add(deterministicallyScheduled(hiveSplit));
+                maxSplitBytes = OptionalLong.empty();
 
                 internalSplit.increaseStart(splitBytes);
 
@@ -421,6 +477,7 @@ class HiveSplitSource
                     splitsToInsertBuilder.add(internalSplit);
                 }
             }
+
             estimatedSplitSizeInBytes.addAndGet(-removedEstimatedSizeInBytes);
             bufferedInternalSplitCount.addAndGet(-removedSplitCount);
 
@@ -453,6 +510,39 @@ class HiveSplitSource
         }, directExecutor());
 
         return toCompletableFuture(transform);
+    }
+
+    private ConnectorSplit deterministicallyScheduled(HiveSplit split)
+    {
+        List<Node> workerNodes = orderedWorkerNodes.get();
+        if (workerNodes.isEmpty()) {
+            // deterministic scheduling disabled
+            return split;
+        }
+        int bucket = Hashing.consistentHash(HashCode.fromInt(split.getSignature().hashCode()), workerNodes.size());
+
+        return new HiveSplit(
+                split.getDatabase(),
+                split.getTable(),
+                split.getPartitionName(),
+                split.getPath(),
+                split.getStart(),
+                split.getLength(),
+                split.getEstimatedFileSize(),
+                split.getFileModifiedTime(),
+                split.getSchema(),
+                split.getPartitionKeys(),
+                ImmutableList.of(workerNodes.get(bucket).getHostAndPort()),
+                split.getBucketNumber(),
+                split.getStatementId(),
+                true,
+                split.getTableToPartitionMapping(),
+                split.getBucketConversion(),
+                split.getBucketValidation(),
+                split.isS3SelectPushdownEnabled(),
+                split.getAcidInfo(),
+                split.getSplitNumber(),
+                split.getSplitWeight());
     }
 
     @Override

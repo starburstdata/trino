@@ -483,7 +483,7 @@ public class HiveTableHandle
                 Objects.equals(bucketHandle, that.bucketHandle) &&
                 Objects.equals(bucketFilter, that.bucketFilter) &&
                 Objects.equals(analyzePartitionValues, that.analyzePartitionValues) &&
-                Objects.equals(transaction, that.transaction) &&
+//                Objects.equals(transaction, that.transaction) &&
                 Objects.equals(projectedColumns, that.projectedColumns);
     }
 
@@ -501,7 +501,7 @@ public class HiveTableHandle
                 bucketHandle,
                 bucketFilter,
                 analyzePartitionValues,
-                transaction,
+//                transaction,
                 projectedColumns);
     }
 

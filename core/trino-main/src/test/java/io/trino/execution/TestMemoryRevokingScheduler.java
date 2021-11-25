@@ -29,7 +29,7 @@ import io.trino.operator.DriverContext;
 import io.trino.operator.OperatorContext;
 import io.trino.operator.PipelineContext;
 import io.trino.operator.TaskContext;
-import io.trino.operator.cache.DriverResultCache;
+import io.trino.operator.cache.PipelineResultCache;
 import io.trino.spi.QueryId;
 import io.trino.spi.memory.MemoryPoolId;
 import io.trino.spiller.SpillSpaceTracker;
@@ -321,7 +321,7 @@ public class TestMemoryRevokingScheduler
                 scheduledExecutor,
                 DataSize.of(1, GIGABYTE),
                 spillSpaceTracker,
-                new DriverResultCache()));
+                new PipelineResultCache()));
     }
 
     private TaskContext getOrCreateTaskContext(SqlTask sqlTask)

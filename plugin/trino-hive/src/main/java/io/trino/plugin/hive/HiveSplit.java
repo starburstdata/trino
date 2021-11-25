@@ -275,6 +275,16 @@ public class HiveSplit
     }
 
     @Override
+    public Object getSignature()
+    {
+        return ImmutableMap.builder()
+                .put("path", path)
+                .put("start", start)
+                .put("length", length)
+                .build();
+    }
+
+    @Override
     public String toString()
     {
         return toStringHelper(this)

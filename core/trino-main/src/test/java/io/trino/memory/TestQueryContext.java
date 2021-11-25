@@ -22,7 +22,7 @@ import io.trino.memory.context.LocalMemoryContext;
 import io.trino.operator.DriverContext;
 import io.trino.operator.OperatorContext;
 import io.trino.operator.TaskContext;
-import io.trino.operator.cache.DriverResultCache;
+import io.trino.operator.cache.PipelineResultCache;
 import io.trino.spi.QueryId;
 import io.trino.spiller.SpillSpaceTracker;
 import io.trino.sql.planner.plan.PlanNodeId;
@@ -83,7 +83,7 @@ public class TestQueryContext
                     localQueryRunner.getScheduler(),
                     DataSize.ofBytes(0),
                     new SpillSpaceTracker(DataSize.ofBytes(0)),
-                    new DriverResultCache());
+                    new PipelineResultCache());
 
             // Use memory
             queryContext.getQueryMemoryContext().initializeLocalMemoryContexts("test");
@@ -149,6 +149,6 @@ public class TestQueryContext
                 TEST_EXECUTOR,
                 DataSize.ofBytes(0),
                 new SpillSpaceTracker(DataSize.ofBytes(0)),
-                new DriverResultCache());
+                new PipelineResultCache());
     }
 }

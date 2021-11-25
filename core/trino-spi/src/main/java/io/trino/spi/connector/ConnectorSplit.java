@@ -30,4 +30,9 @@ public interface ConnectorSplit
     {
         return SplitWeight.standard();
     }
+
+    default Object getSignature()
+    {
+        return getInfo();
+    }
 }

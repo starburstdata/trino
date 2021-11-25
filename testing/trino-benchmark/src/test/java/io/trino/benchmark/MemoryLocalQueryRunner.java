@@ -27,7 +27,7 @@ import io.trino.metadata.QualifiedObjectName;
 import io.trino.metadata.TableHandle;
 import io.trino.operator.Driver;
 import io.trino.operator.TaskContext;
-import io.trino.operator.cache.DriverResultCache;
+import io.trino.operator.cache.PipelineResultCache;
 import io.trino.plugin.memory.MemoryConnectorFactory;
 import io.trino.plugin.tpch.TpchConnectorFactory;
 import io.trino.spi.Page;
@@ -80,7 +80,7 @@ public class MemoryLocalQueryRunner
                 localQueryRunner.getScheduler(),
                 DataSize.of(4, GIGABYTE),
                 spillSpaceTracker,
-                new DriverResultCache());
+                new PipelineResultCache());
 
         TaskContext taskContext = queryContext
                 .addTaskContext(new TaskStateMachine(new TaskId("query", 0, 0), localQueryRunner.getExecutor()),

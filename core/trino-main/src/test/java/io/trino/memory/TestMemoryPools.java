@@ -28,7 +28,7 @@ import io.trino.operator.OperatorContext;
 import io.trino.operator.OutputFactory;
 import io.trino.operator.TableScanOperator;
 import io.trino.operator.TaskContext;
-import io.trino.operator.cache.DriverResultCache;
+import io.trino.operator.cache.PipelineResultCache;
 import io.trino.plugin.tpch.TpchConnectorFactory;
 import io.trino.spi.Page;
 import io.trino.spi.QueryId;
@@ -103,7 +103,7 @@ public class TestMemoryPools
                 localQueryRunner.getScheduler(),
                 TEN_MEGABYTES,
                 spillSpaceTracker,
-                new DriverResultCache());
+                new PipelineResultCache());
         taskContext = createTaskContext(queryContext, localQueryRunner.getExecutor(), localQueryRunner.getDefaultSession());
         drivers = driversSupplier.get();
     }

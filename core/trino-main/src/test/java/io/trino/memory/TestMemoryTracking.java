@@ -28,7 +28,7 @@ import io.trino.operator.PipelineContext;
 import io.trino.operator.PipelineStats;
 import io.trino.operator.TaskContext;
 import io.trino.operator.TaskStats;
-import io.trino.operator.cache.DriverResultCache;
+import io.trino.operator.cache.PipelineResultCache;
 import io.trino.spi.QueryId;
 import io.trino.spi.memory.MemoryPoolId;
 import io.trino.spiller.SpillSpaceTracker;
@@ -107,7 +107,7 @@ public class TestMemoryTracking
                 yieldExecutor,
                 queryMaxSpillSize,
                 spillSpaceTracker,
-                new DriverResultCache());
+                new PipelineResultCache());
         taskContext = queryContext.addTaskContext(
                 new TaskStateMachine(new TaskId("query", 0, 0), notificationExecutor),
                 testSessionBuilder().build(),

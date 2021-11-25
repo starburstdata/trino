@@ -13,6 +13,8 @@
  */
 package io.trino.plugin.hive;
 
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -29,6 +31,8 @@ import io.trino.plugin.hive.metastore.SortingColumn;
 import io.trino.plugin.hive.metastore.Table;
 import io.trino.plugin.hive.util.HiveBucketing.HiveBucketFilter;
 import io.trino.plugin.hive.util.HiveUtil;
+import io.trino.spi.Node;
+import io.trino.spi.NodeManager;
 import io.trino.spi.TrinoException;
 import io.trino.spi.VersionEmbedder;
 import io.trino.spi.connector.ConnectorSession;
@@ -47,6 +51,7 @@ import org.weakref.jmx.Nested;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +59,7 @@ import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
@@ -111,6 +117,7 @@ public class HiveSplitManager
     private final boolean recursiveDfsWalkerEnabled;
     private final CounterStat highMemorySplitSourceCounter;
     private final TypeManager typeManager;
+    private final Supplier<List<Node>> orderedWorkerNodes;
 
     @Inject
     public HiveSplitManager(
@@ -122,7 +129,8 @@ public class HiveSplitManager
             DirectoryLister directoryLister,
             ExecutorService executorService,
             VersionEmbedder versionEmbedder,
-            TypeManager typeManager)
+            TypeManager typeManager,
+            NodeManager nodeManager)
     {
         this(
                 metastoreProvider,
@@ -140,7 +148,8 @@ public class HiveSplitManager
                 hiveConfig.getSplitLoaderConcurrency(),
                 hiveConfig.getMaxSplitsPerSecond(),
                 hiveConfig.getRecursiveDirWalkerEnabled(),
-                typeManager);
+                typeManager,
+                nodeManager);
     }
 
     public HiveSplitManager(
@@ -159,7 +168,8 @@ public class HiveSplitManager
             int splitLoaderConcurrency,
             @Nullable Integer maxSplitsPerSecond,
             boolean recursiveDfsWalkerEnabled,
-            TypeManager typeManager)
+            TypeManager typeManager,
+            NodeManager nodeManager)
     {
         this.metastoreProvider = requireNonNull(metastoreProvider, "metastoreProvider is null");
         this.partitionManager = requireNonNull(partitionManager, "partitionManager is null");
@@ -178,6 +188,12 @@ public class HiveSplitManager
         this.maxSplitsPerSecond = firstNonNull(maxSplitsPerSecond, Integer.MAX_VALUE);
         this.recursiveDfsWalkerEnabled = recursiveDfsWalkerEnabled;
         this.typeManager = requireNonNull(typeManager, "typeManager is null");
+        this.orderedWorkerNodes = Suppliers.memoizeWithExpiration(
+                () -> nodeManager.getWorkerNodes().stream()
+                        .sorted(Comparator.comparing(node -> node.getHostAndPort().toString()))
+                        .collect(toImmutableList()),
+                10,
+                TimeUnit.SECONDS);
     }
 
     @Override
@@ -251,7 +267,6 @@ public class HiveSplitManager
                         .map(validTxnWriteIdList -> validTxnWriteIdList.getTableValidWriteIdList(table.getDatabaseName() + "." + table.getTableName())),
                 hiveTable.getMaxScannedFileSize());
 
-
         HiveSplitSource splitSource;
         switch (splitSchedulingStrategy) {
             case UNGROUPED_SCHEDULING:
@@ -266,7 +281,8 @@ public class HiveSplitManager
                         hiveSplitLoader,
                         executor,
                         highMemorySplitSourceCounter,
-                        hiveTable.isRecordScannedFiles());
+                        hiveTable.isRecordScannedFiles(),
+                        orderedWorkerNodes);
                 break;
             case GROUPED_SCHEDULING:
                 splitSource = HiveSplitSource.bucketed(
@@ -280,7 +296,8 @@ public class HiveSplitManager
                         hiveSplitLoader,
                         executor,
                         highMemorySplitSourceCounter,
-                        hiveTable.isRecordScannedFiles());
+                        hiveTable.isRecordScannedFiles(),
+                        orderedWorkerNodes);
                 break;
             default:
                 throw new IllegalArgumentException("Unknown splitSchedulingStrategy: " + splitSchedulingStrategy);
