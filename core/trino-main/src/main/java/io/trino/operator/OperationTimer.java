@@ -27,7 +27,7 @@ import static java.lang.Math.max;
 import static java.util.Objects.requireNonNull;
 
 @NotThreadSafe
-class OperationTimer
+public class OperationTimer
 {
     private static final ThreadMXBean THREAD_MX_BEAN = ManagementFactory.getThreadMXBean();
 

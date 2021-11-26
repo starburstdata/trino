@@ -26,25 +26,21 @@ import io.airlift.units.Duration;
 import io.trino.execution.ScheduledSplit;
 import io.trino.execution.TaskSource;
 import io.trino.metadata.Split;
-import io.trino.operator.cache.PipelineResultCache;
-import io.trino.operator.cache.PipelineResultCacheSessionProperties;
+import io.trino.operator.cache.CachingDriver;
 import io.trino.operator.cache.PlanNodeSignature;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.UpdatablePageSource;
 import io.trino.sql.planner.plan.PlanNodeId;
 
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 import java.io.Closeable;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -57,6 +53,7 @@ import static com.google.common.base.Throwables.throwIfUnchecked;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static io.airlift.concurrent.MoreFutures.getFutureValue;
 import static io.trino.operator.Operator.NOT_BLOCKED;
+import static io.trino.operator.cache.PipelineResultCacheSessionProperties.isPipelineResultCacheEnabled;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static java.lang.Boolean.TRUE;
 import static java.util.Objects.requireNonNull;
@@ -74,7 +71,6 @@ public class Driver
 
     private final DriverContext driverContext;
     private final List<Operator> activeOperators;
-    private final Optional<PlanNodeSignature> planSignature;
     // this is present only for debugging
     @SuppressWarnings("unused")
     private final List<Operator> allOperators;
@@ -99,14 +95,6 @@ public class Driver
 
     private final AtomicReference<SettableFuture<Void>> driverBlockedFuture = new AtomicReference<>();
 
-    private final PipelineResultCache resultCache;
-    private final Queue<Page> results = new ArrayDeque<>();
-
-    @Nullable
-    private List<Page> onlySplitResult;
-    @Nullable
-    private Split onlySplit;
-
     private enum State
     {
         ALIVE, NEED_DESTRUCTION, DESTROYED
@@ -116,7 +104,11 @@ public class Driver
     {
         requireNonNull(driverContext, "driverContext is null");
         requireNonNull(operators, "operators is null");
-        Driver driver = new Driver(driverContext, planSignature, operators);
+        Driver driver = planSignature
+                .filter(plan -> isPipelineResultCacheEnabled(driverContext.getSession()))
+                .map(plan -> (Driver) new CachingDriver(driverContext, plan, operators))
+                .orElseGet(() -> new Driver(driverContext, operators));
+
         driver.initialize();
         return driver;
     }
@@ -134,11 +126,9 @@ public class Driver
         return createDriver(driverContext, Optional.empty(), operators);
     }
 
-    private Driver(DriverContext driverContext, Optional<PlanNodeSignature> planSignature, List<Operator> operators)
+    protected Driver(DriverContext driverContext, List<Operator> operators)
     {
         this.driverContext = requireNonNull(driverContext, "driverContext is null");
-        this.planSignature = requireNonNull(planSignature, "planSignature is null");
-        this.resultCache = driverContext.getPipelineContext().getTaskContext().getQueryContext().getDriverResultCache();
         this.allOperators = ImmutableList.copyOf(requireNonNull(operators, "operators is null"));
         checkArgument(allOperators.size() > 1, "At least two operators are required");
         this.activeOperators = new ArrayList<>(operators);
@@ -165,7 +155,7 @@ public class Driver
         this.deleteOperator = deleteOperator;
         this.updateOperator = updateOperator;
         // this is either remote output like PartitionedOutputOperator or TaskOutputOperator, or local output like LocalExchangeSinkOperators
-        this.outputOperator = operators.get(operators.size() - 1);
+        this.outputOperator = requireNonNull(operators.get(operators.size() - 1), "outputOperator is null");
 
         currentTaskSource = sourceOperator.map(operator -> new TaskSource(operator.getSourceId(), ImmutableSet.of(), false)).orElse(null);
         // initially the driverBlockedFuture is not blocked (it is completed)
@@ -274,20 +264,7 @@ public class Driver
         SourceOperator sourceOperator = this.sourceOperator.orElseThrow(VerifyException::new);
         for (ScheduledSplit newSplit : newSplits) {
             Split split = newSplit.getSplit();
-
-            Optional<List<Page>> cachedResult = planSignature.flatMap(plan -> resultCache.get(plan, split));
-            if (cachedResult.isPresent() && isPipelineResultCacheEnabled()) {
-                // cache hit, add cached result to the queue to be processed next time #processInternal is invoked
-                results.addAll(cachedResult.get());
-                // TODO lysy: do we have to handle deleteOperator, updateOperator?
-            }
-            else {
-                setupOutputCache(split);
-
-                Supplier<Optional<UpdatablePageSource>> pageSource = sourceOperator.addSplit(split);
-                deleteOperator.ifPresent(deleteOperator -> deleteOperator.setPageSource(pageSource));
-                updateOperator.ifPresent(updateOperator -> updateOperator.setPageSource(pageSource));
-            }
+            addSplit(sourceOperator, split);
         }
 
         // set no more splits
@@ -296,6 +273,13 @@ public class Driver
         }
 
         currentTaskSource = newSource;
+    }
+
+    protected void addSplit(SourceOperator sourceOperator, Split split)
+    {
+        Supplier<Optional<UpdatablePageSource>> pageSource = sourceOperator.addSplit(split);
+        deleteOperator.ifPresent(deleteOperator -> deleteOperator.setPageSource(pageSource));
+        updateOperator.ifPresent(updateOperator -> updateOperator.setPageSource(pageSource));
     }
 
     public ListenableFuture<Void> processFor(Duration duration)
@@ -402,7 +386,7 @@ public class Driver
                 rootOperator.getOperatorContext().recordFinish(operationTimer);
             }
 
-            processCachedResults(operationTimer);
+            beforeProcess(operationTimer);
 
             boolean movedPage = false;
             for (int i = 0; i < activeOperators.size() - 1 && !driverContext.isDone(); i++) {
@@ -425,9 +409,8 @@ public class Driver
                         next.addInput(page);
                         next.getOperatorContext().recordAddInput(operationTimer, page);
                         movedPage = true;
-                        if (onlySplitResult != null && next == outputOperator) {
-                            // onlySplitResult != null means we should cache the result
-                            onlySplitResult.add(page);
+                        if (next == outputOperator) {
+                            newPipelineResult(page);
                         }
                     }
 
@@ -464,7 +447,9 @@ public class Driver
                 }
             }
 
-            updateResultCache();
+            if (activeOperators.isEmpty() || activeOperators.get(0).isFinished()) {
+                driverIsFinished();
+            }
 
             // if we did not move any pages, check if we are blocked
             if (!movedPage) {
@@ -512,47 +497,22 @@ public class Driver
         }
     }
 
-    // we can cache the driver results only if there is a single split being processed
-    // because once split is added to the source operator there is no way of matching output page to the input split
-    private void setupOutputCache(Split split)
+    protected void driverIsFinished()
     {
-        if (onlySplit == null && planSignature.isPresent() && isPipelineResultCacheEnabled()) {
-            // if this is the first split and the caching can be done,
-            // create output cache for this split assuming it will be the only one
-            onlySplit = split;
-            onlySplitResult = new ArrayList<>();
-        }
-        else {
-            // we have more than one split, disable caching the results since we cannot match result page with input split
-            onlySplitResult = null;
-        }
     }
 
-    private void updateResultCache()
+    protected void beforeProcess(OperationTimer operationTimer)
     {
-        if (planSignature.isPresent()
-                && isPipelineResultCacheEnabled()
-                && onlySplitResult != null
-                && (activeOperators.isEmpty() || activeOperators.get(0).isFinished())) {
-            // if Driver is finished updated result cache
-            resultCache.put(planSignature.get(), onlySplit, ImmutableList.copyOf(onlySplitResult));
-            onlySplitResult = null;
-            onlySplit = null;
-        }
     }
 
-    private boolean isPipelineResultCacheEnabled()
+    protected void newPipelineResult(Page page)
     {
-        return PipelineResultCacheSessionProperties.isPipelineResultCacheEnabled(driverContext.getSession());
     }
 
-    private void processCachedResults(OperationTimer operationTimer)
+    protected void addOutput(OperationTimer operationTimer, Page page)
     {
-        for (Page page : results) {
-            outputOperator.addInput(page);
-            outputOperator.getOperatorContext().recordAddInput(operationTimer, page);
-        }
-        results.clear();
+        outputOperator.addInput(page);
+        outputOperator.getOperatorContext().recordAddInput(operationTimer, page);
     }
 
     @GuardedBy("exclusiveLock")

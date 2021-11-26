@@ -162,7 +162,7 @@ public class OperatorContext
         return driverContext.isDone();
     }
 
-    void recordAddInput(OperationTimer operationTimer, Page page)
+    public void recordAddInput(OperationTimer operationTimer, Page page)
     {
         operationTimer.recordOperationComplete(addInputTiming);
         if (page != null) {
