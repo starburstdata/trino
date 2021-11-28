@@ -19,6 +19,7 @@ import io.airlift.json.JsonCodec;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import io.trino.connector.CatalogName;
+import io.trino.operator.cache.CacheStatsDto;
 import io.trino.operator.output.PartitionedOutputOperator.PartitionedOutputInfo;
 import io.trino.plugin.base.metrics.LongCount;
 import io.trino.spi.metrics.Metrics;
@@ -83,6 +84,7 @@ public class TestOperatorStats
             DataSize.ofBytes(25),
             DataSize.ofBytes(26),
             Optional.empty(),
+            CacheStatsDto.ZERO,
             NON_MERGEABLE_INFO);
 
     public static final OperatorStats MERGEABLE = new OperatorStats(
@@ -132,6 +134,7 @@ public class TestOperatorStats
             DataSize.ofBytes(25),
             DataSize.ofBytes(26),
             Optional.empty(),
+            CacheStatsDto.ZERO,
             MERGEABLE_INFO);
 
     @Test

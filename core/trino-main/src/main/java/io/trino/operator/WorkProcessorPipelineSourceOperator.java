@@ -28,6 +28,7 @@ import io.trino.memory.context.MemoryTrackingContext;
 import io.trino.metadata.Split;
 import io.trino.operator.OperationTimer.OperationTiming;
 import io.trino.operator.WorkProcessor.ProcessState;
+import io.trino.operator.cache.CacheStatsDto;
 import io.trino.spi.Page;
 import io.trino.spi.connector.UpdatablePageSource;
 import io.trino.spi.metrics.Metrics;
@@ -363,6 +364,7 @@ public class WorkProcessorPipelineSourceOperator
                         succinctBytes(context.peakTotalMemoryReservation.get()),
                         DataSize.ofBytes(0),
                         operatorContext.isWaitingForMemory().isDone() ? Optional.empty() : Optional.of(WAITING_FOR_MEMORY),
+                        new CacheStatsDto(0, 0),
                         getOperatorInfo(context)))
                 .collect(toImmutableList());
     }

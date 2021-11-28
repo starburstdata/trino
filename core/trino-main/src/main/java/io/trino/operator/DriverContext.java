@@ -25,6 +25,7 @@ import io.trino.execution.TaskId;
 import io.trino.memory.QueryContextVisitor;
 import io.trino.memory.context.MemoryTrackingContext;
 import io.trino.operator.OperationTimer.OperationTiming;
+import io.trino.operator.cache.CacheStatsDto;
 import io.trino.sql.planner.plan.PlanNodeId;
 import org.joda.time.DateTime;
 
@@ -429,7 +430,8 @@ public class DriverContext
                 outputDataSize.succinct(),
                 outputPositions,
                 succinctBytes(physicalWrittenDataSize),
-                operators);
+                operators,
+                operators.stream().map(OperatorStats::getResultCacheStats).reduce(new CacheStatsDto(0, 0), CacheStatsDto::add));
     }
 
     public <C, R> R accept(QueryContextVisitor<C, R> visitor, C context)

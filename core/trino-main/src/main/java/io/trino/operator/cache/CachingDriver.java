@@ -1,6 +1,7 @@
 package io.trino.operator.cache;
 
 import com.google.common.collect.ImmutableList;
+import io.airlift.log.Logger;
 import io.trino.metadata.Split;
 import io.trino.operator.Driver;
 import io.trino.operator.DriverContext;
@@ -22,6 +23,7 @@ import static java.util.Objects.requireNonNull;
 public class CachingDriver
         extends Driver
 {
+    private static final Logger log = Logger.get(CachingDriver.class);
     private final PlanNodeSignature planSignature;
     private final PipelineResultCache resultCache;
     private final Queue<Page> results = new ArrayDeque<>();
@@ -46,10 +48,14 @@ public class CachingDriver
             // cache hit, add cached result to the queue to be processed next time #processInternal is invoked
             results.addAll(cachedResult.get());
             // TODO lysy: do we have to handle deleteOperator, updateOperator?
+            log.info("cache hit plan: %s, split %s", planSignature, split);
+            outputOperator.getOperatorContext().recordCacheHit();
         }
         else {
             setupOutputCache(split);
             super.addSplit(sourceOperator, split);
+            log.info("cache miss plan: %s, split %s", planSignature, split);
+            outputOperator.getOperatorContext().recordCacheMiss();
         }
     }
 

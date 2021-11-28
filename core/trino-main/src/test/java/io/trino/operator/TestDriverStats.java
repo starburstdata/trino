@@ -19,6 +19,7 @@ import io.airlift.json.JsonCodec;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import io.trino.execution.Lifespan;
+import io.trino.operator.cache.CacheStatsDto;
 import org.joda.time.DateTime;
 import org.testng.annotations.Test;
 
@@ -69,7 +70,9 @@ public class TestDriverStats
 
             DataSize.ofBytes(20),
 
-            ImmutableList.of(TestOperatorStats.EXPECTED));
+            ImmutableList.of(TestOperatorStats.EXPECTED),
+
+            new CacheStatsDto(0, 0));
 
     @Test
     public void testJson()

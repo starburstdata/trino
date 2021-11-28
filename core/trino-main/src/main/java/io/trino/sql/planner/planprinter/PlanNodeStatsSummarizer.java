@@ -22,6 +22,7 @@ import io.trino.operator.OperatorStats;
 import io.trino.operator.PipelineStats;
 import io.trino.operator.TaskStats;
 import io.trino.operator.WindowInfo;
+import io.trino.operator.cache.CacheStatsDto;
 import io.trino.sql.planner.plan.PlanNodeId;
 
 import java.util.ArrayList;
@@ -82,6 +83,7 @@ public final class PlanNodeStatsSummarizer
         Map<PlanNodeId, Map<String, OperatorInputStats>> operatorInputStats = new HashMap<>();
         Map<PlanNodeId, Map<String, OperatorHashCollisionsStats>> operatorHashCollisionsStats = new HashMap<>();
         Map<PlanNodeId, WindowOperatorStats> windowNodeStats = new HashMap<>();
+        Map<PlanNodeId, CacheStatsDto> planNodeResultCacheStats = new HashMap<>();
 
         for (PipelineStats pipelineStats : taskStats.getPipelines()) {
             // Due to eventual consistently collected stats, these could be empty
@@ -142,6 +144,7 @@ public final class PlanNodeStatsSummarizer
 
                 planNodeOutputPositions.merge(planNodeId, operatorStats.getOutputPositions(), Long::sum);
                 planNodeOutputBytes.merge(planNodeId, operatorStats.getOutputDataSize().toBytes(), Long::sum);
+                planNodeResultCacheStats.merge(planNodeId, operatorStats.getResultCacheStats(), CacheStatsDto::add);
                 processedNodes.add(planNodeId);
             }
 
@@ -183,6 +186,7 @@ public final class PlanNodeStatsSummarizer
             // It's possible to observe stats after the build starts, but before the probe does
             // and therefore only have scheduled time, but no output stats
             long outputPositions = planNodeOutputPositions.getOrDefault(planNodeId, 0L);
+            CacheStatsDto resultCacheStats = planNodeResultCacheStats.getOrDefault(planNodeId, CacheStatsDto.ZERO);
 
             if (operatorHashCollisionsStats.containsKey(planNodeId)) {
                 nodeStats = new HashCollisionPlanNodeStats(
@@ -194,6 +198,7 @@ public final class PlanNodeStatsSummarizer
                         outputPositions,
                         succinctBytes(planNodeOutputBytes.getOrDefault(planNodeId, 0L)),
                         succinctBytes(planNodeSpilledDataSize.get(planNodeId)),
+                        resultCacheStats,
                         operatorInputStats.get(planNodeId),
                         operatorHashCollisionsStats.get(planNodeId));
             }
@@ -207,6 +212,7 @@ public final class PlanNodeStatsSummarizer
                         outputPositions,
                         succinctBytes(planNodeOutputBytes.getOrDefault(planNodeId, 0L)),
                         succinctBytes(planNodeSpilledDataSize.get(planNodeId)),
+                        resultCacheStats,
                         operatorInputStats.get(planNodeId),
                         windowNodeStats.get(planNodeId));
             }
@@ -220,6 +226,7 @@ public final class PlanNodeStatsSummarizer
                         outputPositions,
                         succinctBytes(planNodeOutputBytes.getOrDefault(planNodeId, 0L)),
                         succinctBytes(planNodeSpilledDataSize.get(planNodeId)),
+                        resultCacheStats,
                         operatorInputStats.get(planNodeId));
             }
 

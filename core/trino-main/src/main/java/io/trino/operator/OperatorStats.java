@@ -18,6 +18,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableList;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
+import io.trino.operator.cache.CacheStats;
+import io.trino.operator.cache.CacheStatsDto;
 import io.trino.spi.Mergeable;
 import io.trino.spi.metrics.Metrics;
 import io.trino.sql.planner.plan.PlanNodeId;
@@ -85,7 +87,7 @@ public class OperatorStats
     private final DataSize spilledDataSize;
 
     private final Optional<BlockedReason> blockedReason;
-
+    private final CacheStatsDto resultCacheStats;
     @Nullable
     private final OperatorInfo info;
 
@@ -141,11 +143,13 @@ public class OperatorStats
 
             @JsonProperty("blockedReason") Optional<BlockedReason> blockedReason,
 
+            @JsonProperty("resultCacheStats") CacheStatsDto resultCacheStats,
             @Nullable
             @JsonProperty("info") OperatorInfo info)
     {
         this.stageId = stageId;
         this.pipelineId = pipelineId;
+        this.resultCacheStats = requireNonNull(resultCacheStats, "resultCacheStats is null");
 
         checkArgument(operatorId >= 0, "operatorId is negative");
         this.operatorId = operatorId;
@@ -436,6 +440,12 @@ public class OperatorStats
         return blockedReason;
     }
 
+    @JsonProperty
+    public CacheStatsDto getResultCacheStats()
+    {
+        return resultCacheStats;
+    }
+
     @Nullable
     @JsonProperty
     public OperatorInfo getInfo()
@@ -492,6 +502,9 @@ public class OperatorStats
 
         long spilledDataSize = this.spilledDataSize.toBytes();
 
+        CacheStats resultCacheStats = new CacheStats();
+        resultCacheStats.update(this.resultCacheStats);
+
         Optional<BlockedReason> blockedReason = this.blockedReason;
 
         Mergeable<OperatorInfo> base = getMergeableInfoOrNull(info);
@@ -541,6 +554,7 @@ public class OperatorStats
             peakTotalMemory = max(peakTotalMemory, operator.getPeakTotalMemoryReservation().toBytes());
 
             spilledDataSize += operator.getSpilledDataSize().toBytes();
+            resultCacheStats.update(operator.getResultCacheStats());
 
             if (operator.getBlockedReason().isPresent()) {
                 blockedReason = operator.getBlockedReason();
@@ -603,7 +617,7 @@ public class OperatorStats
                 DataSize.ofBytes(spilledDataSize),
 
                 blockedReason,
-
+                resultCacheStats.toDto(),
                 (OperatorInfo) base);
     }
 
@@ -669,6 +683,7 @@ public class OperatorStats
                 peakTotalMemoryReservation,
                 spilledDataSize,
                 blockedReason,
+                resultCacheStats,
                 info);
     }
 }

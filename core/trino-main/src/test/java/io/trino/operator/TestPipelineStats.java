@@ -20,6 +20,7 @@ import io.airlift.stats.Distribution;
 import io.airlift.stats.Distribution.DistributionSnapshot;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
+import io.trino.operator.cache.CacheStatsDto;
 import org.joda.time.DateTime;
 import org.testng.annotations.Test;
 
@@ -82,6 +83,7 @@ public class TestPipelineStats
 
             DataSize.ofBytes(20),
 
+            new CacheStatsDto(0, 0),
             ImmutableList.of(TestOperatorStats.EXPECTED),
             ImmutableList.of(TestDriverStats.EXPECTED));
 

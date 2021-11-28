@@ -15,6 +15,7 @@ package io.trino.sql.planner.planprinter;
 
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
+import io.trino.operator.cache.CacheStatsDto;
 import io.trino.spi.Mergeable;
 import io.trino.sql.planner.plan.PlanNodeId;
 
@@ -42,6 +43,7 @@ public class PlanNodeStats
     private final long planNodeOutputPositions;
     private final DataSize planNodeOutputDataSize;
     private final DataSize planNodeSpilledDataSize;
+    private final CacheStatsDto resultCacheStats;
 
     protected final Map<String, OperatorInputStats> operatorInputStats;
 
@@ -54,6 +56,7 @@ public class PlanNodeStats
             long planNodeOutputPositions,
             DataSize planNodeOutputDataSize,
             DataSize planNodeSpilledDataSize,
+            CacheStatsDto resultCacheStats,
             Map<String, OperatorInputStats> operatorInputStats)
     {
         this.planNodeId = requireNonNull(planNodeId, "planNodeId is null");
@@ -65,6 +68,7 @@ public class PlanNodeStats
         this.planNodeOutputPositions = planNodeOutputPositions;
         this.planNodeOutputDataSize = planNodeOutputDataSize;
         this.planNodeSpilledDataSize = requireNonNull(planNodeSpilledDataSize, "planNodeSpilledDataSize is null");
+        this.resultCacheStats = requireNonNull(resultCacheStats, "resultCacheStats is null");
 
         this.operatorInputStats = requireNonNull(operatorInputStats, "operatorInputStats is null");
     }
@@ -122,6 +126,11 @@ public class PlanNodeStats
         return planNodeSpilledDataSize;
     }
 
+    public CacheStatsDto getResultCacheStats()
+    {
+        return resultCacheStats;
+    }
+
     public Map<String, Double> getOperatorInputPositionsAverages()
     {
         return operatorInputStats.entrySet().stream()
@@ -160,6 +169,7 @@ public class PlanNodeStats
                 planNodeInputPositions, planNodeInputDataSize,
                 planNodeOutputPositions, planNodeOutputDataSize,
                 succinctBytes(this.planNodeSpilledDataSize.toBytes() + other.planNodeSpilledDataSize.toBytes()),
+                resultCacheStats.add(other.resultCacheStats),
                 operatorInputStats);
     }
 }

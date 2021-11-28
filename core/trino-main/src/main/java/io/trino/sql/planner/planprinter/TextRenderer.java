@@ -18,6 +18,7 @@ import io.airlift.units.DataSize;
 import io.trino.cost.PlanCostEstimate;
 import io.trino.cost.PlanNodeStatsAndCostSummary;
 import io.trino.cost.PlanNodeStatsEstimate;
+import io.trino.operator.cache.CacheStatsDto;
 import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.planprinter.NodeRepresentation.TypedSymbol;
 
@@ -142,7 +143,20 @@ public class TextRenderer
             printWindowOperatorStats(output, ((WindowPlanNodeStats) nodeStats).getWindowOperatorStats());
         }
 
+        if (!nodeStats.getResultCacheStats().isZero()) {
+            printPipelineResultCacheStats(output, nodeStats.getResultCacheStats());
+        }
         return output.toString();
+    }
+
+    private void printPipelineResultCacheStats(StringBuilder output, CacheStatsDto resultCacheStats)
+    {
+        if (!verbose) {
+            // these stats are too detailed for non-verbose mode
+            return;
+        }
+
+        output.append(format("Pipeline result cache: [ hits: %d, misses: %d ]\n", resultCacheStats.getCacheHits(), resultCacheStats.getCacheMisses()));
     }
 
     private void printDistributions(StringBuilder output, PlanNodeStats stats)

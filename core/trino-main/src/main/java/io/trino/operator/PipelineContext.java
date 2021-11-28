@@ -28,6 +28,8 @@ import io.trino.execution.TaskId;
 import io.trino.memory.QueryContextVisitor;
 import io.trino.memory.context.LocalMemoryContext;
 import io.trino.memory.context.MemoryTrackingContext;
+import io.trino.operator.cache.CacheStats;
+import io.trino.operator.cache.CacheStatsDto;
 import org.joda.time.DateTime;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -101,6 +103,7 @@ public class PipelineContext
     private final ConcurrentMap<Integer, OperatorStats> operatorSummaries = new ConcurrentHashMap<>();
 
     private final MemoryTrackingContext pipelineMemoryContext;
+    private final CacheStats resultCacheStats = new CacheStats();
 
     public PipelineContext(int pipelineId, TaskContext taskContext, Executor notificationExecutor, ScheduledExecutorService yieldExecutor, MemoryTrackingContext pipelineMemoryContext, boolean inputPipeline, boolean outputPipeline, boolean partitioned)
     {
@@ -223,6 +226,8 @@ public class PipelineContext
         outputPositions.update(driverStats.getOutputPositions());
 
         physicalWrittenDataSize.getAndAdd(driverStats.getPhysicalWrittenDataSize().toBytes());
+
+        resultCacheStats.update(driverStats.getResultCacheStats());
     }
 
     public void start()
@@ -382,6 +387,7 @@ public class PipelineContext
         boolean hasUnfinishedDrivers = false;
         boolean unfinishedDriversFullyBlocked = true;
 
+        CacheStatsDto resultCacheStats = this.resultCacheStats.toDto();
         TreeMap<Integer, OperatorStats> operatorSummaries = new TreeMap<>(this.operatorSummaries);
         ListMultimap<Integer, OperatorStats> runningOperators = ArrayListMultimap.create();
         ImmutableList.Builder<DriverStats> drivers = ImmutableList.builderWithExpectedSize(driverContexts.size());
@@ -424,6 +430,7 @@ public class PipelineContext
             outputPositions += driverStats.getOutputPositions();
 
             physicalWrittenDataSize += driverStats.getPhysicalWrittenDataSize().toBytes();
+            resultCacheStats.add(driverStats.getResultCacheStats());
         }
 
         // merge the running operator stats into the operator summary
@@ -500,6 +507,7 @@ public class PipelineContext
 
                 succinctBytes(physicalWrittenDataSize),
 
+                resultCacheStats,
                 ImmutableList.copyOf(operatorSummaries.values()),
                 drivers.build());
     }

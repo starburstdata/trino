@@ -27,6 +27,7 @@ import io.trino.memory.context.AggregatedMemoryContext;
 import io.trino.memory.context.LocalMemoryContext;
 import io.trino.memory.context.MemoryTrackingContext;
 import io.trino.operator.OperationTimer.OperationTiming;
+import io.trino.operator.cache.CacheStats;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
 import io.trino.spi.metrics.Metrics;
@@ -104,6 +105,7 @@ public class OperatorContext
     private final AtomicLong peakSystemMemoryReservation = new AtomicLong();
     private final AtomicLong peakRevocableMemoryReservation = new AtomicLong();
     private final AtomicLong peakTotalMemoryReservation = new AtomicLong();
+    private final CacheStats resultCacheStats = new CacheStats();
 
     @GuardedBy("this")
     private boolean memoryRevokingRequested;
@@ -220,6 +222,16 @@ public class OperatorContext
     public void recordDynamicFilterSplitProcessed(long dynamicFilterSplits)
     {
         dynamicFilterSplitsProcessed.getAndAdd(dynamicFilterSplits);
+    }
+
+    public void recordCacheHit()
+    {
+        resultCacheStats.recordCacheHit();
+    }
+
+    public void recordCacheMiss()
+    {
+        resultCacheStats.recordCacheMiss();
     }
 
     /**
@@ -583,8 +595,8 @@ public class OperatorContext
                 DataSize.ofBytes(peakTotalMemoryReservation.get()),
 
                 DataSize.ofBytes(spillContext.getSpilledBytes()),
-
                 memoryFuture.get().isDone() ? Optional.empty() : Optional.of(WAITING_FOR_MEMORY),
+                resultCacheStats.toDto(),
                 info);
     }
 

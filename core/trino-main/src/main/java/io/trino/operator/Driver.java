@@ -69,7 +69,7 @@ public class Driver
 {
     private static final Logger log = Logger.get(Driver.class);
 
-    private final DriverContext driverContext;
+    protected final DriverContext driverContext;
     private final List<Operator> activeOperators;
     // this is present only for debugging
     @SuppressWarnings("unused")
@@ -77,7 +77,7 @@ public class Driver
     private final Optional<SourceOperator> sourceOperator;
     private final Optional<DeleteOperator> deleteOperator;
     private final Optional<UpdateOperator> updateOperator;
-    private final Operator outputOperator; // last operator that sends output outside the driver
+    protected final Operator outputOperator; // last operator that sends output outside the driver
 
     // This variable acts as a staging area. When new splits (encapsulated in TaskSource) are
     // provided to a Driver, the Driver will not process them right away. Instead, the splits are
@@ -104,11 +104,18 @@ public class Driver
     {
         requireNonNull(driverContext, "driverContext is null");
         requireNonNull(operators, "operators is null");
-        Driver driver = planSignature
-                .filter(plan -> isPipelineResultCacheEnabled(driverContext.getSession()))
-                .map(plan -> (Driver) new CachingDriver(driverContext, plan, operators))
-                .orElseGet(() -> new Driver(driverContext, operators));
-
+        boolean pipelineResultCacheEnabled = isPipelineResultCacheEnabled(driverContext.getSession());
+        Driver driver;
+        if (planSignature.isPresent() && pipelineResultCacheEnabled) {
+            log.info("Using CachingDriver for: %s::%d with plan: %s", driverContext.getTaskId(), driverContext.getPipelineContext().getPipelineId(), planSignature.get());
+            driver = new CachingDriver(driverContext, planSignature.get(), operators);
+        }
+        else {
+            if (pipelineResultCacheEnabled) {
+                log.info("Caching not possible for: %s::%d", driverContext.getTaskId(), driverContext.getPipelineContext().getPipelineId());
+            }
+            driver = new Driver(driverContext, operators);
+        }
         driver.initialize();
         return driver;
     }

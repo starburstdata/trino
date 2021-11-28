@@ -107,9 +107,7 @@ public abstract class PlanNodeSignature
         @Override
         public String toString()
         {
-            return MoreObjects.toStringHelper(this)
-                    .add("node", node)
-                    .toString();
+            return node.toString();
         }
     }
 
@@ -208,7 +206,7 @@ public abstract class PlanNodeSignature
         {
             return MoreObjects.toStringHelper(this)
                     .add("source", source)
-                    .add("node", node)
+                    .add("assignments", node.getAssignments())
                     .toString();
         }
     }
@@ -252,7 +250,7 @@ public abstract class PlanNodeSignature
         {
             return MoreObjects.toStringHelper(this)
                     .add("source", source)
-                    .add("node", node)
+                    .add("predicate", node.getPredicate())
                     .toString();
         }
     }

@@ -3,7 +3,6 @@ package io.trino.operator.cache;
 import com.google.common.base.MoreObjects;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.RemovalListener;
 import com.google.common.cache.Weigher;
 import com.google.common.primitives.Ints;
 import io.trino.metadata.Split;
@@ -24,12 +23,8 @@ public class PipelineResultCache
     {
         underlying = CacheBuilder.newBuilder()
                 .recordStats()
-                .removalListener((RemovalListener<PipelineResultCacheKey, List<Page>>) notification -> {
-                    System.out.println("removed " + notification);
-                })
                 .weigher((Weigher<PipelineResultCacheKey, List<Page>>) (key, value) -> Ints.checkedCast(value.stream().mapToLong(Page::getRetainedSizeInBytes).sum()))
-//                .maximumSize(1024 * 1024)
-                .maximumWeight(32L * 1024 * 1024 * 1024)
+                .maximumWeight(128L * 1024 * 1024 * 1024)
                 .build();
     }
 
@@ -51,7 +46,6 @@ public class PipelineResultCache
     public void put(PipelineResultCacheKey key, List<Page> value)
     {
         underlying.put(key, value);
-        System.out.println("put: " + signature(key.split) + " current size: " + underlying.size() + " instance: " + this);
     }
 
     private static Object signature(Split split)

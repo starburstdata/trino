@@ -77,7 +77,7 @@ public final class HiveQueryRunner
     public static DistributedQueryRunner create()
             throws Exception
     {
-        return builder().setNodeCount(1).build();
+        return builder().build();
     }
 
     public static Builder builder()

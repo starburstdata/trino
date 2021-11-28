@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableSet;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import io.trino.execution.Lifespan;
+import io.trino.operator.cache.CacheStatsDto;
 import org.joda.time.DateTime;
 
 import javax.annotation.Nullable;
@@ -74,6 +75,7 @@ public class DriverStats
 
     private final DataSize physicalWrittenDataSize;
 
+    private final CacheStatsDto resultCacheStats;
     private final List<OperatorStats> operatorStats;
 
     public DriverStats()
@@ -117,6 +119,7 @@ public class DriverStats
         this.physicalWrittenDataSize = DataSize.ofBytes(0);
 
         this.operatorStats = ImmutableList.of();
+        this.resultCacheStats = new CacheStatsDto(0, 0);
     }
 
     @JsonCreator
@@ -159,7 +162,8 @@ public class DriverStats
 
             @JsonProperty("physicalWrittenDataSize") DataSize physicalWrittenDataSize,
 
-            @JsonProperty("operatorStats") List<OperatorStats> operatorStats)
+            @JsonProperty("operatorStats") List<OperatorStats> operatorStats,
+            @JsonProperty("resultCacheStats") CacheStatsDto resultCacheStats)
     {
         this.lifespan = lifespan;
 
@@ -205,6 +209,7 @@ public class DriverStats
         this.physicalWrittenDataSize = requireNonNull(physicalWrittenDataSize, "physicalWrittenDataSize is null");
 
         this.operatorStats = ImmutableList.copyOf(requireNonNull(operatorStats, "operatorStats is null"));
+        this.resultCacheStats = requireNonNull(resultCacheStats, "resultCacheStats is null");
     }
 
     @JsonProperty
@@ -381,5 +386,11 @@ public class DriverStats
     public List<OperatorStats> getOperatorStats()
     {
         return operatorStats;
+    }
+
+    @JsonProperty
+    public CacheStatsDto getResultCacheStats()
+    {
+        return resultCacheStats;
     }
 }

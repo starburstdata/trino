@@ -400,9 +400,7 @@ class HiveSplitSource
             int removedEstimatedSizeInBytes = 0;
             int removedSplitCount = 0;
             OptionalLong maxSplitBytes = OptionalLong.empty();
-            System.out.println("Start");
             for (InternalHiveSplit internalSplit : internalSplits) {
-                System.out.println("internal split " + internalSplit);
                 // Dynamic filter may not have been ready when partition was loaded in BackgroundHiveSplitLoader.
                 // Perform one more dynamic filter check immediately before split is returned to the engine
                 if (!internalSplit.getPartitionMatchSupplier().getAsBoolean()) {

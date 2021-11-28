@@ -21,6 +21,7 @@ import io.airlift.units.Duration;
 import io.trino.operator.FilterAndProjectOperator;
 import io.trino.operator.OperatorStats;
 import io.trino.operator.TableWriterOperator;
+import io.trino.operator.cache.CacheStatsDto;
 import io.trino.spi.eventlistener.StageGcStatistics;
 import io.trino.spi.metrics.Metrics;
 import io.trino.sql.planner.plan.PlanNodeId;
@@ -79,6 +80,7 @@ public class TestQueryStats
                     succinctBytes(130L),
                     succinctBytes(131L),
                     Optional.empty(),
+                    CacheStatsDto.ZERO,
                     null),
             new OperatorStats(
                     20,
@@ -120,6 +122,7 @@ public class TestQueryStats
                     succinctBytes(230L),
                     succinctBytes(231L),
                     Optional.empty(),
+                    CacheStatsDto.ZERO,
                     null),
             new OperatorStats(
                     30,
@@ -161,6 +164,7 @@ public class TestQueryStats
                     succinctBytes(330L),
                     succinctBytes(331L),
                     Optional.empty(),
+                    CacheStatsDto.ZERO,
                     null));
 
     public static final QueryStats EXPECTED = new QueryStats(

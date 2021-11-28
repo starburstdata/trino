@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableSet;
 import io.airlift.stats.Distribution.DistributionSnapshot;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
+import io.trino.operator.cache.CacheStatsDto;
 import org.joda.time.DateTime;
 
 import javax.annotation.Nullable;
@@ -84,6 +85,7 @@ public class PipelineStats
 
     private final DataSize physicalWrittenDataSize;
 
+    private final CacheStatsDto resultCacheStats;
     private final List<OperatorStats> operatorSummaries;
     private final List<DriverStats> drivers;
 
@@ -139,6 +141,7 @@ public class PipelineStats
 
             @JsonProperty("physicalWrittenDataSize") DataSize physicalWrittenDataSize,
 
+            @JsonProperty("resultCacheStats") CacheStatsDto resultCacheStats,
             @JsonProperty("operatorSummaries") List<OperatorStats> operatorSummaries,
             @JsonProperty("drivers") List<DriverStats> drivers)
     {
@@ -150,6 +153,7 @@ public class PipelineStats
 
         this.inputPipeline = inputPipeline;
         this.outputPipeline = outputPipeline;
+        this.resultCacheStats = requireNonNull(resultCacheStats, "resultCacheStats is null");
 
         checkArgument(totalDrivers >= 0, "totalDrivers is negative");
         this.totalDrivers = totalDrivers;
@@ -436,6 +440,12 @@ public class PipelineStats
     }
 
     @JsonProperty
+    public CacheStatsDto getResultCacheStats()
+    {
+        return resultCacheStats;
+    }
+
+    @JsonProperty
     public List<OperatorStats> getOperatorSummaries()
     {
         return operatorSummaries;
@@ -487,6 +497,7 @@ public class PipelineStats
                 outputDataSize,
                 outputPositions,
                 physicalWrittenDataSize,
+                resultCacheStats,
                 summarizeOperatorStats(operatorSummaries),
                 ImmutableList.of());
     }
