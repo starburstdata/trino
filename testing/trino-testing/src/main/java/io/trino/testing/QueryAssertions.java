@@ -134,9 +134,18 @@ public final class QueryAssertions
         Plan queryPlan = null;
         if (planAssertion.isPresent()) {
             try {
-                MaterializedResultWithPlan resultWithPlan = actualQueryRunner.executeWithPlan(session, actual, WarningCollector.NOOP);
-                queryPlan = resultWithPlan.getQueryPlan();
-                actualResults = resultWithPlan.getMaterializedResult().toTestTypes();
+                if (compareUpdate) {
+                    MaterializedResultWithPlan resultWithPlan = actualQueryRunner.executeWithPlan(session, actual, WarningCollector.NOOP);
+                    queryPlan = resultWithPlan.getQueryPlan();
+                    actualResults = resultWithPlan.getMaterializedResult().toTestTypes();
+                } else {
+                    MaterializedResultWithPlan result1 = actualQueryRunner.executeWithPlan(session, actual, WarningCollector.NOOP);
+                    MaterializedResultWithPlan resultWithPlan = actualQueryRunner.executeWithPlan(session, actual, WarningCollector.NOOP);
+                    assertEqualsIgnoreOrder(result1.getMaterializedResult(), resultWithPlan.getMaterializedResult());
+                    queryPlan = resultWithPlan.getQueryPlan();
+                    actualResults = resultWithPlan.getMaterializedResult().toTestTypes();
+                }
+
             }
             catch (RuntimeException ex) {
                 fail("Execution of 'actual' query failed: " + actual, ex);
@@ -144,7 +153,13 @@ public final class QueryAssertions
         }
         else {
             try {
-                actualResults = actualQueryRunner.execute(session, actual).toTestTypes();
+                if (compareUpdate) {
+                    actualResults = actualQueryRunner.execute(session, actual).toTestTypes();
+                } else {
+                    MaterializedResult actualResults1 = actualQueryRunner.execute(session, actual).toTestTypes();
+                    actualResults = actualQueryRunner.execute(session, actual).toTestTypes();
+                    assertEqualsIgnoreOrder(actualResults1, actualResults);
+                }
             }
             catch (RuntimeException ex) {
                 fail("Execution of 'actual' query failed: " + actual, ex);
