@@ -352,7 +352,7 @@ public class TestSqlTask
                 driverYieldExecutor,
                 DataSize.of(1, MEGABYTE),
                 new SpillSpaceTracker(DataSize.of(1, GIGABYTE)),
-                new PipelineResultCache());
+                PipelineResultCache.uncompressed());
 
         queryContext.addTaskContext(new TaskStateMachine(taskId, taskNotificationExecutor), testSessionBuilder().build(), () -> {}, false, false);
 

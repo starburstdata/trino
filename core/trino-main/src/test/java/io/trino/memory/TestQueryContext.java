@@ -83,7 +83,7 @@ public class TestQueryContext
                     localQueryRunner.getScheduler(),
                     DataSize.ofBytes(0),
                     new SpillSpaceTracker(DataSize.ofBytes(0)),
-                    new PipelineResultCache());
+                    PipelineResultCache.uncompressed());
 
             // Use memory
             queryContext.getQueryMemoryContext().initializeLocalMemoryContexts("test");
@@ -149,6 +149,6 @@ public class TestQueryContext
                 TEST_EXECUTOR,
                 DataSize.ofBytes(0),
                 new SpillSpaceTracker(DataSize.ofBytes(0)),
-                new PipelineResultCache());
+                PipelineResultCache.uncompressed());
     }
 }

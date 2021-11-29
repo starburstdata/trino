@@ -1,6 +1,5 @@
 package io.trino.operator.cache;
 
-import com.google.common.base.MoreObjects;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.Weigher;
@@ -13,20 +12,33 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
-public class PipelineResultCache
+public class PipelineResultCache<T>
 {
-    private final Cache<PipelineResultCacheKey, List<Page>> underlying;
+    private final Cache<PipelineResultCacheKey, T> underlying;
+    private final ValueCodec<T> valueCodec;
 
-    public PipelineResultCache()
+    private PipelineResultCache(ValueCodec<T> valueCodec)
     {
+        this.valueCodec = valueCodec;
         underlying = CacheBuilder.newBuilder()
                 .recordStats()
                 .softValues()
-                .weigher((Weigher<PipelineResultCacheKey, List<Page>>) (key, value) -> Ints.checkedCast(value.stream().mapToLong(Page::getRetainedSizeInBytes).sum()))
-                .maximumWeight(128L * 1024 * 1024 * 1024)
+                .weigher(valueCodec)
+                .maximumWeight(200L * 1024 * 1024 * 1024)
                 .build();
+    }
+
+    public static PipelineResultCache<?> uncompressed()
+    {
+        return new PipelineResultCache<>(new DirectValueCodec());
+    }
+
+    public static PipelineResultCache<?> createCache(boolean compressPipelineResultCache)
+    {
+        return uncompressed();
     }
 
     public Optional<List<Page>> get(PlanNodeSignature planSignature, Split split)
@@ -36,7 +48,7 @@ public class PipelineResultCache
 
     public Optional<List<Page>> get(PipelineResultCacheKey key)
     {
-        return Optional.ofNullable(underlying.getIfPresent(key));
+        return Optional.ofNullable(underlying.getIfPresent(key)).map(valueCodec::deserialize);
     }
 
     public void put(PlanNodeSignature planSignature, Split split, List<Page> value)
@@ -46,7 +58,7 @@ public class PipelineResultCache
 
     public void put(PipelineResultCacheKey key, List<Page> value)
     {
-        underlying.put(key, value);
+        underlying.put(key, valueCodec.serialize(value));
     }
 
     private static Object signature(Split split)
@@ -84,22 +96,48 @@ public class PipelineResultCache
         @Override
         public int hashCode()
         {
-            int planSignatureHash = planSignature.hashCode();
-            int signatureHash = signature(split).hashCode();
-            int hash = Objects.hash(
-                    planSignatureHash,
-                    signatureHash
-            );
-            return hash;
+            return Objects.hash(
+                    planSignature,
+                    signature(split));
         }
 
         @Override
         public String toString()
         {
-            return MoreObjects.toStringHelper(this)
+            return toStringHelper(this)
                     .add("planSignature", planSignature)
                     .add("split", signature(split))
                     .toString();
+        }
+    }
+
+    interface ValueCodec<T>
+            extends Weigher<PipelineResultCacheKey, T>
+    {
+        T serialize(List<Page> value);
+
+        List<Page> deserialize(T value);
+    }
+
+    private static class DirectValueCodec
+            implements ValueCodec<List<Page>>
+    {
+        @Override
+        public List<Page> serialize(List<Page> value)
+        {
+            return value;
+        }
+
+        @Override
+        public List<Page> deserialize(List<Page> value)
+        {
+            return value;
+        }
+
+        @Override
+        public int weigh(PipelineResultCacheKey key, List<Page> value)
+        {
+            return Ints.checkedCast(value.stream().mapToLong(Page::getRetainedSizeInBytes).sum());
         }
     }
 }

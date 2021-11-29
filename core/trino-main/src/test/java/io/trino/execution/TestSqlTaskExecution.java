@@ -604,7 +604,7 @@ public class TestSqlTaskExecution
                 driverYieldExecutor,
                 DataSize.of(1, MEGABYTE),
                 new SpillSpaceTracker(DataSize.of(1, GIGABYTE)),
-                new PipelineResultCache());
+                PipelineResultCache.uncompressed());
         return queryContext.addTaskContext(taskStateMachine, TEST_SESSION, () -> {}, false, false);
     }
 

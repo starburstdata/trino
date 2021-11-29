@@ -80,7 +80,7 @@ public class MemoryLocalQueryRunner
                 localQueryRunner.getScheduler(),
                 DataSize.of(4, GIGABYTE),
                 spillSpaceTracker,
-                new PipelineResultCache());
+                PipelineResultCache.uncompressed());
 
         TaskContext taskContext = queryContext
                 .addTaskContext(new TaskStateMachine(new TaskId("query", 0, 0), localQueryRunner.getExecutor()),

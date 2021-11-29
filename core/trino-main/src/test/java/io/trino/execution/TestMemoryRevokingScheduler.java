@@ -321,7 +321,7 @@ public class TestMemoryRevokingScheduler
                 scheduledExecutor,
                 DataSize.of(1, GIGABYTE),
                 spillSpaceTracker,
-                new PipelineResultCache()));
+                PipelineResultCache.uncompressed()));
     }
 
     private TaskContext getOrCreateTaskContext(SqlTask sqlTask)

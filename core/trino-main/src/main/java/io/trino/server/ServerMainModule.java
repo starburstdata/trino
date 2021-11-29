@@ -87,7 +87,6 @@ import io.trino.operator.ForExchange;
 import io.trino.operator.OperatorFactories;
 import io.trino.operator.PagesIndex;
 import io.trino.operator.TrinoOperatorFactories;
-import io.trino.operator.cache.PipelineResultCache;
 import io.trino.operator.cache.PipelineResultCacheModule;
 import io.trino.operator.index.IndexJoinLookupStats;
 import io.trino.server.ExpressionSerialization.ExpressionDeserializer;
@@ -277,7 +276,6 @@ public class ServerMainModule
         newExporter(binder).export(TaskExecutorResource.class).withGeneratedName();
         binder.bind(TaskManagementExecutor.class).in(Scopes.SINGLETON);
         binder.bind(SqlTaskManager.class).in(Scopes.SINGLETON);
-        binder.bind(PipelineResultCache.class).in(Scopes.SINGLETON);
         binder.bind(TaskManager.class).to(Key.get(SqlTaskManager.class));
         binder.bind(TableExecuteContextManager.class).in(Scopes.SINGLETON);
 

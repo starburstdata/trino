@@ -107,7 +107,7 @@ public class TestMemoryTracking
                 yieldExecutor,
                 queryMaxSpillSize,
                 spillSpaceTracker,
-                new PipelineResultCache());
+                PipelineResultCache.uncompressed());
         taskContext = queryContext.addTaskContext(
                 new TaskStateMachine(new TaskId("query", 0, 0), notificationExecutor),
                 testSessionBuilder().build(),

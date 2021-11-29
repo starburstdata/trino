@@ -1,21 +1,23 @@
 package io.trino.operator.cache;
 
 import com.google.inject.Binder;
-import com.google.inject.Module;
+import io.airlift.configuration.AbstractConfigurationAwareModule;
 import io.trino.SystemSessionPropertiesProvider;
 
 import static com.google.inject.Scopes.SINGLETON;
 import static com.google.inject.multibindings.Multibinder.newSetBinder;
-import static io.airlift.configuration.ConfigBinder.configBinder;
+import static io.trino.operator.cache.PipelineResultCache.createCache;
 
 public class PipelineResultCacheModule
-        implements Module
+        extends AbstractConfigurationAwareModule
 {
     @Override
-    public void configure(Binder binder)
+    protected void setup(Binder binder)
     {
-        configBinder(binder).bindConfig(PipelineResultCacheConfig.class);
+        PipelineResultCacheConfig cacheConfig = buildConfigObject(PipelineResultCacheConfig.class);
         newSetBinder(binder, SystemSessionPropertiesProvider.class).addBinding()
                 .to(PipelineResultCacheSessionProperties.class).in(SINGLETON);
+
+        binder.bind(PipelineResultCache.class).toInstance(createCache(cacheConfig.isPipelineResultCacheCompressionEnabled()));
     }
 }

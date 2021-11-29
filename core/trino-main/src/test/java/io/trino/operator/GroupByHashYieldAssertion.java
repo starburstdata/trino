@@ -90,7 +90,7 @@ public final class GroupByHashYieldAssertion
                 SCHEDULED_EXECUTOR,
                 DataSize.of(512, MEGABYTE),
                 new SpillSpaceTracker(DataSize.of(512, MEGABYTE)),
-                new PipelineResultCache());
+                PipelineResultCache.uncompressed());
 
         DriverContext driverContext = createTaskContext(queryContext, EXECUTOR, TEST_SESSION)
                 .addPipelineContext(0, true, true, false)

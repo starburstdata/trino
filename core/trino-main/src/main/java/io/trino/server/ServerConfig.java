@@ -105,4 +105,5 @@ public class ServerConfig
         this.queryInfoUrlTemplate = Optional.ofNullable(queryInfoUrlTemplate);
         return this;
     }
+
 }

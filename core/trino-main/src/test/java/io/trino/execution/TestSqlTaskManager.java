@@ -311,7 +311,7 @@ public class TestSqlTaskManager
                 localSpillManager,
                 new NodeSpillConfig(),
                 new TestingGcMonitor(),
-                new PipelineResultCache());
+                PipelineResultCache.uncompressed());
     }
 
     private TaskInfo createTask(SqlTaskManager sqlTaskManager, TaskId taskId, ImmutableSet<ScheduledSplit> splits, OutputBuffers outputBuffers)

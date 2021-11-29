@@ -150,7 +150,7 @@ public final class TestingTaskContext
                     yieldExecutor,
                     queryMaxSpillSize,
                     spillSpaceTracker,
-                    new PipelineResultCache());
+                    PipelineResultCache.uncompressed());
 
             return createTaskContext(queryContext, session, taskStateMachine);
         }
