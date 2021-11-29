@@ -13,70 +13,98 @@
  */
 package io.trino.operator.cache;
 
-import com.google.common.base.MoreObjects;
+import io.airlift.log.Logger;
 import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.FilterNode;
+import io.trino.sql.planner.plan.JoinNode;
 import io.trino.sql.planner.plan.PlanNode;
 import io.trino.sql.planner.plan.PlanVisitor;
 import io.trino.sql.planner.plan.ProjectNode;
 import io.trino.sql.planner.plan.TableScanNode;
 
+import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
+import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static java.util.Objects.requireNonNull;
 
-public abstract class PlanNodeSignature
+public interface PlanNodeSignature
 {
-    public static Optional<PlanNodeSignature> from(PlanNode plan)
+    Logger log = Logger.get(CachingDriver.class);
+
+    PlanNodeSignature UNKNOWN = () -> false;
+
+    boolean canCache();
+
+    static PlanNodeSignature from(PlanNode plan)
     {
-        Optional<PlanNodeSignature> signatureNode = plan.accept(new Visitor(), null);
-        return signatureNode;
+        return plan.accept(new Visitor(), null);
     }
 
-    private static class Visitor
-            extends PlanVisitor<Optional<PlanNodeSignature>, Void>
+    class Visitor
+            extends PlanVisitor<PlanNodeSignature, Void>
     {
         @Override
-        protected Optional<PlanNodeSignature> visitPlan(PlanNode node, Void context)
+        protected PlanNodeSignature visitPlan(PlanNode node, Void context)
         {
-            System.out.println("missing signature for: " + node);
-            return Optional.empty();
+            log.debug("missing signature for: " + node);
+            return new GenericPlanNodeSignature(
+                    false,
+                    node,
+                    node.getSources().stream()
+                            .map(source -> source.accept(this, context))
+                            .collect(toImmutableList()));
         }
 
         @Override
-        public Optional<PlanNodeSignature> visitAggregation(AggregationNode node, Void context)
+        public PlanNodeSignature visitAggregation(AggregationNode node, Void context)
         {
-            return node.getSource().accept(this, context).map(source -> new AggregationNodeSignature(source, node));
+            return new AggregationNodeSignature(node.getSource().accept(this, context), node);
         }
 
         @Override
-        public Optional<PlanNodeSignature> visitTableScan(TableScanNode node, Void context)
+        public PlanNodeSignature visitTableScan(TableScanNode node, Void context)
         {
-            return Optional.of(new TableScanNodeSignature(node));
+            return new TableScanNodeSignature(node);
         }
 
         @Override
-        public Optional<PlanNodeSignature> visitProject(ProjectNode node, Void context)
+        public PlanNodeSignature visitProject(ProjectNode node, Void context)
         {
-            return node.getSource().accept(this, context).map(source -> new ProjectNodeSignature(source, node));
+            return new ProjectNodeSignature(node.getSource().accept(this, context), node);
         }
 
         @Override
-        public Optional<PlanNodeSignature> visitFilter(FilterNode node, Void context)
+        public PlanNodeSignature visitFilter(FilterNode node, Void context)
         {
-            return node.getSource().accept(this, context).map(source -> new FilterNodeSignature(source, node));
+            return new FilterNodeSignature(node.getSource().accept(this, context), node);
+        }
+
+        @Override
+        public PlanNodeSignature visitJoin(JoinNode node, Void context)
+        {
+            return new JoinNodeSignature(
+                    node.getLeft().accept(this, context),
+                    node.getRight().accept(this, context),
+                    node);
         }
     }
 
-    private static class TableScanNodeSignature
-            extends PlanNodeSignature
+    class TableScanNodeSignature
+            implements PlanNodeSignature
     {
         private final TableScanNode node;
 
         private TableScanNodeSignature(TableScanNode node)
         {
             this.node = requireNonNull(node, "node is null");
+        }
+
+        @Override
+        public boolean canCache()
+        {
+            return true;
         }
 
         @Override
@@ -111,8 +139,8 @@ public abstract class PlanNodeSignature
         }
     }
 
-    private static class AggregationNodeSignature
-            extends PlanNodeSignature
+    class AggregationNodeSignature
+            implements PlanNodeSignature
     {
         private final PlanNodeSignature source;
         private final AggregationNode node;
@@ -121,6 +149,12 @@ public abstract class PlanNodeSignature
         {
             this.source = requireNonNull(source, "source is null");
             this.node = requireNonNull(node, "node is null");
+        }
+
+        @Override
+        public boolean canCache()
+        {
+            return source.canCache();
         }
 
         @Override
@@ -153,22 +187,21 @@ public abstract class PlanNodeSignature
                     node.getStep(),
                     node.getHashSymbol(),
                     node.getGroupIdSymbol(),
-                    node.getOutputSymbols()
-            );
+                    node.getOutputSymbols());
         }
 
         @Override
         public String toString()
         {
-            return MoreObjects.toStringHelper(this)
+            return toStringHelper(this)
                     .add("source", source)
                     .add("node", node)
                     .toString();
         }
     }
 
-    private static class ProjectNodeSignature
-            extends PlanNodeSignature
+    class ProjectNodeSignature
+            implements PlanNodeSignature
     {
         private final PlanNodeSignature source;
         private final ProjectNode node;
@@ -177,6 +210,12 @@ public abstract class PlanNodeSignature
         {
             this.source = requireNonNull(source, "source is null");
             this.node = requireNonNull(node, "node is null");
+        }
+
+        @Override
+        public boolean canCache()
+        {
+            return source.canCache();
         }
 
         @Override
@@ -204,15 +243,15 @@ public abstract class PlanNodeSignature
         @Override
         public String toString()
         {
-            return MoreObjects.toStringHelper(this)
+            return toStringHelper(this)
                     .add("source", source)
                     .add("assignments", node.getAssignments())
                     .toString();
         }
     }
 
-    private static class FilterNodeSignature
-            extends PlanNodeSignature
+    class FilterNodeSignature
+            implements PlanNodeSignature
     {
         private final PlanNodeSignature source;
         private final FilterNode node;
@@ -221,6 +260,12 @@ public abstract class PlanNodeSignature
         {
             this.source = requireNonNull(source, "source is null");
             this.node = requireNonNull(node, "node is null");
+        }
+
+        @Override
+        public boolean canCache()
+        {
+            return source.canCache();
         }
 
         @Override
@@ -248,10 +293,129 @@ public abstract class PlanNodeSignature
         @Override
         public String toString()
         {
-            return MoreObjects.toStringHelper(this)
+            return toStringHelper(this)
                     .add("source", source)
                     .add("predicate", node.getPredicate())
                     .toString();
+        }
+    }
+
+    class JoinNodeSignature
+            implements PlanNodeSignature
+    {
+        private final PlanNodeSignature left;
+        private final PlanNodeSignature right;
+        private final JoinNode node;
+
+        public JoinNodeSignature(PlanNodeSignature left, PlanNodeSignature right, JoinNode node)
+        {
+            this.left = requireNonNull(left, "source is null");
+            this.right = requireNonNull(right, "right is null");
+            this.node = requireNonNull(node, "node is null");
+        }
+
+        @Override
+        public boolean canCache()
+        {
+            return left.canCache();
+        }
+
+        @Override
+        public boolean equals(Object o)
+        {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            JoinNodeSignature that = (JoinNodeSignature) o;
+            return left.equals(that.left)
+                    && right.equals(that.right)
+                    && node.isMaySkipOutputDuplicates() == that.node.isMaySkipOutputDuplicates()
+                    && node.getType() == that.node.getType()
+                    && node.getCriteria().equals(that.node.getCriteria())
+                    && node.getLeftOutputSymbols().equals(that.node.getLeftOutputSymbols())
+                    && node.getRightOutputSymbols().equals(that.node.getRightOutputSymbols())
+                    && node.getFilter().equals(that.node.getFilter())
+                    && node.getLeftHashSymbol().equals(that.node.getLeftHashSymbol())
+                    && node.getRightHashSymbol().equals(that.node.getRightHashSymbol())
+                    && node.getDistributionType().equals(that.node.getDistributionType())
+                    && node.isSpillable().equals(that.node.isSpillable())
+                    && node.getDynamicFilters().equals(that.node.getDynamicFilters());
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hash(
+                    left,
+                    right,
+                    node.getType(),
+                    node.getCriteria(),
+                    node.getLeftOutputSymbols(),
+                    node.getRightOutputSymbols(),
+                    node.isMaySkipOutputDuplicates(),
+                    node.getFilter(),
+                    node.getLeftHashSymbol(),
+                    node.getRightHashSymbol(),
+                    node.getDistributionType(),
+                    node.isSpillable(),
+                    node.getDynamicFilters());
+        }
+
+        @Override
+        public String toString()
+        {
+            return toStringHelper(this)
+                    .add("type", node.getType())
+                    .add("left", left)
+                    .add("right", right)
+                    .add("criteria", node.getCriteria())
+                    .add("filter", node.getFilter())
+                    .add("leftHashSymbol", node.getLeftHashSymbol())
+                    .add("rightHashSymbol", node.getRightHashSymbol())
+                    .add("distributionType", node.getDistributionType())
+                    .toString();
+        }
+    }
+
+    class GenericPlanNodeSignature
+            implements PlanNodeSignature
+    {
+        private final boolean canCache;
+        private final PlanNode node;
+        private final List<PlanNodeSignature> sources;
+
+        public GenericPlanNodeSignature(boolean canCache, PlanNode node, List<PlanNodeSignature> sources)
+        {
+            this.canCache = canCache;
+            this.node = requireNonNull(node, "node is null");
+            this.sources = requireNonNull(sources, "sources is null");
+        }
+
+        public boolean canCache()
+        {
+            return canCache;
+        }
+
+        @Override
+        public boolean equals(Object o)
+        {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            GenericPlanNodeSignature that = (GenericPlanNodeSignature) o;
+            return node.getClass().equals(that.node.getClass()) && sources.equals(that.sources);
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hash(node.getClass(), sources);
         }
     }
 }

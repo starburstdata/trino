@@ -54,6 +54,7 @@ import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static io.airlift.concurrent.MoreFutures.getFutureValue;
 import static io.trino.operator.Operator.NOT_BLOCKED;
 import static io.trino.operator.cache.PipelineResultCacheSessionProperties.isPipelineResultCacheEnabled;
+import static io.trino.operator.cache.PlanNodeSignature.UNKNOWN;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static java.lang.Boolean.TRUE;
 import static java.util.Objects.requireNonNull;
@@ -100,15 +101,15 @@ public class Driver
         ALIVE, NEED_DESTRUCTION, DESTROYED
     }
 
-    public static Driver createDriver(DriverContext driverContext, Optional<PlanNodeSignature> planSignature, List<Operator> operators)
+    public static Driver createDriver(DriverContext driverContext, PlanNodeSignature planSignature, List<Operator> operators)
     {
         requireNonNull(driverContext, "driverContext is null");
         requireNonNull(operators, "operators is null");
         boolean pipelineResultCacheEnabled = isPipelineResultCacheEnabled(driverContext.getSession());
         Driver driver;
-        if (planSignature.isPresent() && pipelineResultCacheEnabled) {
-            log.info("Using CachingDriver for: %s::%d with plan: %s", driverContext.getTaskId(), driverContext.getPipelineContext().getPipelineId(), planSignature.get());
-            driver = new CachingDriver(driverContext, planSignature.get(), operators);
+        if (planSignature.canCache() && pipelineResultCacheEnabled) {
+            log.info("Using CachingDriver for: %s::%d with plan: %s", driverContext.getTaskId(), driverContext.getPipelineContext().getPipelineId(), planSignature);
+            driver = new CachingDriver(driverContext, planSignature, operators);
         }
         else {
             if (pipelineResultCacheEnabled) {
@@ -130,7 +131,7 @@ public class Driver
                 .add(firstOperator)
                 .add(otherOperators)
                 .build();
-        return createDriver(driverContext, Optional.empty(), operators);
+        return createDriver(driverContext, UNKNOWN, operators);
     }
 
     protected Driver(DriverContext driverContext, List<Operator> operators)

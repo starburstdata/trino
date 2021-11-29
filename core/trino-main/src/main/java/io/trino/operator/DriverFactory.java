@@ -34,7 +34,7 @@ import static java.util.Objects.requireNonNull;
 
 public class DriverFactory
 {
-    private final Optional<PlanNodeSignature> planSignature;
+    private final PlanNodeSignature planSignature;
     private final int pipelineId;
     private final boolean inputDriver;
     private final boolean outputDriver;
@@ -49,7 +49,7 @@ public class DriverFactory
 
     public DriverFactory(int pipelineId, boolean inputDriver, boolean outputDriver, List<OperatorFactory> operatorFactories, OptionalInt driverInstances, PipelineExecutionStrategy pipelineExecutionStrategy)
     {
-        this(Optional.empty(), pipelineId, inputDriver, outputDriver, operatorFactories, driverInstances, pipelineExecutionStrategy);
+        this(PlanNodeSignature.UNKNOWN, pipelineId, inputDriver, outputDriver, operatorFactories, driverInstances, pipelineExecutionStrategy);
     }
 
     public DriverFactory(PlanNode plan, int pipelineId, boolean inputDriver, boolean outputDriver, List<OperatorFactory> operatorFactories, OptionalInt driverInstances, PipelineExecutionStrategy pipelineExecutionStrategy)
@@ -57,7 +57,7 @@ public class DriverFactory
         this(PlanNodeSignature.from(plan), pipelineId, inputDriver, outputDriver, operatorFactories, driverInstances, pipelineExecutionStrategy);
     }
 
-    public DriverFactory(Optional<PlanNodeSignature> planSignature, int pipelineId, boolean inputDriver, boolean outputDriver, List<OperatorFactory> operatorFactories, OptionalInt driverInstances, PipelineExecutionStrategy pipelineExecutionStrategy)
+    public DriverFactory(PlanNodeSignature planSignature, int pipelineId, boolean inputDriver, boolean outputDriver, List<OperatorFactory> operatorFactories, OptionalInt driverInstances, PipelineExecutionStrategy pipelineExecutionStrategy)
     {
         this.planSignature = planSignature;
         this.pipelineId = pipelineId;

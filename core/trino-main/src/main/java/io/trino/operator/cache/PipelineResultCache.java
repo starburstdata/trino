@@ -23,6 +23,7 @@ public class PipelineResultCache
     {
         underlying = CacheBuilder.newBuilder()
                 .recordStats()
+                .softValues()
                 .weigher((Weigher<PipelineResultCacheKey, List<Page>>) (key, value) -> Ints.checkedCast(value.stream().mapToLong(Page::getRetainedSizeInBytes).sum()))
                 .maximumWeight(128L * 1024 * 1024 * 1024)
                 .build();
