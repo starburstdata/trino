@@ -5,6 +5,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.Weigher;
 import com.google.common.primitives.Ints;
 import io.trino.metadata.Split;
+import io.trino.operator.cache.serde.PagesSerdeFactory;
 import io.trino.spi.Page;
 import io.trino.spi.connector.ConnectorSplit;
 
@@ -31,14 +32,16 @@ public class PipelineResultCache<T>
                 .build();
     }
 
+
+
     public static PipelineResultCache<?> uncompressed()
     {
         return new PipelineResultCache<>(new DirectValueCodec());
     }
 
-    public static PipelineResultCache<?> createCache(boolean compressPipelineResultCache)
+    public static PipelineResultCache<?> compressed(PagesSerdeFactory pagesSerdeFactory)
     {
-        return uncompressed();
+        return new PipelineResultCache<>(new SerdeValueCodec(pagesSerdeFactory));
     }
 
     public Optional<List<Page>> get(PlanNodeSignature planSignature, Split split)
@@ -48,7 +51,8 @@ public class PipelineResultCache<T>
 
     public Optional<List<Page>> get(PipelineResultCacheKey key)
     {
-        return Optional.ofNullable(underlying.getIfPresent(key)).map(valueCodec::deserialize);
+        Optional<T> value = Optional.ofNullable(underlying.getIfPresent(key));
+        return value.map(valueCodec::deserialize);
     }
 
     public void put(PlanNodeSignature planSignature, Split split, List<Page> value)
@@ -58,7 +62,8 @@ public class PipelineResultCache<T>
 
     public void put(PipelineResultCacheKey key, List<Page> value)
     {
-        underlying.put(key, valueCodec.serialize(value));
+        T serialized = valueCodec.serialize(value);
+        underlying.put(key, serialized);
     }
 
     private static Object signature(Split split)

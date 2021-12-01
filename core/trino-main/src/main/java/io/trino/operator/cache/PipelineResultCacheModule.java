@@ -1,23 +1,36 @@
 package io.trino.operator.cache;
 
 import com.google.inject.Binder;
-import io.airlift.configuration.AbstractConfigurationAwareModule;
+import com.google.inject.Module;
+import com.google.inject.Provides;
 import io.trino.SystemSessionPropertiesProvider;
+import io.trino.metadata.MetadataManager;
+import io.trino.operator.cache.serde.CachePagesSerdeFactory;
+
+import javax.inject.Singleton;
 
 import static com.google.inject.Scopes.SINGLETON;
 import static com.google.inject.multibindings.Multibinder.newSetBinder;
-import static io.trino.operator.cache.PipelineResultCache.createCache;
+import static io.airlift.configuration.ConfigBinder.configBinder;
 
 public class PipelineResultCacheModule
-        extends AbstractConfigurationAwareModule
+        implements Module
 {
     @Override
-    protected void setup(Binder binder)
+    public void configure(Binder binder)
     {
-        PipelineResultCacheConfig cacheConfig = buildConfigObject(PipelineResultCacheConfig.class);
+        configBinder(binder).bindConfig(PipelineResultCacheConfig.class);
         newSetBinder(binder, SystemSessionPropertiesProvider.class).addBinding()
                 .to(PipelineResultCacheSessionProperties.class).in(SINGLETON);
+    }
 
-        binder.bind(PipelineResultCache.class).toInstance(createCache(cacheConfig.isPipelineResultCacheCompressionEnabled()));
+    @Provides
+    @Singleton
+    public PipelineResultCache pipelineResultCache(PipelineResultCacheConfig config, MetadataManager metadataManager)
+    {
+        if (config.isPipelineResultCacheCompressionEnabled()) {
+            return PipelineResultCache.compressed(new CachePagesSerdeFactory(metadataManager::getType));
+        }
+        return PipelineResultCache.uncompressed();
     }
 }
