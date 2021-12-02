@@ -13,6 +13,7 @@
  */
 package io.trino.operator.cache;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.airlift.log.Logger;
@@ -713,6 +714,17 @@ public interface PlanNodeSignature
         public int hashCode()
         {
             return Objects.hash(node.getClass(), nodeProperties, sources);
+        }
+
+        @Override
+        public String toString()
+        {
+            return MoreObjects.toStringHelper(this)
+                    .add("node", node.getClass())
+                    .add("canCache", canCache)
+                    .add("nodeProperties", nodeProperties)
+                    .add("sources", sources)
+                    .toString();
         }
     }
 }
