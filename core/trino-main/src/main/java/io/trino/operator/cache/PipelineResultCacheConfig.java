@@ -5,7 +5,7 @@ import io.airlift.configuration.Config;
 public class PipelineResultCacheConfig
 {
     private boolean pipelineResultCacheEnabled = true;
-    private boolean pipelineResultCacheCompressionEnabled = true;
+    private boolean pipelineResultCacheCompressionEnabled;
 
     @Config("pipeline.result.cache.enabled")
     public PipelineResultCacheConfig setPipelineResultCacheEnabled(boolean pipelineResultCacheEnabled)
