@@ -114,7 +114,7 @@ public class FeaturesConfig
     private boolean statisticsPrecalculationForPushdownEnabled;
     private boolean collectPlanStatisticsForAllQueries;
     private boolean ignoreStatsCalculatorFailures = true;
-    private boolean defaultFilterFactorEnabled;
+    private boolean defaultFilterFactorEnabled = true;
     private boolean enableForcedExchangeBelowGroupId = true;
     private boolean pushAggregationThroughOuterJoin = true;
     private boolean pushPartialAggregationThoughJoin;
