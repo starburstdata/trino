@@ -33,6 +33,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
+import static io.trino.execution.TaskState.FINISHING;
 import static io.trino.execution.TaskState.FLUSHING;
 import static io.trino.execution.TaskState.RUNNING;
 import static io.trino.execution.TaskState.TERMINAL_TASK_STATES;
@@ -96,9 +97,14 @@ public class TaskStateMachine
         return failureCauses;
     }
 
+    public void transitionToFinishing()
+    {
+        taskState.setIf(FINISHING, currentState -> currentState == RUNNING);
+    }
+
     public void transitionToFlushing()
     {
-        taskState.setIf(FLUSHING, currentState -> currentState == RUNNING);
+        taskState.setIf(FLUSHING, currentState -> currentState == RUNNING || currentState == FINISHING);
     }
 
     public void finished()

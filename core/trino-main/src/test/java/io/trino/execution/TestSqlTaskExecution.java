@@ -92,6 +92,7 @@ import static io.trino.SessionTestUtils.TEST_SESSION;
 import static io.trino.block.BlockAssertions.createStringSequenceBlock;
 import static io.trino.block.BlockAssertions.createStringsBlock;
 import static io.trino.execution.TaskState.FINISHED;
+import static io.trino.execution.TaskState.FINISHING;
 import static io.trino.execution.TaskState.FLUSHING;
 import static io.trino.execution.TaskState.RUNNING;
 import static io.trino.execution.TaskTestUtils.TABLE_SCAN_NODE_ID;
@@ -280,7 +281,10 @@ public class TestSqlTaskExecution
                     throw new UnsupportedOperationException();
             }
 
-            assertEquals(taskStateMachine.getStateChange(RUNNING).get(10, SECONDS), FLUSHING);
+            // Skip intermediate FINISHING state. Task might also directly transition to FLUSHING state
+            taskStateMachine.getStateChange(RUNNING).get(10, SECONDS);
+
+            assertEquals(taskStateMachine.getStateChange(FINISHING).get(10, SECONDS), FLUSHING);
             outputBufferConsumer.abort(); // complete the task by calling abort on it
             assertEquals(taskStateMachine.getStateChange(FLUSHING).get(10, SECONDS), FINISHED);
         }
@@ -581,7 +585,10 @@ public class TestSqlTaskExecution
                     throw new UnsupportedOperationException();
             }
 
-            assertEquals(taskStateMachine.getStateChange(RUNNING).get(10, SECONDS), FLUSHING);
+            // Skip intermediate FINISHING state. Task might also directly transition to FLUSHING state
+            taskStateMachine.getStateChange(RUNNING).get(10, SECONDS);
+
+            assertEquals(taskStateMachine.getStateChange(FINISHING).get(10, SECONDS), FLUSHING);
             outputBufferConsumer.abort(); // complete the task by calling abort on it
             assertEquals(taskStateMachine.getStateChange(FLUSHING).get(10, SECONDS), FINISHED);
         }

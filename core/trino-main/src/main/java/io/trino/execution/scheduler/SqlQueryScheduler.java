@@ -907,7 +907,7 @@ public class SqlQueryScheduler
                     if (queryStateMachine.isDone()) {
                         return;
                     }
-                    if (queryStateMachine.getQueryState() == QueryState.STARTING && (state == RUNNING || state.isDone())) {
+                    if (queryStateMachine.getQueryState() == QueryState.STARTING && (state == RUNNING || state == StageExecution.State.FINISHING || state.isDone())) {
                         queryStateMachine.transitionToRunning();
                     }
                     // if any coordinator stage failed transition directly to failure
@@ -1604,7 +1604,7 @@ public class SqlQueryScheduler
 
                 for (StageExecution stageExecution : stageExecutions.values()) {
                     StageExecution.State state = stageExecution.getState();
-                    if (state != SCHEDULED && state != RUNNING && state != FLUSHING && !state.isDone()) {
+                    if (state != SCHEDULED && state != RUNNING && state != StageExecution.State.FINISHING && state != FLUSHING && !state.isDone()) {
                         throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Scheduling is complete, but stage %s is in state %s", stageExecution.getStageId(), state));
                     }
                 }

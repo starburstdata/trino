@@ -15,6 +15,7 @@ package io.trino.execution;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.json.ObjectMapperProvider;
 import io.trino.connector.CatalogName;
 import io.trino.cost.StatsAndCosts;
@@ -59,6 +60,7 @@ import io.trino.util.FinalizerService;
 import java.util.List;
 import java.util.Optional;
 
+import static com.google.common.util.concurrent.Futures.immediateVoidFuture;
 import static io.trino.SessionTestUtils.TEST_SESSION;
 import static io.trino.operator.StageExecutionDescriptor.ungroupedExecution;
 import static io.trino.spi.type.BigintType.BIGINT;
@@ -103,8 +105,13 @@ public final class TaskTestUtils
 
     public static LocalExecutionPlanner createTestingPlanner()
     {
+        return createTestingPlanner(immediateVoidFuture());
+    }
+
+    public static LocalExecutionPlanner createTestingPlanner(ListenableFuture<Void> producePage)
+    {
         PageSourceManager pageSourceManager = new PageSourceManager();
-        pageSourceManager.addConnectorPageSourceProvider(CONNECTOR_ID, new TestingPageSourceProvider());
+        pageSourceManager.addConnectorPageSourceProvider(CONNECTOR_ID, new TestingPageSourceProvider(producePage));
 
         // we don't start the finalizer so nothing will be collected, which is ok for a test
         FinalizerService finalizerService = new FinalizerService();

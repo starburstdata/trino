@@ -301,7 +301,7 @@ public class MemoryRevokingScheduler
     private static List<SqlTask> findRunningTasksInMemoryPool(Collection<SqlTask> allCurrentTasks, MemoryPool memoryPool)
     {
         return allCurrentTasks.stream()
-                .filter(task -> task.getTaskState() == TaskState.RUNNING && task.getQueryContext().getMemoryPool() == memoryPool)
+                .filter(task -> (task.getTaskState() == TaskState.RUNNING || task.getTaskState() == TaskState.FINISHING) && task.getQueryContext().getMemoryPool() == memoryPool)
                 .sorted(ORDER_BY_CREATE_TIME)
                 .collect(toImmutableList());
     }

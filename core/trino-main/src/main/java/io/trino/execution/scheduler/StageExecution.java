@@ -104,6 +104,10 @@ public interface StageExecution
          */
         RUNNING(false, false),
         /**
+         * Stage is running and remaining drivers are finishing.
+         */
+        FINISHING(false, false),
+        /**
          * Stage has finished executing and output being consumed.
          * In this state, at-least one of the tasks is flushing and the non-flushing tasks are finished
          */
@@ -162,6 +166,7 @@ public interface StageExecution
                 case SCHEDULING_SPLITS:
                 case SCHEDULED:
                 case RUNNING:
+                case FINISHING:
                 case FLUSHING:
                 case FINISHED:
                 case CANCELED:

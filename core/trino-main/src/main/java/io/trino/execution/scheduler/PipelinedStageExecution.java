@@ -70,6 +70,7 @@ import static io.trino.execution.scheduler.StageExecution.State.ABORTED;
 import static io.trino.execution.scheduler.StageExecution.State.CANCELED;
 import static io.trino.execution.scheduler.StageExecution.State.FAILED;
 import static io.trino.execution.scheduler.StageExecution.State.FINISHED;
+import static io.trino.execution.scheduler.StageExecution.State.FINISHING;
 import static io.trino.execution.scheduler.StageExecution.State.FLUSHING;
 import static io.trino.execution.scheduler.StageExecution.State.PLANNED;
 import static io.trino.execution.scheduler.StageExecution.State.RUNNING;
@@ -123,9 +124,11 @@ public class PipelinedStageExecution
     @GuardedBy("this")
     private final Set<TaskId> allTasks = new HashSet<>();
     @GuardedBy("this")
-    private final Set<TaskId> finishedTasks = new HashSet<>();
+    private final Set<TaskId> finishingTasks = new HashSet<>();
     @GuardedBy("this")
     private final Set<TaskId> flushingTasks = new HashSet<>();
+    @GuardedBy("this")
+    private final Set<TaskId> finishedTasks = new HashSet<>();
 
     // source task tracking
     @GuardedBy("this")
@@ -252,6 +255,13 @@ public class PipelinedStageExecution
         for (PlanNodeId partitionedSource : stage.getFragment().getPartitionedSources()) {
             schedulingComplete(partitionedSource);
         }
+    }
+
+    private synchronized boolean isFinishing()
+    {
+        // to transition to finishing, there must be at least one finishing task, and all others must be finishing, flushing or finished.
+        return !finishingTasks.isEmpty()
+                && allTasks.stream().allMatch(taskId -> finishingTasks.contains(taskId) || flushingTasks.contains(taskId) || finishedTasks.contains(taskId));
     }
 
     private synchronized boolean isFlushing()
@@ -386,19 +396,27 @@ public class PipelinedStageExecution
                 // A task should only be in the aborted state if the STAGE is done (ABORTED or FAILED)
                 fail(new TrinoException(GENERIC_INTERNAL_ERROR, "A task is in the ABORTED state but stage is " + stageState));
                 break;
+            case FINISHING:
+                finishingTasks.add(taskStatus.getTaskId());
+                break;
             case FLUSHING:
                 flushingTasks.add(taskStatus.getTaskId());
+                finishingTasks.remove(taskStatus.getTaskId());
                 break;
             case FINISHED:
                 finishedTasks.add(taskStatus.getTaskId());
                 flushingTasks.remove(taskStatus.getTaskId());
+                finishingTasks.remove(taskStatus.getTaskId());
                 break;
             default:
         }
 
-        if (stageState == SCHEDULED || stageState == RUNNING || stageState == FLUSHING) {
-            if (taskState == TaskState.RUNNING) {
+        if (stageState == SCHEDULED || stageState == RUNNING || stageState == FINISHING || stageState == FLUSHING) {
+            if (taskState == TaskState.RUNNING || taskState == TaskState.FINISHING) {
                 stateMachine.transitionToRunning();
+            }
+            if (isFinishing()) {
+                stateMachine.transitionToFinishing();
             }
             if (isFlushing()) {
                 stateMachine.transitionToFlushing();
@@ -604,7 +622,12 @@ public class PipelinedStageExecution
 
         public boolean transitionToRunning()
         {
-            return state.setIf(RUNNING, currentState -> currentState != RUNNING && currentState != FLUSHING && !currentState.isDone());
+            return state.setIf(RUNNING, currentState -> currentState != RUNNING && currentState != FINISHING && currentState != FLUSHING && !currentState.isDone());
+        }
+
+        public boolean transitionToFinishing()
+        {
+            return state.setIf(FINISHING, currentState -> currentState != FINISHING && currentState != FLUSHING && !currentState.isDone());
         }
 
         public boolean transitionToFlushing()

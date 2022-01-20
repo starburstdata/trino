@@ -49,6 +49,7 @@ import java.util.stream.Collectors;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static io.trino.execution.scheduler.StageExecution.State.FINISHING;
 import static io.trino.execution.scheduler.StageExecution.State.FLUSHING;
 import static io.trino.execution.scheduler.StageExecution.State.RUNNING;
 import static io.trino.execution.scheduler.StageExecution.State.SCHEDULED;
@@ -92,7 +93,7 @@ public class LegacyPhasedExecutionSchedule
     {
         for (Iterator<StageExecution> stageIterator = activeSources.iterator(); stageIterator.hasNext(); ) {
             StageExecution.State state = stageIterator.next().getState();
-            if (state == SCHEDULED || state == RUNNING || state == FLUSHING || state.isDone()) {
+            if (state == SCHEDULED || state == RUNNING || state == FINISHING || state == FLUSHING || state.isDone()) {
                 stageIterator.remove();
             }
         }

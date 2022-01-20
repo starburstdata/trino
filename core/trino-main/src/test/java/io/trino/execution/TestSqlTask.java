@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import io.airlift.stats.CounterStat;
 import io.airlift.stats.TestingGcMonitor;
 import io.airlift.units.DataSize;
@@ -146,7 +147,15 @@ public class TestSqlTask
     public void testSimpleQuery()
             throws Exception
     {
-        SqlTask sqlTask = createInitialTask();
+        SettableFuture<Void> producePage = SettableFuture.create();
+        LocalExecutionPlanner planner = createTestingPlanner(producePage);
+        SqlTaskExecutionFactory sqlTaskExecutionFactory = new SqlTaskExecutionFactory(
+                taskNotificationExecutor,
+                taskExecutor,
+                planner,
+                createTestSplitMonitor(),
+                new TaskManagerConfig());
+        SqlTask sqlTask = createInitialTask(sqlTaskExecutionFactory);
 
         assertEquals(sqlTask.getTaskStatus().getState(), TaskState.RUNNING);
         assertEquals(sqlTask.getTaskStatus().getVersion(), STARTING_VERSION);
@@ -157,8 +166,14 @@ public class TestSqlTask
                 ImmutableMap.of());
 
         TaskInfo taskInfo = sqlTask.getTaskInfo(STARTING_VERSION).get();
-        assertEquals(taskInfo.getTaskStatus().getState(), TaskState.FLUSHING);
+        assertEquals(taskInfo.getTaskStatus().getState(), TaskState.FINISHING);
         assertEquals(taskInfo.getTaskStatus().getVersion(), STARTING_VERSION + 1);
+
+        producePage.set(null);
+
+        taskInfo = sqlTask.getTaskInfo(STARTING_VERSION + 1).get();
+        assertEquals(taskInfo.getTaskStatus().getState(), TaskState.FLUSHING);
+        assertEquals(taskInfo.getTaskStatus().getVersion(), STARTING_VERSION + 2);
 
         // completed future should be returned immediately when old caller's version is used
         assertTrue(sqlTask.getTaskInfo(STARTING_VERSION).isDone());
@@ -230,8 +245,12 @@ public class TestSqlTask
                 ImmutableMap.of());
 
         TaskInfo taskInfo = sqlTask.getTaskInfo(STARTING_VERSION).get();
+        // task might transition directly into FLUSHING state
+        if (taskInfo.getTaskStatus().getState() == TaskState.FINISHING) {
+            taskInfo = sqlTask.getTaskInfo(taskInfo.getTaskStatus().getVersion()).get();
+        }
+
         assertEquals(taskInfo.getTaskStatus().getState(), TaskState.FLUSHING);
-        assertEquals(taskInfo.getTaskStatus().getVersion(), STARTING_VERSION + 1);
 
         sqlTask.destroyTaskResults(OUT);
 
@@ -341,6 +360,11 @@ public class TestSqlTask
     }
 
     private SqlTask createInitialTask()
+    {
+        return createInitialTask(sqlTaskExecutionFactory);
+    }
+
+    private SqlTask createInitialTask(SqlTaskExecutionFactory sqlTaskExecutionFactory)
     {
         TaskId taskId = new TaskId(new StageId("query", 0), nextTaskId.incrementAndGet(), 0);
         URI location = URI.create("fake://task/" + taskId);

@@ -14,6 +14,7 @@
 package io.trino.execution;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.util.concurrent.ListenableFuture;
 import io.trino.spi.Page;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.ByteArrayBlock;
@@ -29,16 +30,20 @@ import io.trino.spi.connector.FixedPageSource;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static io.airlift.concurrent.MoreFutures.toCompletableFuture;
 import static java.util.Objects.requireNonNull;
 
 public class TestingPageSourceProvider
         implements ConnectorPageSourceProvider
 {
-    public TestingPageSourceProvider()
+    private final ListenableFuture<Void> producePage;
+
+    public TestingPageSourceProvider(ListenableFuture<Void> producePage)
     {
-        System.out.println();
+        this.producePage = requireNonNull(producePage, "producePage is null");
     }
 
     @Override
@@ -56,6 +61,37 @@ public class TestingPageSourceProvider
                 .map(column -> new ByteArrayBlock(1, Optional.of(new boolean[] {true}), new byte[1]))
                 .collect(toImmutableList());
 
-        return new FixedPageSource(ImmutableList.of(new Page(blocks.toArray(new Block[blocks.size()]))));
+        return new BlockingFixedPageSource(ImmutableList.of(new Page(blocks.toArray(new Block[blocks.size()]))));
+    }
+
+    private class BlockingFixedPageSource
+            extends FixedPageSource
+    {
+        public BlockingFixedPageSource(Iterable<Page> pages)
+        {
+            super(pages);
+        }
+
+        @Override
+        public CompletableFuture<?> isBlocked()
+        {
+            return toCompletableFuture(producePage);
+        }
+
+        @Override
+        public boolean isFinished()
+        {
+            return producePage.isDone() && super.isFinished();
+        }
+
+        @Override
+        public Page getNextPage()
+        {
+            if (!producePage.isDone()) {
+                return null;
+            }
+
+            return super.getNextPage();
+        }
     }
 }

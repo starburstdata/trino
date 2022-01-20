@@ -31,6 +31,10 @@ public enum TaskState
      */
     RUNNING(false),
     /**
+     * Task is running and remaining drivers are finishing.
+     */
+    FINISHING(false),
+    /**
      * Task has finished executing and output is left to be consumed.
      * In this state, there will be no new drivers, the existing drivers have finished
      * and the output buffer of the task is at-least in a 'no-more-pages' state.

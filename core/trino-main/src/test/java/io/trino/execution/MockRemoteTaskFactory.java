@@ -326,7 +326,9 @@ public class MockRemoteTaskFactory
             for (Map.Entry<PlanNodeId, Split> entry : toRemove) {
                 this.splits.remove(entry.getKey(), entry.getValue());
             }
+            runningDrivers = this.splits.size();
             updateSplitQueueSpace();
+            updateTaskState();
         }
 
         public synchronized void clearSplits()
@@ -388,15 +390,7 @@ public class MockRemoteTaskFactory
         public synchronized void noMoreSplits(PlanNodeId sourceId)
         {
             noMoreSplits.add(sourceId);
-
-            boolean allSourcesComplete = Stream.concat(fragment.getPartitionedSourceNodes().stream(), fragment.getRemoteSourceNodes().stream())
-                    .filter(Objects::nonNull)
-                    .map(PlanNode::getId)
-                    .allMatch(noMoreSplits::contains);
-
-            if (allSourcesComplete) {
-                taskStateMachine.finished();
-            }
+            updateTaskState();
         }
 
         @Override
@@ -502,6 +496,26 @@ public class MockRemoteTaskFactory
         public synchronized int getUnacknowledgedPartitionedSplitCount()
         {
             return unacknowledgedSplits;
+        }
+
+        private synchronized void updateTaskState()
+        {
+            if (isAllSourcesComplete()) {
+                if (runningDrivers != 0) {
+                    taskStateMachine.transitionToFinishing();
+                }
+                else {
+                    taskStateMachine.finished();
+                }
+            }
+        }
+
+        private synchronized boolean isAllSourcesComplete()
+        {
+            return Stream.concat(fragment.getPartitionedSourceNodes().stream(), fragment.getRemoteSourceNodes().stream())
+                    .filter(Objects::nonNull)
+                    .map(PlanNode::getId)
+                    .allMatch(noMoreSplits::contains);
         }
     }
 }

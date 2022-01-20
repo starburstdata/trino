@@ -635,6 +635,7 @@ public class SqlTaskExecution
         }
         // do we still have running tasks?
         if (status.getRemainingDriver() != 0) {
+            taskStateMachine.transitionToFinishing();
             return;
         }
 
