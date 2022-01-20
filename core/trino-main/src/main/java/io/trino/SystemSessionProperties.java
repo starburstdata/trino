@@ -173,6 +173,8 @@ public final class SystemSessionProperties
     public static final String JOIN_PARTITIONED_BUILD_MIN_ROW_COUNT = "join_partitioned_build_min_row_count";
     public static final String USE_EXACT_PARTITIONING = "use_exact_partitioning";
     public static final String FORCE_SPILLING_JOIN = "force_spilling_join";
+    public static final String TASK_MAX_PARTIAL_AGGREGATION_MEMORY = "task_max_partial_aggregation_memory";
+    public static final String USE_ENHANCED_GROUP_BY = "use_enhanced_group_by";
 
     private final List<PropertyMetadata<?>> sessionProperties;
 
@@ -853,6 +855,18 @@ public final class SystemSessionProperties
                         FORCE_SPILLING_JOIN,
                         "Force the usage of spliing join operator in favor of the non-spilling one, even if spill is not enabled",
                         featuresConfig.isForceSpillingJoin(),
+                        featuresConfig.isHideInaccesibleColumns(),
+                        value -> validateHideInaccesibleColumns(value, featuresConfig.isHideInaccesibleColumns()),
+                        false),
+                dataSizeProperty(
+                        TASK_MAX_PARTIAL_AGGREGATION_MEMORY,
+                        "Maximum size of partial aggregation results for distributed aggregations.",
+                        taskManagerConfig.getMaxPartialAggregationMemoryUsage(),
+                        false),
+                booleanProperty(
+                        USE_ENHANCED_GROUP_BY,
+                        "Enable optimization for aggregations",
+                        featuresConfig.isUseEnhancedGroupBy(),
                         false));
     }
 
@@ -1525,5 +1539,15 @@ public final class SystemSessionProperties
     public static boolean isForceSpillingOperator(Session session)
     {
         return session.getSystemProperty(FORCE_SPILLING_JOIN, Boolean.class);
+    }
+
+    public static DataSize getMaxPartialAggregationMemoryUsage(Session session)
+    {
+        return session.getSystemProperty(TASK_MAX_PARTIAL_AGGREGATION_MEMORY, DataSize.class);
+    }
+
+    public static boolean isUseEnhancedGroupByEnabled(Session session)
+    {
+        return session.getSystemProperty(USE_ENHANCED_GROUP_BY, Boolean.class);
     }
 }

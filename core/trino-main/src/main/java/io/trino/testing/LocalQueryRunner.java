@@ -116,6 +116,7 @@ import io.trino.operator.PagesIndex;
 import io.trino.operator.PagesIndexPageSorter;
 import io.trino.operator.TaskContext;
 import io.trino.operator.TrinoOperatorFactories;
+import io.trino.operator.hash.IsolatedHashTableFactory;
 import io.trino.operator.index.IndexJoinLookupStats;
 import io.trino.operator.scalar.json.JsonExistsFunction;
 import io.trino.operator.scalar.json.JsonQueryFunction;
@@ -382,7 +383,7 @@ public class LocalQueryRunner
         typeRegistry.addType(new JsonPath2016Type(new TypeDeserializer(typeManager), blockEncodingSerde));
         this.plannerContext = new PlannerContext(metadata, typeOperators, blockEncodingSerde, typeManager, functionManager);
         this.joinCompiler = new JoinCompiler(typeOperators);
-        this.groupByHashFactory = new GroupByHashFactory(joinCompiler, blockTypeOperators);
+        this.groupByHashFactory = new GroupByHashFactory(joinCompiler, blockTypeOperators, new IsolatedHashTableFactory());
         PageIndexerFactory pageIndexerFactory = new GroupByHashPageIndexerFactory(groupByHashFactory);
         this.groupProvider = new TestingGroupProvider();
         this.accessControl = new TestingAccessControlManager(transactionManager, eventListenerManager);

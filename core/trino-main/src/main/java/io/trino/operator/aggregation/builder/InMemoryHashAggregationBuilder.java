@@ -27,12 +27,10 @@ import io.trino.operator.TransformWork;
 import io.trino.operator.UpdateMemory;
 import io.trino.operator.Work;
 import io.trino.operator.WorkProcessor;
-import io.trino.operator.WorkProcessor.ProcessState;
 import io.trino.operator.aggregation.AggregatorFactory;
 import io.trino.operator.aggregation.GroupedAggregator;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
-import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.type.Type;
 import io.trino.sql.planner.plan.AggregationNode.Step;
 import it.unimi.dsi.fastutil.ints.AbstractIntIterator;
@@ -262,29 +260,7 @@ public class InMemoryHashAggregationBuilder
     private WorkProcessor<Page> buildResult(IntIterator groupIds)
     {
         PageBuilder pageBuilder = new PageBuilder(buildTypes());
-        return WorkProcessor.create(() -> {
-            if (!groupIds.hasNext()) {
-                return ProcessState.finished();
-            }
-
-            pageBuilder.reset();
-
-            List<Type> types = groupByHash.getTypes();
-            while (!pageBuilder.isFull() && groupIds.hasNext()) {
-                int groupId = groupIds.nextInt();
-
-                groupByHash.appendValuesTo(groupId, pageBuilder);
-
-                pageBuilder.declarePosition();
-                for (int i = 0; i < groupedAggregators.size(); i++) {
-                    GroupedAggregator groupedAggregator = groupedAggregators.get(i);
-                    BlockBuilder output = pageBuilder.getBlockBuilder(types.size() + i);
-                    groupedAggregator.evaluate(groupId, output);
-                }
-            }
-
-            return ProcessState.ofResult(pageBuilder.build());
-        });
+        return groupByHash.buildResult(groupIds, pageBuilder, groupedAggregators);
     }
 
     public List<Type> buildTypes()
