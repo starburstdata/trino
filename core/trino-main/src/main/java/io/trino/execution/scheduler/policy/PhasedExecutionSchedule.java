@@ -55,6 +55,7 @@ import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static io.trino.execution.scheduler.StageExecution.State.FINISHING;
 import static io.trino.execution.scheduler.StageExecution.State.FLUSHING;
 import static io.trino.execution.scheduler.StageExecution.State.PLANNED;
 import static io.trino.execution.scheduler.StageExecution.State.SCHEDULING;
@@ -270,7 +271,7 @@ public class PhasedExecutionSchedule
     private boolean isStageCompleted(StageExecution stage)
     {
         State state = stage.getState();
-        return state == FLUSHING || state.isDone();
+        return state == FINISHING || state == FLUSHING || state.isDone();
     }
 
     private boolean isStageScheduling(StageExecution stage)

@@ -46,6 +46,7 @@ import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.util.concurrent.MoreExecutors.newDirectExecutorService;
 import static io.trino.execution.scheduler.StageExecution.State.ABORTED;
 import static io.trino.execution.scheduler.StageExecution.State.FINISHED;
+import static io.trino.execution.scheduler.StageExecution.State.FINISHING;
 import static io.trino.execution.scheduler.StageExecution.State.FLUSHING;
 import static io.trino.execution.scheduler.StageExecution.State.SCHEDULED;
 import static io.trino.execution.scheduler.policy.PlanUtils.createAggregationFragment;
@@ -93,7 +94,7 @@ public class TestPhasedExecutionSchedule
         assertThat(rescheduleFuture).isNotDone();
 
         // probe stage should start after build stage is completed
-        buildStage.setState(FLUSHING);
+        buildStage.setState(FINISHING);
         assertThat(rescheduleFuture).isDone();
         schedule.schedule();
         assertThat(getActiveFragments(schedule)).containsExactly(joinFragment.getId(), probeFragment.getId());
