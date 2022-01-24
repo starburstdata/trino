@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableList;
 import io.airlift.units.DataSize;
 import io.trino.memory.context.AggregatedMemoryContext;
 import io.trino.memory.context.LocalMemoryContext;
+import io.trino.operator.GroupByHashFactory;
 import io.trino.operator.OperatorContext;
 import io.trino.operator.WorkProcessor;
 import io.trino.operator.WorkProcessor.Transformation;
@@ -24,9 +25,7 @@ import io.trino.operator.WorkProcessor.TransformationState;
 import io.trino.operator.aggregation.AggregatorFactory;
 import io.trino.spi.Page;
 import io.trino.spi.type.Type;
-import io.trino.sql.gen.JoinCompiler;
 import io.trino.sql.planner.plan.AggregationNode;
-import io.trino.type.BlockTypeOperators;
 
 import java.io.Closeable;
 import java.util.List;
@@ -49,8 +48,7 @@ public class MergingHashAggregationBuilder
     private final LocalMemoryContext memoryContext;
     private final long memoryLimitForMerge;
     private final int overwriteIntermediateChannelOffset;
-    private final JoinCompiler joinCompiler;
-    private final BlockTypeOperators blockTypeOperators;
+    private final GroupByHashFactory groupByHashFactory;
 
     public MergingHashAggregationBuilder(
             List<AggregatorFactory> aggregatorFactories,
@@ -63,8 +61,7 @@ public class MergingHashAggregationBuilder
             AggregatedMemoryContext aggregatedMemoryContext,
             long memoryLimitForMerge,
             int overwriteIntermediateChannelOffset,
-            JoinCompiler joinCompiler,
-            BlockTypeOperators blockTypeOperators)
+            GroupByHashFactory groupByHashFactory)
     {
         ImmutableList.Builder<Integer> groupByPartialChannels = ImmutableList.builder();
         for (int i = 0; i < groupByTypes.size(); i++) {
@@ -82,8 +79,7 @@ public class MergingHashAggregationBuilder
         this.memoryContext = aggregatedMemoryContext.newLocalMemoryContext(MergingHashAggregationBuilder.class.getSimpleName());
         this.memoryLimitForMerge = memoryLimitForMerge;
         this.overwriteIntermediateChannelOffset = overwriteIntermediateChannelOffset;
-        this.joinCompiler = joinCompiler;
-        this.blockTypeOperators = blockTypeOperators;
+        this.groupByHashFactory = groupByHashFactory;
 
         rebuildHashAggregationBuilder();
     }
@@ -153,8 +149,7 @@ public class MergingHashAggregationBuilder
                 operatorContext,
                 Optional.of(DataSize.succinctBytes(0)),
                 Optional.of(overwriteIntermediateChannelOffset),
-                joinCompiler,
-                blockTypeOperators,
+                groupByHashFactory,
                 // TODO: merging should also yield on memory reservations
                 () -> true);
     }

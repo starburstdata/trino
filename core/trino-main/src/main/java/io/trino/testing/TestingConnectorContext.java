@@ -15,6 +15,7 @@ package io.trino.testing;
 
 import io.trino.connector.ConnectorAwareNodeManager;
 import io.trino.metadata.InMemoryNodeManager;
+import io.trino.operator.GroupByHashFactory;
 import io.trino.operator.GroupByHashPageIndexerFactory;
 import io.trino.operator.PagesIndex;
 import io.trino.operator.PagesIndexPageSorter;
@@ -45,7 +46,7 @@ public final class TestingConnectorContext
     public TestingConnectorContext()
     {
         TypeOperators typeOperators = new TypeOperators();
-        pageIndexerFactory = new GroupByHashPageIndexerFactory(new JoinCompiler(typeOperators), new BlockTypeOperators(typeOperators));
+        pageIndexerFactory = new GroupByHashPageIndexerFactory(new GroupByHashFactory(new JoinCompiler(typeOperators), new BlockTypeOperators(typeOperators)));
         nodeManager = new ConnectorAwareNodeManager(new InMemoryNodeManager(), "testenv", TEST_CATALOG_HANDLE, true);
     }
 

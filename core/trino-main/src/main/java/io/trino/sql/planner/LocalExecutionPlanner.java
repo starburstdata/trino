@@ -61,6 +61,7 @@ import io.trino.operator.EnforceSingleRowOperator;
 import io.trino.operator.ExchangeOperator.ExchangeOperatorFactory;
 import io.trino.operator.ExplainAnalyzeOperator.ExplainAnalyzeOperatorFactory;
 import io.trino.operator.FilterAndProjectOperator;
+import io.trino.operator.GroupByHashFactory;
 import io.trino.operator.GroupIdOperator;
 import io.trino.operator.HashAggregationOperator.HashAggregationOperatorFactory;
 import io.trino.operator.HashSemiJoinOperator;
@@ -400,6 +401,7 @@ public class LocalExecutionPlanner
     private final PartitioningSpillerFactory partitioningSpillerFactory;
     private final PagesIndex.Factory pagesIndexFactory;
     private final JoinCompiler joinCompiler;
+    private final GroupByHashFactory groupByHashFactory;
     private final OperatorFactories operatorFactories;
     private final OrderingCompiler orderingCompiler;
     private final DynamicFilterConfig dynamicFilterConfig;
@@ -435,6 +437,7 @@ public class LocalExecutionPlanner
             PartitioningSpillerFactory partitioningSpillerFactory,
             PagesIndex.Factory pagesIndexFactory,
             JoinCompiler joinCompiler,
+            GroupByHashFactory groupByHashFactory,
             OperatorFactories operatorFactories,
             OrderingCompiler orderingCompiler,
             DynamicFilterConfig dynamicFilterConfig,
@@ -464,6 +467,7 @@ public class LocalExecutionPlanner
         this.maxLocalExchangeBufferSize = taskManagerConfig.getMaxLocalExchangeBufferSize();
         this.pagesIndexFactory = requireNonNull(pagesIndexFactory, "pagesIndexFactory is null");
         this.joinCompiler = requireNonNull(joinCompiler, "joinCompiler is null");
+        this.groupByHashFactory = requireNonNull(groupByHashFactory, "groupByHashFactory is null");
         this.operatorFactories = requireNonNull(operatorFactories, "operatorFactories is null");
         this.orderingCompiler = requireNonNull(orderingCompiler, "orderingCompiler is null");
         this.dynamicFilterConfig = requireNonNull(dynamicFilterConfig, "dynamicFilterConfig is null");
@@ -970,8 +974,7 @@ public class LocalExecutionPlanner
                     node.getMaxRowCountPerPartition(),
                     hashChannel,
                     10_000,
-                    joinCompiler,
-                    blockTypeOperators);
+                    groupByHashFactory);
             return new PhysicalOperation(operatorFactory, outputMappings.buildOrThrow(), context, source);
         }
 
@@ -1026,7 +1029,7 @@ public class LocalExecutionPlanner
                     hashChannel,
                     1000,
                     maxPartialTopNMemorySize,
-                    joinCompiler,
+                    groupByHashFactory,
                     plannerContext.getTypeOperators(),
                     blockTypeOperators);
 
@@ -1717,8 +1720,7 @@ public class LocalExecutionPlanner
                     distinctChannels,
                     node.getLimit(),
                     hashChannel,
-                    joinCompiler,
-                    blockTypeOperators);
+                    groupByHashFactory);
             return new PhysicalOperation(operatorFactory, makeLayout(node), context, source);
         }
 
@@ -1794,7 +1796,7 @@ public class LocalExecutionPlanner
 
             List<Integer> channels = getChannelsForSymbols(node.getDistinctSymbols(), source.getLayout());
             Optional<Integer> hashChannel = node.getHashSymbol().map(channelGetter(source));
-            MarkDistinctOperatorFactory operator = new MarkDistinctOperatorFactory(context.getNextOperatorId(), node.getId(), source.getTypes(), channels, hashChannel, joinCompiler, blockTypeOperators);
+            MarkDistinctOperatorFactory operator = new MarkDistinctOperatorFactory(context.getNextOperatorId(), node.getId(), source.getTypes(), channels, hashChannel, groupByHashFactory);
             return new PhysicalOperation(operator, makeLayout(node), context, source);
         }
 
@@ -2284,7 +2286,7 @@ public class LocalExecutionPlanner
                     indexJoinLookupStats,
                     SystemSessionProperties.isShareIndexLoading(session),
                     pagesIndexFactory,
-                    joinCompiler,
+                    groupByHashFactory,
                     blockTypeOperators);
 
             indexLookupSourceFactory.setTaskContext(context.taskContext);
@@ -3133,8 +3135,7 @@ public class LocalExecutionPlanner
                     buildChannel,
                     buildHashChannel,
                     10_000,
-                    joinCompiler,
-                    blockTypeOperators);
+                    groupByHashFactory);
             SetSupplier setProvider = setBuilderOperatorFactory.getSetProvider();
             context.addDriverFactory(
                     buildContext.isInputDriver(),
@@ -3682,8 +3683,7 @@ public class LocalExecutionPlanner
                         argumentChannels.stream()
                                 .map(channel -> source.getTypes().get(channel))
                                 .collect(toImmutableList()),
-                        joinCompiler,
-                        blockTypeOperators,
+                        groupByHashFactory,
                         session);
             }
 
@@ -3953,7 +3953,7 @@ public class LocalExecutionPlanner
                         spillEnabled,
                         unspillMemoryLimit,
                         spillerFactory,
-                        joinCompiler,
+                        groupByHashFactory,
                         blockTypeOperators,
                         createPartialAggregationController(step, session));
             }

@@ -21,11 +21,8 @@ import io.trino.RowPagesBuilder;
 import io.trino.operator.SetBuilderOperator.SetBuilderOperatorFactory;
 import io.trino.spi.Page;
 import io.trino.spi.type.Type;
-import io.trino.spi.type.TypeOperators;
-import io.trino.sql.gen.JoinCompiler;
 import io.trino.sql.planner.plan.PlanNodeId;
 import io.trino.testing.MaterializedResult;
-import io.trino.type.BlockTypeOperators;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.DataProvider;
@@ -41,6 +38,7 @@ import static io.airlift.concurrent.Threads.daemonThreadsNamed;
 import static io.airlift.testing.Assertions.assertGreaterThanOrEqual;
 import static io.trino.RowPagesBuilder.rowPagesBuilder;
 import static io.trino.SessionTestUtils.TEST_SESSION;
+import static io.trino.operator.GroupByHashFactoryTestUtils.createGroupByHashFactory;
 import static io.trino.operator.GroupByHashYieldAssertion.createPagesWithDistinctHashKeys;
 import static io.trino.operator.GroupByHashYieldAssertion.finishOperatorWithYieldingGroupByHash;
 import static io.trino.spi.type.BigintType.BIGINT;
@@ -58,8 +56,6 @@ public class TestHashSemiJoinOperator
     private ExecutorService executor;
     private ScheduledExecutorService scheduledExecutor;
     private TaskContext taskContext;
-    private TypeOperators typeOperators;
-    private BlockTypeOperators blockTypeOperators;
 
     @BeforeMethod
     public void setUp()
@@ -67,8 +63,6 @@ public class TestHashSemiJoinOperator
         executor = newCachedThreadPool(daemonThreadsNamed(getClass().getSimpleName() + "-%s"));
         scheduledExecutor = newScheduledThreadPool(2, daemonThreadsNamed(getClass().getSimpleName() + "-scheduledExecutor-%s"));
         taskContext = createTaskContext(executor, scheduledExecutor, TEST_SESSION);
-        typeOperators = new TypeOperators();
-        blockTypeOperators = new BlockTypeOperators(typeOperators);
     }
 
     @AfterMethod(alwaysRun = true)
@@ -114,8 +108,7 @@ public class TestHashSemiJoinOperator
                 0,
                 rowPagesBuilder.getHashChannel(),
                 10,
-                new JoinCompiler(typeOperators),
-                blockTypeOperators);
+                createGroupByHashFactory());
         Operator setBuilderOperator = setBuilderOperatorFactory.createOperator(driverContext);
 
         Driver driver = Driver.createDriver(driverContext, buildOperator, setBuilderOperator);
@@ -179,8 +172,7 @@ public class TestHashSemiJoinOperator
                 0,
                 rowPagesBuilder.getHashChannel(),
                 10,
-                new JoinCompiler(typeOperators),
-                blockTypeOperators);
+                createGroupByHashFactory());
         Operator setBuilderOperator = setBuilderOperatorFactory.createOperator(driverContext);
 
         Driver driver = Driver.createDriver(driverContext, buildOperator, setBuilderOperator);
@@ -234,8 +226,7 @@ public class TestHashSemiJoinOperator
                 0,
                 Optional.of(1),
                 10,
-                new JoinCompiler(typeOperators),
-                blockTypeOperators);
+                createGroupByHashFactory());
 
         // run test
         GroupByHashYieldAssertion.GroupByHashYieldResult result = finishOperatorWithYieldingGroupByHash(
@@ -274,8 +265,7 @@ public class TestHashSemiJoinOperator
                 0,
                 rowPagesBuilder.getHashChannel(),
                 10,
-                new JoinCompiler(typeOperators),
-                blockTypeOperators);
+                createGroupByHashFactory());
         Operator setBuilderOperator = setBuilderOperatorFactory.createOperator(driverContext);
 
         Driver driver = Driver.createDriver(driverContext, buildOperator, setBuilderOperator);
@@ -330,8 +320,7 @@ public class TestHashSemiJoinOperator
                 0,
                 rowPagesBuilder.getHashChannel(),
                 10,
-                new JoinCompiler(typeOperators),
-                blockTypeOperators);
+                createGroupByHashFactory());
         Operator setBuilderOperator = setBuilderOperatorFactory.createOperator(driverContext);
 
         Driver driver = Driver.createDriver(driverContext, buildOperator, setBuilderOperator);
@@ -390,8 +379,7 @@ public class TestHashSemiJoinOperator
                 0,
                 rowPagesBuilder.getHashChannel(),
                 10,
-                new JoinCompiler(typeOperators),
-                blockTypeOperators);
+                createGroupByHashFactory());
         Operator setBuilderOperator = setBuilderOperatorFactory.createOperator(driverContext);
 
         Driver driver = Driver.createDriver(driverContext, buildOperator, setBuilderOperator);
@@ -448,8 +436,7 @@ public class TestHashSemiJoinOperator
                 0,
                 rowPagesBuilder.getHashChannel(),
                 10,
-                new JoinCompiler(typeOperators),
-                blockTypeOperators);
+                createGroupByHashFactory());
         Operator setBuilderOperator = setBuilderOperatorFactory.createOperator(driverContext);
 
         Driver driver = Driver.createDriver(driverContext, buildOperator, setBuilderOperator);
