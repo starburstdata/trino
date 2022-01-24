@@ -510,6 +510,9 @@ public class TaskExecutor
                                 }, executor);
                             }
                         }
+
+                        // start a new task if split concurrency increased
+                        scheduleTaskIfNecessary(split.getTaskHandle());
                     }
                     catch (Throwable t) {
                         // ignore random errors due to driver thread interruption
