@@ -40,6 +40,8 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Verify.verify;
 import static io.airlift.slice.SizeOf.sizeOf;
+import static io.trino.operator.SyntheticAddress.decodePosition;
+import static io.trino.operator.SyntheticAddress.decodeSliceIndex;
 import static io.trino.operator.SyntheticAddress.encodeSyntheticAddress;
 import static io.trino.spi.StandardErrorCode.GENERIC_INSUFFICIENT_RESOURCES;
 import static io.trino.spi.type.BigintType.BIGINT;
@@ -244,20 +246,20 @@ public class MultiChannelGroupByHash
     }
 
     @Override
-    public boolean contains(int position, Page page, int[] hashChannels)
+    public boolean contains(int position, Page page)
     {
         long rawHash = hashStrategy.hashRow(position, page);
-        return contains(position, page, hashChannels, rawHash);
+        return contains(position, page, rawHash);
     }
 
     @Override
-    public boolean contains(int position, Page page, int[] hashChannels, long rawHash)
+    public boolean contains(int position, Page page, long rawHash)
     {
         int hashPosition = getHashPosition(rawHash, mask);
 
         // look for a slot containing this key
         while (groupIdsByHash[hashPosition] != -1) {
-            if (positionNotDistinctFromCurrentRow(groupIdsByHash[hashPosition], hashPosition, position, page, (byte) rawHash, hashChannels)) {
+            if (positionNotDistinctFromCurrentRow(groupIdsByHash[hashPosition], hashPosition, position, page, (byte) rawHash)) {
                 // found an existing slot for this key
                 return true;
             }
@@ -438,6 +440,14 @@ public class MultiChannelGroupByHash
         int blockIndex = groupId >> VALUES_PAGE_BITS;
         int blockPosition = groupId & VALUES_PAGE_MASK;
         return hashStrategy.positionNotDistinctFromRow(blockIndex, blockPosition, position, page, hashChannels);
+    }
+
+    private boolean positionNotDistinctFromCurrentRow(long address, int hashPosition, int position, Page page, byte rawHash)
+    {
+        if (rawHashByHashPosition[hashPosition] != rawHash) {
+            return false;
+        }
+        return hashStrategy.positionNotDistinctFromRow(decodeSliceIndex(address), decodePosition(address), position, page);
     }
 
     private static int getHashPosition(long rawHash, int mask)

@@ -62,7 +62,6 @@ import static org.testng.Assert.assertTrue;
 public class TestGroupByHash
 {
     private static final int MAX_GROUP_ID = 500;
-    private static final int[] CONTAINS_CHANNELS = new int[] {0};
     private static final Session TEST_SESSION = TestingSession.testSessionBuilder().build();
     private static final TypeOperators TYPE_OPERATORS = new TypeOperators();
     private static final BlockTypeOperators TYPE_OPERATOR_FACTORY = new BlockTypeOperators(TYPE_OPERATORS);
@@ -213,7 +212,7 @@ public class TestGroupByHash
         block = createLongsBlock(0);
         hashBlock = getHashBlock(ImmutableList.of(BIGINT), block);
         page = new Page(block, hashBlock);
-        assertFalse(groupByHash.contains(0, page, CONTAINS_CHANNELS));
+        assertFalse(groupByHash.contains(0, page));
     }
 
     @Test(dataProvider = "groupByHashType")
@@ -310,11 +309,11 @@ public class TestGroupByHash
 
         Block testBlock = BlockAssertions.createLongsBlock(3);
         Block testHashBlock = TypeTestUtils.getHashBlock(ImmutableList.of(BIGINT), testBlock);
-        assertTrue(groupByHash.contains(0, new Page(testBlock, testHashBlock), CONTAINS_CHANNELS));
+        assertTrue(groupByHash.contains(0, new Page(testBlock, testHashBlock)));
 
         testBlock = BlockAssertions.createLongsBlock(11);
         testHashBlock = TypeTestUtils.getHashBlock(ImmutableList.of(BIGINT), testBlock);
-        assertFalse(groupByHash.contains(0, new Page(testBlock, testHashBlock), CONTAINS_CHANNELS));
+        assertFalse(groupByHash.contains(0, new Page(testBlock, testHashBlock)));
     }
 
     @Test
@@ -330,7 +329,7 @@ public class TestGroupByHash
         Block testValuesBlock = BlockAssertions.createDoublesBlock((double) 3);
         Block testStringValuesBlock = BlockAssertions.createStringsBlock("3");
         Block testHashBlock = TypeTestUtils.getHashBlock(ImmutableList.of(DOUBLE, VARCHAR), testValuesBlock, testStringValuesBlock);
-        assertTrue(groupByHash.contains(0, new Page(testValuesBlock, testStringValuesBlock, testHashBlock), hashChannels));
+        assertTrue(groupByHash.contains(0, new Page(testValuesBlock, testStringValuesBlock, testHashBlock)));
     }
 
     @Test(dataProvider = "groupByHashType")
@@ -346,7 +345,7 @@ public class TestGroupByHash
 
         // Ensure that all groups are present in group by hash
         for (int i = 0; i < valuesBlock.getPositionCount(); i++) {
-            assertTrue(groupByHash.contains(i, new Page(valuesBlock, hashBlock), CONTAINS_CHANNELS));
+            assertTrue(groupByHash.contains(i, new Page(valuesBlock, hashBlock)));
         }
     }
 
