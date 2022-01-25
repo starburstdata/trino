@@ -48,7 +48,7 @@ public class SplitConcurrencyController
         threadNanosSinceLastAdjustment += nanos;
         if (threadNanosSinceLastAdjustment >= adjustmentIntervalNanos && utilization < TARGET_UTILIZATION && currentConcurrency >= targetConcurrency) {
             threadNanosSinceLastAdjustment = 0;
-            targetConcurrency++;
+            //targetConcurrency++;
         }
     }
 
@@ -68,11 +68,11 @@ public class SplitConcurrencyController
         if (threadNanosSinceLastAdjustment >= adjustmentIntervalNanos || threadNanosSinceLastAdjustment >= splitThreadNanos) {
             if (utilization > TARGET_UTILIZATION && targetConcurrency > 1) {
                 threadNanosSinceLastAdjustment = 0;
-                targetConcurrency--;
+                //targetConcurrency--;
             }
             else if (utilization < TARGET_UTILIZATION && currentConcurrency >= targetConcurrency) {
                 threadNanosSinceLastAdjustment = 0;
-                targetConcurrency++;
+                //targetConcurrency++;
             }
         }
     }
