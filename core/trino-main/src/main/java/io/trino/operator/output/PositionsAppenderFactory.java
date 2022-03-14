@@ -21,6 +21,7 @@ import io.trino.spi.block.DictionaryBlock;
 import io.trino.spi.block.Int128ArrayBlock;
 import io.trino.spi.block.Int96ArrayBlock;
 import io.trino.spi.type.FixedWidthType;
+import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VariableWidthType;
 import io.trino.type.BlockTypeOperators;
@@ -79,6 +80,9 @@ public class PositionsAppenderFactory
         }
         else if (type instanceof VariableWidthType) {
             return new SlicePositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
+        else if (type instanceof RowType) {
+            return RowPositionsAppender.createRowAppender(this, (RowType) type, blockBuilderStatus, expectedPositions);
         }
 
         return new TypeBlockBuilderPositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);

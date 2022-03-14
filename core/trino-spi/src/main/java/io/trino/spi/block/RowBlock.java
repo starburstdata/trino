@@ -69,7 +69,7 @@ public class RowBlock
     /**
      * Create a row block directly without per element validations.
      */
-    static RowBlock createRowBlockInternal(int startOffset, int positionCount, @Nullable boolean[] rowIsNull, @Nullable int[] fieldBlockOffsets, Block[] fieldBlocks)
+    public static RowBlock createRowBlockInternal(int startOffset, int positionCount, @Nullable boolean[] rowIsNull, @Nullable int[] fieldBlockOffsets, Block[] fieldBlocks)
     {
         validateConstructorArguments(startOffset, positionCount, rowIsNull, fieldBlockOffsets, fieldBlocks);
         return new RowBlock(startOffset, positionCount, rowIsNull, fieldBlockOffsets, fieldBlocks);
@@ -129,20 +129,20 @@ public class RowBlock
     }
 
     @Override
-    protected Block[] getRawFieldBlocks()
+    public Block[] getRawFieldBlocks()
     {
         return fieldBlocks;
     }
 
     @Override
     @Nullable
-    protected int[] getFieldBlockOffsets()
+    public int[] getFieldBlockOffsets()
     {
         return fieldBlockOffsets;
     }
 
     @Override
-    protected int getOffsetBase()
+    public int getOffsetBase()
     {
         return startOffset;
     }

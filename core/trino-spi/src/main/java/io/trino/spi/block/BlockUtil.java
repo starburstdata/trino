@@ -63,7 +63,7 @@ public final class BlockUtil
         }
     }
 
-    static int calculateNewArraySize(int currentSize)
+    public static int calculateNewArraySize(int currentSize)
     {
         // grow array by 50%
         long newSize = (long) currentSize + (currentSize >> 1);
