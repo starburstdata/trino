@@ -11,37 +11,42 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package io.trino.operator.output;
 
 import io.trino.spi.block.Block;
-import io.trino.spi.block.BlockBuilder;
-import io.trino.spi.type.Type;
+import io.trino.spi.block.BlockBuilderStatus;
+import io.trino.spi.block.DictionaryBlock;
+import io.trino.spi.block.RunLengthEncodedBlock;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
-
-import static java.util.Objects.requireNonNull;
 
 public interface PositionsAppender
 {
-    void appendTo(IntArrayList positions, Block source, BlockBuilder target);
+    void appendTo(IntArrayList positions, Block source);
 
-    class TypedPositionsAppender
-            implements PositionsAppender
+    default void appendRle(RunLengthEncodedBlock rleBlock)
     {
-        private final Type type;
-
-        public TypedPositionsAppender(Type type)
-        {
-            this.type = requireNonNull(type, "type is null");
-        }
-
-        @Override
-        public void appendTo(IntArrayList positions, Block source, BlockBuilder target)
-        {
-            int[] positionArray = positions.elements();
-            for (int i = 0; i < positions.size(); i++) {
-                type.appendTo(source, positionArray[i], target);
-            }
-        }
+        appendRle(rleBlock.getPositionCount(), rleBlock.getValue(), 0);
     }
+
+    void appendRle(int positionCount, Block source, int sourcePosition);
+
+    void appendDictionary(IntArrayList positions, DictionaryBlock source);
+
+    Block build();
+
+    /**
+     * Returns {@code true} if the first value (at position 0) equals value in block {@code other} at position {@code otherPosition}.
+     */
+    boolean firstValueEquals(Block other, int otherPosition);
+
+    /**
+     * Creates new empty {@link PositionsAppender} of the same type as {@code this}.
+     */
+    PositionsAppender newState(BlockBuilderStatus blockBuilderStatus, int expectedPositions);
+
+    void prepareProcessingByRow();
+
+    void appendRow(Block source, int position);
+
+    long getRetainedSizeInBytes();
 }

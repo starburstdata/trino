@@ -13,121 +13,83 @@
  */
 package io.trino.operator.output;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import io.airlift.bytecode.DynamicClassLoader;
-import io.trino.collect.cache.NonEvictableLoadingCache;
-import io.trino.operator.output.PositionsAppender.TypedPositionsAppender;
+import io.trino.operator.output.BlockBuilderPositionsAppender.TypeBlockBuilderPositionsAppender;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
+import io.trino.spi.block.BlockBuilderStatus;
+import io.trino.spi.block.DictionaryBlock;
 import io.trino.spi.block.Int128ArrayBlock;
 import io.trino.spi.block.Int96ArrayBlock;
 import io.trino.spi.type.FixedWidthType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VariableWidthType;
-import io.trino.sql.gen.IsolatedClass;
+import io.trino.type.BlockTypeOperators;
+import io.trino.type.BlockTypeOperators.BlockPositionEqual;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 
-import java.util.Objects;
-import java.util.Optional;
-
 import static io.airlift.slice.SizeOf.SIZE_OF_LONG;
-import static io.trino.collect.cache.SafeCaches.buildNonEvictableCache;
 import static java.util.Objects.requireNonNull;
 
-/**
- * Isolates the {@code PositionsAppender} class per type and block tuples.
- * Type specific {@code PositionsAppender} implementations manually inline {@code Type#appendTo} method inside the loop
- * to avoid virtual(mega-morphic) calls and force jit to inline the {@code Block} and {@code BlockBuilder} methods.
- * Ideally, {@code TypedPositionsAppender} could work instead of type specific {@code PositionsAppender}s,
- * but in practice jit falls back to virtual calls in some cases (e.g. {@link Block#isNull}).
- */
 public class PositionsAppenderFactory
 {
-    private final NonEvictableLoadingCache<CacheKey, PositionsAppender> cache;
+    private final BlockTypeOperators blockTypeOperators;
 
-    public PositionsAppenderFactory()
+    public PositionsAppenderFactory(BlockTypeOperators blockTypeOperators)
     {
-        this.cache = buildNonEvictableCache(
-                CacheBuilder.newBuilder().maximumSize(1000),
-                CacheLoader.from(key -> createAppender(key.type)));
+        this.blockTypeOperators = requireNonNull(blockTypeOperators, "blockTypeOperators is null");
     }
 
-    public PositionsAppender create(Type type, Class<? extends Block> blockClass)
+    public PositionsAppender create(Type type, BlockBuilderStatus blockBuilderStatus, int expectedPositions)
     {
-        return cache.getUnchecked(new CacheKey(type, blockClass));
+        return new BlockTypeDispatchingPositionsAppender(createDedicatedAppenderFor(type, getEqualOperator(type), blockBuilderStatus, expectedPositions));
     }
 
-    private PositionsAppender createAppender(Type type)
+    private BlockPositionEqual getEqualOperator(Type type)
     {
-        return Optional.ofNullable(findDedicatedAppenderClassFor(type))
-                .map(this::isolateAppender)
-                .orElseGet(() -> isolateTypeAppender(type));
+        if (type.isComparable()) {
+            return blockTypeOperators.getEqualOperator(type);
+        }
+        else {
+            // if type is not comparable, we are not going to be able to support different RLE values
+            return (left, leftPosition, right, rightPosition) -> false;
+        }
     }
 
-    private Class<? extends PositionsAppender> findDedicatedAppenderClassFor(Type type)
+    private PositionsAppender createDedicatedAppenderFor(Type type, BlockPositionEqual equalOperator, BlockBuilderStatus blockBuilderStatus, int expectedPositions)
     {
         if (type instanceof FixedWidthType) {
             switch (((FixedWidthType) type).getFixedSize()) {
                 case Byte.BYTES:
-                    return BytePositionsAppender.class;
+                    return new BytePositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
                 case Short.BYTES:
-                    return SmallintPositionsAppender.class;
+                    return new SmallintPositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
                 case Integer.BYTES:
-                    return IntPositionsAppender.class;
+                    return new IntPositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
                 case Long.BYTES:
-                    return LongPositionsAppender.class;
+                    return new LongPositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
                 case Int96ArrayBlock.INT96_BYTES:
-                    return Int96PositionsAppender.class;
+                    return new Int96PositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
                 case Int128ArrayBlock.INT128_BYTES:
-                    return Int128PositionsAppender.class;
+                    return new Int128PositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
                 default:
                     // size not supported directly, fallback to the generic appender
             }
         }
         else if (type instanceof VariableWidthType) {
-            return SlicePositionsAppender.class;
+            return new SlicePositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
         }
 
-        return null;
-    }
-
-    private PositionsAppender isolateTypeAppender(Type type)
-    {
-        Class<? extends PositionsAppender> isolatedAppenderClass = isolateAppenderClass(TypedPositionsAppender.class);
-        try {
-            return isolatedAppenderClass.getConstructor(Type.class).newInstance(type);
-        }
-        catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private PositionsAppender isolateAppender(Class<? extends PositionsAppender> appenderClass)
-    {
-        Class<? extends PositionsAppender> isolatedAppenderClass = isolateAppenderClass(appenderClass);
-        try {
-            return isolatedAppenderClass.getConstructor().newInstance();
-        }
-        catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private Class<? extends PositionsAppender> isolateAppenderClass(Class<? extends PositionsAppender> appenderClass)
-    {
-        DynamicClassLoader dynamicClassLoader = new DynamicClassLoader(PositionsAppender.class.getClassLoader());
-
-        Class<? extends PositionsAppender> isolatedBatchPositionsTransferClass = IsolatedClass.isolateClass(
-                dynamicClassLoader,
-                PositionsAppender.class,
-                appenderClass);
-        return isolatedBatchPositionsTransferClass;
+        return new TypeBlockBuilderPositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
     }
 
     public static class LongPositionsAppender
-            implements PositionsAppender
+            extends BlockBuilderPositionsAppender
     {
+        public LongPositionsAppender(Type type, BlockPositionEqual equalOperator, BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+        {
+            super(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
+
         @Override
         public void appendTo(IntArrayList positions, Block block, BlockBuilder blockBuilder)
         {
@@ -149,11 +111,60 @@ public class PositionsAppenderFactory
                 }
             }
         }
+
+        @Override
+        protected void appendDictionary(IntArrayList positions, DictionaryBlock block, BlockBuilder blockBuilder)
+        {
+            int[] positionArray = positions.elements();
+            if (block.mayHaveNull()) {
+                for (int i = 0; i < positions.size(); i++) {
+                    int position = positionArray[i];
+                    if (block.isNull(position)) {
+                        blockBuilder.appendNull();
+                    }
+                    else {
+                        blockBuilder.writeLong(block.getLong(position, 0)).closeEntry();
+                    }
+                }
+            }
+            else {
+                for (int i = 0; i < positions.size(); i++) {
+                    blockBuilder.writeLong(block.getLong(positionArray[i], 0)).closeEntry();
+                }
+            }
+        }
+
+        @Override
+        protected void appendRle(int positionCount, Block block, int sourcePosition, BlockBuilder blockBuilder)
+        {
+            if (block.isNull(sourcePosition)) {
+                for (int i = 0; i < positionCount; i++) {
+                    blockBuilder.appendNull();
+                }
+            }
+            else {
+                long value = block.getLong(sourcePosition, 0);
+                for (int i = 0; i < positionCount; i++) {
+                    blockBuilder.writeLong(value).closeEntry();
+                }
+            }
+        }
+
+        @Override
+        public PositionsAppender newState(BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+        {
+            return new LongPositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
     }
 
     public static class IntPositionsAppender
-            implements PositionsAppender
+            extends BlockBuilderPositionsAppender
     {
+        public IntPositionsAppender(Type type, BlockPositionEqual equalOperator, BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+        {
+            super(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
+
         @Override
         public void appendTo(IntArrayList positions, Block block, BlockBuilder blockBuilder)
         {
@@ -175,11 +186,60 @@ public class PositionsAppenderFactory
                 }
             }
         }
+
+        @Override
+        protected void appendDictionary(IntArrayList positions, DictionaryBlock block, BlockBuilder blockBuilder)
+        {
+            int[] positionArray = positions.elements();
+            if (block.mayHaveNull()) {
+                for (int i = 0; i < positions.size(); i++) {
+                    int position = positionArray[i];
+                    if (block.isNull(position)) {
+                        blockBuilder.appendNull();
+                    }
+                    else {
+                        blockBuilder.writeInt(block.getInt(position, 0)).closeEntry();
+                    }
+                }
+            }
+            else {
+                for (int i = 0; i < positions.size(); i++) {
+                    blockBuilder.writeInt(block.getInt(positionArray[i], 0)).closeEntry();
+                }
+            }
+        }
+
+        @Override
+        protected void appendRle(int positionCount, Block block, int sourcePosition, BlockBuilder blockBuilder)
+        {
+            if (block.isNull(sourcePosition)) {
+                for (int i = 0; i < positionCount; i++) {
+                    blockBuilder.appendNull();
+                }
+            }
+            else {
+                int value = block.getInt(sourcePosition, 0);
+                for (int i = 0; i < positionCount; i++) {
+                    blockBuilder.writeInt(value).closeEntry();
+                }
+            }
+        }
+
+        @Override
+        public PositionsAppender newState(BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+        {
+            return new IntPositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
     }
 
     public static class BytePositionsAppender
-            implements PositionsAppender
+            extends BlockBuilderPositionsAppender
     {
+        public BytePositionsAppender(Type type, BlockPositionEqual equalOperator, BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+        {
+            super(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
+
         @Override
         public void appendTo(IntArrayList positions, Block block, BlockBuilder blockBuilder)
         {
@@ -201,11 +261,60 @@ public class PositionsAppenderFactory
                 }
             }
         }
+
+        @Override
+        protected void appendDictionary(IntArrayList positions, DictionaryBlock block, BlockBuilder blockBuilder)
+        {
+            int[] positionArray = positions.elements();
+            if (block.mayHaveNull()) {
+                for (int i = 0; i < positions.size(); i++) {
+                    int position = positionArray[i];
+                    if (block.isNull(position)) {
+                        blockBuilder.appendNull();
+                    }
+                    else {
+                        blockBuilder.writeByte(block.getByte(position, 0)).closeEntry();
+                    }
+                }
+            }
+            else {
+                for (int i = 0; i < positions.size(); i++) {
+                    blockBuilder.writeByte(block.getByte(positionArray[i], 0)).closeEntry();
+                }
+            }
+        }
+
+        @Override
+        protected void appendRle(int positionCount, Block block, int sourcePosition, BlockBuilder blockBuilder)
+        {
+            if (block.isNull(sourcePosition)) {
+                for (int i = 0; i < positionCount; i++) {
+                    blockBuilder.appendNull();
+                }
+            }
+            else {
+                byte value = block.getByte(sourcePosition, 0);
+                for (int i = 0; i < positionCount; i++) {
+                    blockBuilder.writeByte(value).closeEntry();
+                }
+            }
+        }
+
+        @Override
+        public PositionsAppender newState(BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+        {
+            return new BytePositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
     }
 
     public static class SlicePositionsAppender
-            implements PositionsAppender
+            extends BlockBuilderPositionsAppender
     {
+        public SlicePositionsAppender(Type type, BlockPositionEqual equalOperator, BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+        {
+            super(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
+
         @Override
         public void appendTo(IntArrayList positions, Block block, BlockBuilder blockBuilder)
         {
@@ -230,11 +339,64 @@ public class PositionsAppenderFactory
                 }
             }
         }
+
+        @Override
+        protected void appendDictionary(IntArrayList positions, DictionaryBlock block, BlockBuilder blockBuilder)
+        {
+            int[] positionArray = positions.elements();
+            if (block.mayHaveNull()) {
+                for (int i = 0; i < positions.size(); i++) {
+                    int position = positionArray[i];
+                    if (block.isNull(position)) {
+                        blockBuilder.appendNull();
+                    }
+                    else {
+                        block.writeBytesTo(position, 0, block.getSliceLength(position), blockBuilder);
+                        blockBuilder.closeEntry();
+                    }
+                }
+            }
+            else {
+                for (int i = 0; i < positions.size(); i++) {
+                    int position = positionArray[i];
+                    block.writeBytesTo(position, 0, block.getSliceLength(position), blockBuilder);
+                    blockBuilder.closeEntry();
+                }
+            }
+        }
+
+        @Override
+        protected void appendRle(int positionCount, Block block, int sourcePosition, BlockBuilder blockBuilder)
+        {
+            if (block.isNull(sourcePosition)) {
+                for (int i = 0; i < positionCount; i++) {
+                    blockBuilder.appendNull();
+                }
+            }
+            else {
+                int sliceLength = block.getSliceLength(sourcePosition);
+                for (int i = 0; i < positionCount; i++) {
+                    block.writeBytesTo(sourcePosition, 0, sliceLength, blockBuilder);
+                    blockBuilder.closeEntry();
+                }
+            }
+        }
+
+        @Override
+        public PositionsAppender newState(BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+        {
+            return new SlicePositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
     }
 
     public static class SmallintPositionsAppender
-            implements PositionsAppender
+            extends BlockBuilderPositionsAppender
     {
+        public SmallintPositionsAppender(Type type, BlockPositionEqual equalOperator, BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+        {
+            super(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
+
         @Override
         public void appendTo(IntArrayList positions, Block block, BlockBuilder blockBuilder)
         {
@@ -256,11 +418,60 @@ public class PositionsAppenderFactory
                 }
             }
         }
+
+        @Override
+        protected void appendDictionary(IntArrayList positions, DictionaryBlock block, BlockBuilder blockBuilder)
+        {
+            int[] positionArray = positions.elements();
+            if (block.mayHaveNull()) {
+                for (int i = 0; i < positions.size(); i++) {
+                    int position = positionArray[i];
+                    if (block.isNull(position)) {
+                        blockBuilder.appendNull();
+                    }
+                    else {
+                        blockBuilder.writeShort(block.getShort(position, 0)).closeEntry();
+                    }
+                }
+            }
+            else {
+                for (int i = 0; i < positions.size(); i++) {
+                    blockBuilder.writeShort(block.getShort(positionArray[i], 0)).closeEntry();
+                }
+            }
+        }
+
+        @Override
+        protected void appendRle(int positionCount, Block block, int sourcePosition, BlockBuilder blockBuilder)
+        {
+            if (block.isNull(sourcePosition)) {
+                for (int i = 0; i < positionCount; i++) {
+                    blockBuilder.appendNull();
+                }
+            }
+            else {
+                short value = block.getShort(sourcePosition, 0);
+                for (int i = 0; i < positionCount; i++) {
+                    blockBuilder.writeShort(value).closeEntry();
+                }
+            }
+        }
+
+        @Override
+        public PositionsAppender newState(BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+        {
+            return new SmallintPositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
     }
 
     public static class Int96PositionsAppender
-            implements PositionsAppender
+            extends BlockBuilderPositionsAppender
     {
+        public Int96PositionsAppender(Type type, BlockPositionEqual equalOperator, BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+        {
+            super(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
+
         @Override
         public void appendTo(IntArrayList positions, Block block, BlockBuilder blockBuilder)
         {
@@ -287,11 +498,68 @@ public class PositionsAppenderFactory
                 }
             }
         }
+
+        @Override
+        protected void appendDictionary(IntArrayList positions, DictionaryBlock block, BlockBuilder blockBuilder)
+        {
+            int[] positionArray = positions.elements();
+            if (block.mayHaveNull()) {
+                for (int i = 0; i < positions.size(); i++) {
+                    int position = positionArray[i];
+                    if (block.isNull(position)) {
+                        blockBuilder.appendNull();
+                    }
+                    else {
+                        blockBuilder.writeLong(block.getLong(position, 0));
+                        blockBuilder.writeInt(block.getInt(position, SIZE_OF_LONG));
+                        blockBuilder.closeEntry();
+                    }
+                }
+            }
+            else {
+                for (int i = 0; i < positions.size(); i++) {
+                    int position = positionArray[i];
+                    blockBuilder.writeLong(block.getLong(position, 0));
+                    blockBuilder.writeInt(block.getInt(position, SIZE_OF_LONG));
+                    blockBuilder.closeEntry();
+                }
+            }
+        }
+
+        @Override
+        protected void appendRle(int positionCount, Block block, int sourcePosition, BlockBuilder blockBuilder)
+        {
+            if (block.isNull(sourcePosition)) {
+                for (int i = 0; i < positionCount; i++) {
+                    blockBuilder.appendNull();
+                }
+            }
+            else {
+                long high = block.getLong(sourcePosition, 0);
+                int low = block.getInt(sourcePosition, SIZE_OF_LONG);
+                for (int i = 0; i < positionCount; i++) {
+                    blockBuilder.writeLong(high);
+                    blockBuilder.writeInt(low);
+                    blockBuilder.closeEntry();
+                }
+            }
+        }
+
+        @Override
+        public PositionsAppender newState(BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+        {
+            return new Int96PositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
     }
 
     public static class Int128PositionsAppender
-            implements PositionsAppender
+            extends BlockBuilderPositionsAppender
     {
+        public Int128PositionsAppender(Type type, BlockPositionEqual equalOperator, BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+        {
+            super(type, equalOperator, blockBuilderStatus, expectedPositions);
+        }
+
         @Override
         public void appendTo(IntArrayList positions, Block block, BlockBuilder blockBuilder)
         {
@@ -318,36 +586,57 @@ public class PositionsAppenderFactory
                 }
             }
         }
-    }
 
-    private static class CacheKey
-    {
-        private final Type type;
-        private final Class<? extends Block> blockClass;
-
-        private CacheKey(Type type, Class<? extends Block> blockClass)
+        @Override
+        protected void appendDictionary(IntArrayList positions, DictionaryBlock block, BlockBuilder blockBuilder)
         {
-            this.type = requireNonNull(type, "type is null");
-            this.blockClass = requireNonNull(blockClass, "blockClass is null");
+            int[] positionArray = positions.elements();
+            if (block.mayHaveNull()) {
+                for (int i = 0; i < positions.size(); i++) {
+                    int position = positionArray[i];
+                    if (block.isNull(position)) {
+                        blockBuilder.appendNull();
+                    }
+                    else {
+                        blockBuilder.writeLong(block.getLong(position, 0));
+                        blockBuilder.writeLong(block.getLong(position, SIZE_OF_LONG));
+                        blockBuilder.closeEntry();
+                    }
+                }
+            }
+            else {
+                for (int i = 0; i < positions.size(); i++) {
+                    int position = positionArray[i];
+                    blockBuilder.writeLong(block.getLong(position, 0));
+                    blockBuilder.writeLong(block.getLong(position, SIZE_OF_LONG));
+                    blockBuilder.closeEntry();
+                }
+            }
         }
 
         @Override
-        public boolean equals(Object o)
+        protected void appendRle(int positionCount, Block block, int sourcePosition, BlockBuilder blockBuilder)
         {
-            if (this == o) {
-                return true;
+            if (block.isNull(sourcePosition)) {
+                for (int i = 0; i < positionCount; i++) {
+                    blockBuilder.appendNull();
+                }
             }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
+            else {
+                long high = block.getLong(sourcePosition, 0);
+                long low = block.getLong(sourcePosition, SIZE_OF_LONG);
+                for (int i = 0; i < positionCount; i++) {
+                    blockBuilder.writeLong(high);
+                    blockBuilder.writeLong(low);
+                    blockBuilder.closeEntry();
+                }
             }
-            CacheKey cacheKey = (CacheKey) o;
-            return type.equals(cacheKey.type) && blockClass.equals(cacheKey.blockClass);
         }
 
         @Override
-        public int hashCode()
+        public PositionsAppender newState(BlockBuilderStatus blockBuilderStatus, int expectedPositions)
         {
-            return Objects.hash(type, blockClass);
+            return new Int128PositionsAppender(type, equalOperator, blockBuilderStatus, expectedPositions);
         }
     }
 }

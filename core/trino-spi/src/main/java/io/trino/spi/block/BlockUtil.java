@@ -22,7 +22,7 @@ import static java.lang.Math.ceil;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
-final class BlockUtil
+public final class BlockUtil
 {
     private static final double BLOCK_RESET_SKEW = 1.25;
 
@@ -81,7 +81,7 @@ final class BlockUtil
         return (int) newSize;
     }
 
-    static int calculateBlockResetSize(int currentSize)
+    public static int calculateBlockResetSize(int currentSize)
     {
         long newSize = (long) ceil(currentSize * BLOCK_RESET_SKEW);
 

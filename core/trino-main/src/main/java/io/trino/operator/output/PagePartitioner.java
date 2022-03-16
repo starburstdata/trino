@@ -24,9 +24,7 @@ import io.trino.execution.buffer.PagesSerdeFactory;
 import io.trino.operator.OperatorContext;
 import io.trino.operator.PartitionFunction;
 import io.trino.spi.Page;
-import io.trino.spi.PageBuilder;
 import io.trino.spi.block.Block;
-import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.DictionaryBlock;
 import io.trino.spi.block.RunLengthEncodedBlock;
 import io.trino.spi.predicate.NullableValue;
@@ -65,14 +63,12 @@ public class PagePartitioner
     @Nullable
     private final Block[] partitionConstantBlocks; // when null, no constants are present. Only non-null elements are constants
     private final PagesSerde serde;
-    private final PageBuilder[] pageBuilders;
+    private final PositionsAppenderPageBuilder[] pageBuilders;
     private final boolean replicatesAnyRow;
     private final int nullChannel; // when >= 0, send the position to every partition if this channel is null
     private final AtomicLong rowsAdded = new AtomicLong();
     private final AtomicLong pagesAdded = new AtomicLong();
     private final OperatorContext operatorContext;
-    private final PositionsAppenderFactory positionsAppenderFactory;
-    private final PositionsAppender[] positionsAppenders;
 
     private boolean hasAnyRowBeenReplicated;
 
@@ -91,7 +87,7 @@ public class PagePartitioner
     {
         this.partitionFunction = requireNonNull(partitionFunction, "partitionFunction is null");
         this.partitionChannels = Ints.toArray(requireNonNull(partitionChannels, "partitionChannels is null"));
-        this.positionsAppenderFactory = requireNonNull(positionsAppenderFactory, "positionsAppenderFactory is null");
+        requireNonNull(positionsAppenderFactory, "positionsAppenderFactory is null");
         Block[] partitionConstantBlocks = requireNonNull(partitionConstants, "partitionConstants is null").stream()
                 .map(constant -> constant.map(NullableValue::asBlock).orElse(null))
                 .toArray(Block[]::new);
@@ -120,11 +116,10 @@ public class PagePartitioner
         int pageSize = toIntExact(min(DEFAULT_MAX_PAGE_SIZE_IN_BYTES, maxMemory.toBytes() / partitionCount));
         pageSize = max(1, pageSize);
 
-        this.pageBuilders = new PageBuilder[partitionCount];
+        this.pageBuilders = new PositionsAppenderPageBuilder[partitionCount];
         for (int i = 0; i < partitionCount; i++) {
-            pageBuilders[i] = PageBuilder.withMaxPageSize(pageSize, sourceTypes);
+            pageBuilders[i] = PositionsAppenderPageBuilder.withMaxPageSize(pageSize, sourceTypes, positionsAppenderFactory);
         }
-        positionsAppenders = new PositionsAppender[sourceTypes.size()];
     }
 
     public ListenableFuture<Void> isFull()
@@ -137,7 +132,7 @@ public class PagePartitioner
         // We use a foreach loop instead of streams
         // as it has much better performance.
         long sizeInBytes = 0;
-        for (PageBuilder pageBuilder : pageBuilders) {
+        for (PositionsAppenderPageBuilder pageBuilder : pageBuilders) {
             sizeInBytes += pageBuilder.getSizeInBytes();
         }
         return sizeInBytes;
@@ -149,7 +144,7 @@ public class PagePartitioner
     public long getRetainedSizeInBytes()
     {
         long sizeInBytes = 0;
-        for (PageBuilder pageBuilder : pageBuilders) {
+        for (PositionsAppenderPageBuilder pageBuilder : pageBuilders) {
             sizeInBytes += pageBuilder.getRetainedSizeInBytes();
         }
         return sizeInBytes;
@@ -175,6 +170,7 @@ public class PagePartitioner
             return;
         }
 
+        // TODO lysy: if the last page is small, partitionPageByRow can destroy RLE optimization
         if (page.getPositionCount() < partitionFunction.getPartitionCount() * COLUMNAR_STRATEGY_COEFFICIENT) {
             // Partition will have on average less than COLUMNAR_STRATEGY_COEFFICIENT rows.
             // Doing it column-wise would degrade performance, so we fall back to row-wise approach.
@@ -193,11 +189,14 @@ public class PagePartitioner
         if (page.getPositionCount() == 0) {
             return;
         }
+        for (PositionsAppenderPageBuilder pageBuilder : pageBuilders) {
+            pageBuilder.prepareProcessingByRow();
+        }
 
         int position;
         // Handle "any row" replication outside of the inner loop processing
         if (replicatesAnyRow && !hasAnyRowBeenReplicated) {
-            for (PageBuilder pageBuilder : pageBuilders) {
+            for (PositionsAppenderPageBuilder pageBuilder : pageBuilders) {
                 appendRow(pageBuilder, page, 0);
             }
             hasAnyRowBeenReplicated = true;
@@ -213,7 +212,7 @@ public class PagePartitioner
             Block nullsBlock = page.getBlock(nullChannel);
             for (; position < page.getPositionCount(); position++) {
                 if (nullsBlock.isNull(position)) {
-                    for (PageBuilder pageBuilder : pageBuilders) {
+                    for (PositionsAppenderPageBuilder pageBuilder : pageBuilders) {
                         appendRow(pageBuilder, page, position);
                     }
                 }
@@ -233,13 +232,13 @@ public class PagePartitioner
         flush(false);
     }
 
-    private void appendRow(PageBuilder pageBuilder, Page page, int position)
+    private void appendRow(PositionsAppenderPageBuilder pageBuilder, Page page, int position)
     {
         pageBuilder.declarePosition();
 
         for (int channel = 0; channel < sourceTypes.length; channel++) {
-            Type type = sourceTypes[channel];
-            type.appendTo(page.getBlock(channel), position, pageBuilder.getBlockBuilder(channel));
+            PositionsAppender target = pageBuilder.getAppender(channel);
+            target.appendRow(page.getBlock(channel), position);
         }
     }
 
@@ -247,25 +246,15 @@ public class PagePartitioner
     {
         IntArrayList[] partitionedPositions = partitionPositions(page);
 
-        PositionsAppender[] positionsAppenders = getAppenders(page);
-
         for (int i = 0; i < partitionFunction.getPartitionCount(); i++) {
             IntArrayList partitionPositions = partitionedPositions[i];
             if (!partitionPositions.isEmpty()) {
-                appendToOutputPartition(pageBuilders[i], page, partitionPositions, positionsAppenders);
+                appendToOutputPartition(pageBuilders[i], page, partitionPositions);
                 partitionPositions.clear();
             }
         }
 
         flush(false);
-    }
-
-    private PositionsAppender[] getAppenders(Page page)
-    {
-        for (int i = 0; i < positionsAppenders.length; i++) {
-            positionsAppenders[i] = positionsAppenderFactory.create(sourceTypes[i], page.getBlock(i).getClass());
-        }
-        return positionsAppenders;
     }
 
     private IntArrayList[] partitionPositions(Page page)
@@ -301,14 +290,14 @@ public class PagePartitioner
         return partitionPositions;
     }
 
-    private void appendToOutputPartition(PageBuilder outputPartition, Page page, IntArrayList positions, PositionsAppender[] positionsAppenders)
+    private void appendToOutputPartition(PositionsAppenderPageBuilder outputPartition, Page page, IntArrayList positions)
     {
         outputPartition.declarePositions(positions.size());
 
-        for (int channel = 0; channel < positionsAppenders.length; channel++) {
+        for (int channel = 0; channel < sourceTypes.length; channel++) {
             Block partitionBlock = page.getBlock(channel);
-            BlockBuilder target = outputPartition.getBlockBuilder(channel);
-            positionsAppenders[channel].appendTo(positions, partitionBlock, target);
+            PositionsAppender target = outputPartition.getAppender(channel);
+            target.appendTo(positions, partitionBlock);
         }
     }
 
@@ -481,7 +470,7 @@ public class PagePartitioner
         try (PagesSerde.PagesSerdeContext context = serde.newContext()) {
             // add all full pages to output buffer
             for (int partition = 0; partition < pageBuilders.length; partition++) {
-                PageBuilder partitionPageBuilder = pageBuilders[partition];
+                PositionsAppenderPageBuilder partitionPageBuilder = pageBuilders[partition];
                 if (!partitionPageBuilder.isEmpty() && (force || partitionPageBuilder.isFull())) {
                     Page pagePartition = partitionPageBuilder.build();
                     partitionPageBuilder.reset();
