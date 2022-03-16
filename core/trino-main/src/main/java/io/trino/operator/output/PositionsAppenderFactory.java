@@ -41,7 +41,9 @@ public class PositionsAppenderFactory
 
     public PositionsAppender create(Type type, BlockBuilderStatus blockBuilderStatus, int expectedPositions)
     {
-        return new BlockTypeDispatchingPositionsAppender(createDedicatedAppenderFor(type, getEqualOperator(type), blockBuilderStatus, expectedPositions));
+        return new BlockTypeDispatchingPositionsAppender(
+                new AdaptivePositionsAppender(
+                        createDedicatedAppenderFor(type, getEqualOperator(type), blockBuilderStatus, expectedPositions), blockBuilderStatus, expectedPositions));
     }
 
     private BlockPositionEqual getEqualOperator(Type type)
