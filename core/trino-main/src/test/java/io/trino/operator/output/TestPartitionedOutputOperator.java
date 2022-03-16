@@ -357,6 +357,37 @@ public class TestPartitionedOutputOperator
         assertThat(partitioned).containsExactlyInAnyOrderElementsOf(expected); // order is different due to 2 partitions joined
     }
 
+    @Test(dataProvider = "types")
+    public void testOutputForMixedSmallAndNormalPagesWithType(Type type)
+    {
+        PartitionedOutputOperatorBuilder operatorBuilder = partitionedOutputOperator(BIGINT, type, type);
+        Page normalPage = new Page(
+                createLongSequenceBlock(0, POSITIONS_PER_PAGE), // partition block
+                createBlockForType(type, POSITIONS_PER_PAGE),
+                createBlockForType(type, POSITIONS_PER_PAGE));
+        Page smallPage = new Page(
+                createLongSequenceBlock(0, 2), // partition block
+                createBlockForType(type, 2),
+                createBlockForType(type, 2));
+
+        testOutput(operatorBuilder, type, normalPage, smallPage);
+        testOutput(operatorBuilder, type, smallPage, normalPage);
+        testOutput(operatorBuilder, type, smallPage, smallPage);
+        testOutput(operatorBuilder, type, normalPage, normalPage);
+    }
+
+    private void testOutput(PartitionedOutputOperatorBuilder operatorBuilder, Type type, Page... input)
+    {
+        PartitionedOutputOperator partitionedOutputOperator = operatorBuilder.build();
+        List<Object> expected = readChannel(Stream.of(input), 1, type);
+
+        processPages(partitionedOutputOperator, input);
+
+        List<Object> partitioned = readChannel(outputBuffer.getEnqueuedDeserialized(), 1, type);
+        assertThat(partitioned).containsExactlyInAnyOrderElementsOf(expected); // output of the PartitionedOutputOperator can be reordered
+        outputBuffer.clear();
+    }
+
     @DataProvider(name = "types")
     public static Object[][] types()
     {
@@ -383,7 +414,7 @@ public class TestPartitionedOutputOperator
 
     private Block createBlockForType(Type type, int positionsPerPage)
     {
-        return createRandomBlockForType(type, positionsPerPage, 0.2F);
+        return createRandomBlockForType(type, positionsPerPage, 0.5F);
     }
 
     private static void processPages(PartitionedOutputOperator partitionedOutputOperator, Page... pages)
@@ -562,6 +593,11 @@ public class TestPartitionedOutputOperator
         {
             Collection<Slice> serializedPages = enqueued.get(partition);
             return serializedPages == null ? ImmutableList.of() : ImmutableList.copyOf(serializedPages);
+        }
+
+        public void clear()
+        {
+            enqueued.clear();
         }
 
         @Override

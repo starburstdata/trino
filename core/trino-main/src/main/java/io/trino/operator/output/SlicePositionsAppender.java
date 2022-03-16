@@ -13,35 +13,289 @@
  */
 package io.trino.operator.output;
 
+import io.airlift.slice.Slice;
+import io.airlift.slice.Slices;
 import io.trino.spi.block.Block;
-import io.trino.spi.block.BlockBuilder;
+import io.trino.spi.block.BlockBuilderStatus;
+import io.trino.spi.block.BlockUtil;
+import io.trino.spi.block.DictionaryBlock;
+import io.trino.spi.block.PageBuilderStatus;
+import io.trino.spi.block.RunLengthEncodedBlock;
+import io.trino.spi.block.VariableWidthBlock;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import org.openjdk.jol.info.ClassLayout;
+
+import javax.annotation.Nullable;
+
+import java.util.Arrays;
+import java.util.Optional;
+
+import static io.airlift.slice.SizeOf.SIZE_OF_BYTE;
+import static io.airlift.slice.SizeOf.SIZE_OF_INT;
+import static io.airlift.slice.SizeOf.sizeOf;
+import static io.airlift.slice.Slices.EMPTY_SLICE;
+import static io.trino.spi.block.BlockUtil.MAX_ARRAY_SIZE;
+import static io.trino.spi.block.BlockUtil.calculateBlockResetBytes;
+import static io.trino.spi.block.BlockUtil.calculateBlockResetSize;
+import static io.trino.spi.type.AbstractVariableWidthType.EXPECTED_BYTES_PER_ENTRY;
+import static java.lang.Math.min;
 
 public class SlicePositionsAppender
-        implements PositionsAppender
+        implements BlockTypeAwarePositionsAppender
 {
-    @Override
-    public void appendTo(IntArrayList positions, Block block, BlockBuilder blockBuilder)
+    private static final int INSTANCE_SIZE = ClassLayout.parseClass(SlicePositionsAppender.class).instanceSize();
+    private static final Block NULL_VALUE_BLOCK = new VariableWidthBlock(1, EMPTY_SLICE, new int[] {0, 0}, Optional.of(new boolean[] {true}));
+
+    @Nullable
+    private final BlockBuilderStatus blockBuilderStatus;
+
+    private boolean initialized;
+    private final int initialEntryCount;
+    private int initialBytesSize;
+
+    private byte[] bytes = new byte[0];
+    private int currentOffset;
+
+    private boolean hasNullValue;
+    private boolean hasNonNullValue;
+    // it is assumed that the offsets array is one position longer than the valueIsNull array
+    private boolean[] valueIsNull = new boolean[0];
+    private int[] offsets = new int[1];
+
+    private int positionCount;
+
+    private long arraysRetainedSizeInBytes;
+
+    public SlicePositionsAppender(@Nullable BlockBuilderStatus blockBuilderStatus, int expectedPositions)
     {
+        this(blockBuilderStatus, expectedPositions, getExpectedBytes(blockBuilderStatus, expectedPositions));
+    }
+
+    public SlicePositionsAppender(@Nullable BlockBuilderStatus blockBuilderStatus, int expectedEntries, int expectedBytes)
+    {
+        this.blockBuilderStatus = blockBuilderStatus;
+
+        initialEntryCount = expectedEntries;
+        initialBytesSize = min(expectedBytes, MAX_ARRAY_SIZE);
+
+        updateArraysDataSize();
+    }
+
+    @Override
+    public void append(IntArrayList positions, Block block)
+    {
+        ensurePositionCapacity(positionCount + positions.size());
         int[] positionArray = positions.elements();
+        int newByteCount = 0;
+        int[] lengths = new int[positions.size()];
+
         if (block.mayHaveNull()) {
             for (int i = 0; i < positions.size(); i++) {
                 int position = positionArray[i];
                 if (block.isNull(position)) {
-                    blockBuilder.appendNull();
+                    this.offsets[positionCount + i + 1] = this.offsets[positionCount + i];
+                    valueIsNull[positionCount + i] = true;
+                    hasNullValue = true;
                 }
                 else {
-                    block.writeBytesTo(position, 0, block.getSliceLength(position), blockBuilder);
-                    blockBuilder.closeEntry();
+                    int length = block.getSliceLength(position);
+                    lengths[i] = length;
+                    newByteCount += length;
+                    this.offsets[positionCount + i + 1] = this.offsets[positionCount + i] + length;
+                    hasNonNullValue = true;
                 }
             }
         }
         else {
             for (int i = 0; i < positions.size(); i++) {
                 int position = positionArray[i];
-                block.writeBytesTo(position, 0, block.getSliceLength(position), blockBuilder);
-                blockBuilder.closeEntry();
+                int length = block.getSliceLength(position);
+                lengths[i] = length;
+                newByteCount += length;
+                this.offsets[positionCount + i + 1] = this.offsets[positionCount + i] + length;
+            }
+            hasNonNullValue = true;
+        }
+        copyBytes(block, lengths, positionArray, positions.size(), this.offsets, positionCount, newByteCount);
+    }
+
+    private void copyBytes(Block block, int[] lengths, int[] positions, int count, int[] targetOffsets, int targetOffsetsIndex, int newByteCount)
+    {
+        ensureBytesCapacity(currentOffset + newByteCount);
+
+        for (int i = 0; i < count; i++) {
+            int position = positions[i];
+            if (!block.isNull(position)) {
+                int length = lengths[i];
+                Slice slice = block.getSlice(position, 0, length);
+                slice.getBytes(0, bytes, targetOffsets[targetOffsetsIndex + i], length);
             }
         }
+
+        positionCount += count;
+        currentOffset += newByteCount;
+        updateBlockBuilderStatus(count, newByteCount);
+    }
+
+    @Override
+    public void appendDictionary(IntArrayList positions, DictionaryBlock block)
+    {
+        ensurePositionCapacity(positionCount + positions.size());
+        int[] positionArray = positions.elements();
+        int newByteCount = 0;
+        int[] lengths = new int[positions.size()];
+
+        if (block.mayHaveNull()) {
+            for (int i = 0; i < positions.size(); i++) {
+                int position = positionArray[i];
+                if (block.isNull(position)) {
+                    this.offsets[positionCount + i + 1] = this.offsets[positionCount + i];
+                    valueIsNull[positionCount + i] = true;
+                    hasNullValue = true;
+                }
+                else {
+                    int length = block.getSliceLength(position);
+                    lengths[i] = length;
+                    newByteCount += length;
+                    this.offsets[positionCount + i + 1] = this.offsets[positionCount + i] + length;
+                    hasNonNullValue = true;
+                }
+            }
+        }
+        else {
+            for (int i = 0; i < positions.size(); i++) {
+                int position = positionArray[i];
+                int length = block.getSliceLength(position);
+                lengths[i] = length;
+                newByteCount += length;
+                this.offsets[positionCount + i + 1] = this.offsets[positionCount + i] + length;
+            }
+            hasNonNullValue = true;
+        }
+        copyBytes(block, lengths, positionArray, positions.size(), this.offsets, positionCount, newByteCount);
+    }
+
+    @Override
+    public void appendRle(RunLengthEncodedBlock block)
+    {
+        int rlePositionCount = block.getPositionCount();
+        int sourcePosition = 0;
+        ensurePositionCapacity(positionCount + rlePositionCount);
+        if (block.isNull(sourcePosition)) {
+            int offset = this.offsets[positionCount];
+            Arrays.fill(valueIsNull, positionCount, positionCount + rlePositionCount, true);
+            Arrays.fill(offsets, positionCount + 1, positionCount + rlePositionCount + 1, offset);
+            positionCount += rlePositionCount;
+
+            hasNullValue = true;
+            updateBlockBuilderStatus(rlePositionCount, 0);
+        }
+        else {
+            int startOffset = offsets[positionCount];
+            hasNonNullValue = true;
+            duplicateBytes(block.getValue(), sourcePosition, rlePositionCount, startOffset);
+        }
+    }
+
+    /**
+     * Copy {@code length} bytes from {@code block}, at position {@code position} to {@code count} consecutive positions in the {@link #bytes} array.
+     */
+    private void duplicateBytes(Block block, int position, int count, int startOffset)
+    {
+        int length = block.getSliceLength(position);
+        int newByteCount = count * length;
+        ensureBytesCapacity(currentOffset + newByteCount);
+
+        for (int i = 0; i < count; i++) {
+            Slice slice = block.getSlice(position, 0, length);
+            slice.getBytes(0, bytes, startOffset + (i * length), length);
+            this.offsets[positionCount + i + 1] = startOffset + ((i + 1) * length);
+        }
+
+        positionCount += count;
+        currentOffset += newByteCount;
+        updateBlockBuilderStatus(count, newByteCount);
+    }
+
+    @Override
+    public Block build()
+    {
+        if (!hasNonNullValue) {
+            return new RunLengthEncodedBlock(NULL_VALUE_BLOCK, positionCount);
+        }
+        return new VariableWidthBlock(positionCount, Slices.wrappedBuffer(bytes, 0, currentOffset), offsets, hasNullValue ? Optional.of(valueIsNull) : Optional.empty());
+    }
+
+    @Override
+    public BlockTypeAwarePositionsAppender newStateLike(@Nullable BlockBuilderStatus blockBuilderStatus)
+    {
+        int currentSizeInBytes = positionCount == 0 ? positionCount : (offsets[positionCount] - offsets[0]);
+        return new SlicePositionsAppender(blockBuilderStatus, calculateBlockResetSize(positionCount), calculateBlockResetBytes(currentSizeInBytes));
+    }
+
+    private static int getExpectedBytes(BlockBuilderStatus blockBuilderStatus, int expectedPositions)
+    {
+        int maxBlockSizeInBytes;
+        if (blockBuilderStatus == null) {
+            maxBlockSizeInBytes = PageBuilderStatus.DEFAULT_MAX_PAGE_SIZE_IN_BYTES;
+        }
+        else {
+            maxBlockSizeInBytes = blockBuilderStatus.getMaxPageSizeInBytes();
+        }
+
+        // it is guaranteed Math.min will not overflow; safe to cast
+        return (int) min((long) expectedPositions * EXPECTED_BYTES_PER_ENTRY, maxBlockSizeInBytes);
+    }
+
+    private void updateBlockBuilderStatus(int count, int bytesWritten)
+    {
+        if (blockBuilderStatus != null) {
+            blockBuilderStatus.addBytes((SIZE_OF_BYTE + SIZE_OF_INT) * count + bytesWritten);
+        }
+    }
+
+    @Override
+    public long getRetainedSizeInBytes()
+    {
+        long size = INSTANCE_SIZE + arraysRetainedSizeInBytes;
+        if (blockBuilderStatus != null) {
+            size += BlockBuilderStatus.INSTANCE_SIZE;
+        }
+        return size;
+    }
+
+    private void ensureBytesCapacity(int bytesCapacity)
+    {
+        if (bytes.length < bytesCapacity) {
+            int newBytesLength = Math.max(bytes.length, initialBytesSize);
+            if (bytesCapacity > newBytesLength) {
+                newBytesLength = Math.max(bytesCapacity, BlockUtil.calculateNewArraySize(newBytesLength));
+            }
+            bytes = Arrays.copyOf(bytes, newBytesLength);
+        }
+    }
+
+    private void ensurePositionCapacity(int capacity)
+    {
+        if (valueIsNull.length < capacity) {
+            int newSize;
+            if (initialized) {
+                newSize = BlockUtil.calculateNewArraySize(valueIsNull.length);
+            }
+            else {
+                newSize = initialEntryCount;
+                initialized = true;
+            }
+            newSize = Math.max(newSize, capacity);
+
+            valueIsNull = Arrays.copyOf(valueIsNull, newSize);
+            offsets = Arrays.copyOf(offsets, newSize + 1);
+            updateArraysDataSize();
+        }
+    }
+
+    private void updateArraysDataSize()
+    {
+        arraysRetainedSizeInBytes = sizeOf(valueIsNull) + sizeOf(offsets) + sizeOf(bytes);
     }
 }
