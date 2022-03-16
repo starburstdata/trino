@@ -77,7 +77,7 @@ public class VariableWidthBlockBuilder
     }
 
     @Override
-    protected int getPositionOffset(int position)
+    public int getPositionOffset(int position)
     {
         checkValidPosition(position, positions);
         return getOffset(position);
@@ -91,7 +91,7 @@ public class VariableWidthBlockBuilder
     }
 
     @Override
-    protected Slice getRawSlice(int position)
+    public Slice getRawSlice(int position)
     {
         return sliceOutput.getUnderlyingSlice();
     }
