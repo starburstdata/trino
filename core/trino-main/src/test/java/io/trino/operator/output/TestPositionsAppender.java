@@ -26,6 +26,7 @@ import io.trino.spi.type.Decimals;
 import io.trino.spi.type.Int128;
 import io.trino.spi.type.LongTimestamp;
 import io.trino.spi.type.Type;
+import io.trino.type.BlockTypeOperators;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -72,7 +73,7 @@ import static org.testng.Assert.assertTrue;
 
 public class TestPositionsAppender
 {
-    private static final PositionsAppenderFactory POSITIONS_APPENDER_FACTORY = new PositionsAppenderFactory();
+    private static final PositionsAppenderFactory POSITIONS_APPENDER_FACTORY = new PositionsAppenderFactory(new BlockTypeOperators());
 
     @Test(dataProvider = "types")
     public void testAppend(Type type)
@@ -179,6 +180,20 @@ public class TestPositionsAppender
                         {createTimestampType(3), createShortTimestampBlock(createTimestampType(3), 0L), createShortTimestampBlock(createTimestampType(3), 1000000L)},
                         {IPADDRESS, createIpAddressesBlock(Int128.ZERO), createIpAddressesBlock(Int128.ONE)}
                 };
+    }
+
+    @Test(dataProvider = "types")
+    public void testMultipleRleWithTheSameValueProduceRle(Type type)
+    {
+        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type, null, 10);
+
+        Block value = notNullBlock(type, 1);
+        positionsAppender.append(allPositions(3), rleBlock(value, 3));
+        positionsAppender.append(allPositions(2), rleBlock(value, 2));
+
+        Block actual = positionsAppender.build();
+        assertEquals(actual.getPositionCount(), 5);
+        assertTrue(actual instanceof RunLengthEncodedBlock, actual.toString());
     }
 
     @DataProvider(name = "nullRleTypes")
