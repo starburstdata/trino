@@ -486,6 +486,44 @@
     <build>
         <plugins>
             <plugin>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>build-classpath</id>
+                        <goals>
+                            <goal>build-classpath</goal>
+                        </goals>
+                        <configuration>
+                            <includeScope>runtime</includeScope>
+                            <includeScope>test</includeScope>
+                            <outputProperty>jmhClasspath</outputProperty>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>run-jmh-poo</id>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>io.trino.operator.output.BenchmarkPartitionedOutputOperator</mainClass>
+                            <classpathScope>test</classpathScope>
+                            <systemProperties>
+                                <systemProperty>
+                                    <key>java.class.path</key>
+                                    <value>${project.build.outputDirectory}${path.separator}${project.build.testOutputDirectory}${path.separator}${jmhClasspath}</value>
+                                </systemProperty>
+                            </systemProperties>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <dependencies>
