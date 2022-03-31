@@ -150,6 +150,7 @@ public class TransformCorrelatedDistinctAggregationWithProjection
                 ImmutableList.of(),
                 aggregation.getStep(),
                 Optional.empty(),
+                Optional.empty(),
                 Optional.empty());
 
         // restrict outputs and apply projection

@@ -248,7 +248,8 @@ public class PushPartialAggregationThroughExchange
                 ImmutableList.of(),
                 PARTIAL,
                 node.getHashSymbol(),
-                node.getGroupIdSymbol());
+                node.getGroupIdSymbol(),
+                node.getPartialGroupingAggregation());
 
         return new AggregationNode(
                 node.getId(),
@@ -260,6 +261,7 @@ public class PushPartialAggregationThroughExchange
                 ImmutableList.of(),
                 FINAL,
                 node.getHashSymbol(),
-                node.getGroupIdSymbol());
+                node.getGroupIdSymbol(),
+                node.getPartialGroupingAggregation());
     }
 }

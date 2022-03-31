@@ -22,6 +22,7 @@ import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.SymbolAllocator;
 import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.AggregationNode.Aggregation;
+import io.trino.sql.planner.plan.AggregationNode.PartialGroupingAggregation;
 import io.trino.sql.planner.plan.DistinctLimitNode;
 import io.trino.sql.planner.plan.GroupIdNode;
 import io.trino.sql.planner.plan.LimitNode;
@@ -157,7 +158,11 @@ public class SymbolMapper
                 ImmutableList.of(),
                 node.getStep(),
                 node.getHashSymbol().map(this::map),
-                node.getGroupIdSymbol().map(this::map));
+                node.getGroupIdSymbol().map(this::map),
+                node.getPartialGroupingAggregation().map(aggregation -> new PartialGroupingAggregation(
+                        aggregation.getInputGroupId(),
+                        aggregation.getOutputGroupId(),
+                        this.map(aggregation.getGroupingColumns()))));
     }
 
     public Aggregation map(Aggregation aggregation)

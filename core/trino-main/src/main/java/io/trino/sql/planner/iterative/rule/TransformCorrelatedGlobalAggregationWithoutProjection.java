@@ -209,6 +209,7 @@ public class TransformCorrelatedGlobalAggregationWithoutProjection
                     ImmutableList.of(),
                     distinct.getStep(),
                     Optional.empty(),
+                    Optional.empty(),
                     Optional.empty());
         }
 
@@ -257,6 +258,7 @@ public class TransformCorrelatedGlobalAggregationWithoutProjection
                         .build()),
                 ImmutableList.of(),
                 globalAggregation.getStep(),
+                Optional.empty(),
                 Optional.empty(),
                 Optional.empty());
 

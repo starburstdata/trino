@@ -193,6 +193,7 @@ public class TransformCorrelatedGroupedAggregationWithProjection
                     ImmutableList.of(),
                     distinct.getStep(),
                     Optional.empty(),
+                    Optional.empty(),
                     Optional.empty());
         }
 
@@ -208,6 +209,7 @@ public class TransformCorrelatedGroupedAggregationWithProjection
                         .build()),
                 ImmutableList.of(),
                 groupedAggregation.getStep(),
+                Optional.empty(),
                 Optional.empty(),
                 Optional.empty());
 

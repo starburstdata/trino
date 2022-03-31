@@ -39,6 +39,8 @@ import java.util.Optional;
 import java.util.Set;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static io.trino.sql.planner.plan.AggregationNode.Step.INTERMEDIATE;
+import static io.trino.sql.planner.plan.AggregationNode.Step.PARTIAL;
 import static io.trino.sql.planner.plan.AggregationNode.Step.SINGLE;
 import static java.util.Objects.requireNonNull;
 
@@ -53,6 +55,7 @@ public class AggregationNode
     private final Step step;
     private final Optional<Symbol> hashSymbol;
     private final Optional<Symbol> groupIdSymbol;
+    private final Optional<PartialGroupingAggregation> partialGroupingAggregation;
     private final List<Symbol> outputs;
 
     @JsonCreator
@@ -64,7 +67,8 @@ public class AggregationNode
             @JsonProperty("preGroupedSymbols") List<Symbol> preGroupedSymbols,
             @JsonProperty("step") Step step,
             @JsonProperty("hashSymbol") Optional<Symbol> hashSymbol,
-            @JsonProperty("groupIdSymbol") Optional<Symbol> groupIdSymbol)
+            @JsonProperty("groupIdSymbol") Optional<Symbol> groupIdSymbol,
+            @JsonProperty("partialGroupingAggregation") Optional<PartialGroupingAggregation> partialGroupingAggregation)
     {
         super(id);
 
@@ -76,7 +80,14 @@ public class AggregationNode
         groupIdSymbol.ifPresent(symbol -> checkArgument(groupingSets.getGroupingKeys().contains(symbol), "Grouping columns does not contain groupId column"));
         this.groupingSets = groupingSets;
 
+        if (partialGroupingAggregation.isPresent()) {
+            checkArgument(groupIdSymbol.isPresent(), "Group id symbol must be present for partial grouping aggregation");
+            checkArgument(step == PARTIAL || step == INTERMEDIATE, "Partial grouping aggregation must produce partial output");
+            checkArgument(groupingSets.getGroupingSetCount() > 1, "Partial grouping aggregation only works for multiple grouping sets");
+            checkArgument(groupingSets.getGroupingKeys().containsAll(partialGroupingAggregation.get().getGroupingColumns()), "Grouping keys must contain all partial grouping columns");
+        }
         this.groupIdSymbol = requireNonNull(groupIdSymbol);
+        this.partialGroupingAggregation = requireNonNull(partialGroupingAggregation, "partialGroupingAggregation is null");
 
         boolean noOrderBy = aggregations.values().stream()
                 .map(Aggregation::getOrderingScheme)
@@ -190,6 +201,12 @@ public class AggregationNode
         return groupIdSymbol;
     }
 
+    @JsonProperty("partialGroupingAggregation")
+    public Optional<PartialGroupingAggregation> getPartialGroupingAggregation()
+    {
+        return partialGroupingAggregation;
+    }
+
     public boolean hasOrderings()
     {
         return aggregations.values().stream()
@@ -206,7 +223,7 @@ public class AggregationNode
     @Override
     public PlanNode replaceChildren(List<PlanNode> newChildren)
     {
-        return new AggregationNode(getId(), Iterables.getOnlyElement(newChildren), aggregations, groupingSets, preGroupedSymbols, step, hashSymbol, groupIdSymbol);
+        return new AggregationNode(getId(), Iterables.getOnlyElement(newChildren), aggregations, groupingSets, preGroupedSymbols, step, hashSymbol, groupIdSymbol, partialGroupingAggregation);
     }
 
     public boolean producesDistinctRows()
@@ -476,6 +493,42 @@ public class AggregationNode
                     resolvedFunction.getSignature(),
                     expectedArgumentCount,
                     arguments.size());
+        }
+    }
+
+    public static class PartialGroupingAggregation
+    {
+        private final long inputGroupId;
+        private final long outputGroupId;
+        private final List<Symbol> groupingColumns;
+
+        @JsonCreator
+        public PartialGroupingAggregation(
+                @JsonProperty("inputGroupId") long inputGroupId,
+                @JsonProperty("outputGroupId") long outputGroupId,
+                @JsonProperty("groupingColumns") List<Symbol> groupingColumns)
+        {
+            this.inputGroupId = inputGroupId;
+            this.outputGroupId = outputGroupId;
+            this.groupingColumns = ImmutableList.copyOf(requireNonNull(groupingColumns, "groupingColumns is null"));
+        }
+
+        @JsonProperty
+        public long getInputGroupId()
+        {
+            return inputGroupId;
+        }
+
+        @JsonProperty
+        public long getOutputGroupId()
+        {
+            return outputGroupId;
+        }
+
+        @JsonProperty
+        public List<Symbol> getGroupingColumns()
+        {
+            return groupingColumns;
         }
     }
 }

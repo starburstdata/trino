@@ -93,6 +93,7 @@ final class PlanUtils
                 ImmutableList.of(),
                 FINAL,
                 Optional.empty(),
+                Optional.empty(),
                 Optional.empty());
 
         return createFragment(planNode);
