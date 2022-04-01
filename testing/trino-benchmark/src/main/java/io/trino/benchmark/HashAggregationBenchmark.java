@@ -58,6 +58,7 @@ public class HashAggregationBenchmark
                 ImmutableList.of(doubleSum.bind(ImmutableList.of(1))),
                 Optional.empty(),
                 Optional.empty(),
+                Optional.empty(),
                 100_000,
                 Optional.of(DataSize.of(16, MEGABYTE)),
                 new JoinCompiler(localQueryRunner.getTypeOperators()),

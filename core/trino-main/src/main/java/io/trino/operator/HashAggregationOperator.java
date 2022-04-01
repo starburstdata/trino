@@ -27,6 +27,7 @@ import io.trino.operator.aggregation.partial.SkipAggregationBuilder;
 import io.trino.operator.scalar.CombineHashFunction;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
+import io.trino.spi.block.Block;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.Type;
 import io.trino.spiller.SpillerFactory;
@@ -34,6 +35,8 @@ import io.trino.sql.gen.JoinCompiler;
 import io.trino.sql.planner.plan.AggregationNode.Step;
 import io.trino.sql.planner.plan.PlanNodeId;
 import io.trino.type.BlockTypeOperators;
+
+import javax.annotation.Nullable;
 
 import java.util.List;
 import java.util.Optional;
@@ -64,7 +67,7 @@ public class HashAggregationOperator
         private final List<AggregatorFactory> aggregatorFactories;
         private final Optional<Integer> hashChannel;
         private final Optional<Integer> groupIdChannel;
-
+        private final Optional<PartialGroupingAggregation> partialGroupingAggregation;
         private final int expectedGroups;
         private final Optional<DataSize> maxPartialMemory;
         private final boolean spillEnabled;
@@ -88,6 +91,7 @@ public class HashAggregationOperator
                 List<AggregatorFactory> aggregatorFactories,
                 Optional<Integer> hashChannel,
                 Optional<Integer> groupIdChannel,
+                Optional<PartialGroupingAggregation> partialGroupingAggregation,
                 int expectedGroups,
                 Optional<DataSize> maxPartialMemory,
                 JoinCompiler joinCompiler,
@@ -104,6 +108,7 @@ public class HashAggregationOperator
                     aggregatorFactories,
                     hashChannel,
                     groupIdChannel,
+                    partialGroupingAggregation,
                     expectedGroups,
                     maxPartialMemory,
                     false,
@@ -128,6 +133,7 @@ public class HashAggregationOperator
                 List<AggregatorFactory> aggregatorFactories,
                 Optional<Integer> hashChannel,
                 Optional<Integer> groupIdChannel,
+                Optional<PartialGroupingAggregation> partialGroupingAggregation,
                 int expectedGroups,
                 Optional<DataSize> maxPartialMemory,
                 boolean spillEnabled,
@@ -147,6 +153,7 @@ public class HashAggregationOperator
                     aggregatorFactories,
                     hashChannel,
                     groupIdChannel,
+                    partialGroupingAggregation,
                     expectedGroups,
                     maxPartialMemory,
                     spillEnabled,
@@ -170,6 +177,7 @@ public class HashAggregationOperator
                 List<AggregatorFactory> aggregatorFactories,
                 Optional<Integer> hashChannel,
                 Optional<Integer> groupIdChannel,
+                Optional<PartialGroupingAggregation> partialGroupingAggregation,
                 int expectedGroups,
                 Optional<DataSize> maxPartialMemory,
                 boolean spillEnabled,
@@ -184,6 +192,7 @@ public class HashAggregationOperator
             this.planNodeId = requireNonNull(planNodeId, "planNodeId is null");
             this.hashChannel = requireNonNull(hashChannel, "hashChannel is null");
             this.groupIdChannel = requireNonNull(groupIdChannel, "groupIdChannel is null");
+            this.partialGroupingAggregation = requireNonNull(partialGroupingAggregation, "partialGroupingAggregation is null");
             this.groupByTypes = ImmutableList.copyOf(groupByTypes);
             this.groupByChannels = ImmutableList.copyOf(groupByChannels);
             this.globalAggregationGroupIds = ImmutableList.copyOf(globalAggregationGroupIds);
@@ -217,6 +226,7 @@ public class HashAggregationOperator
                     aggregatorFactories,
                     hashChannel,
                     groupIdChannel,
+                    partialGroupingAggregation,
                     expectedGroups,
                     maxPartialMemory,
                     spillEnabled,
@@ -249,6 +259,7 @@ public class HashAggregationOperator
                     aggregatorFactories,
                     hashChannel,
                     groupIdChannel,
+                    partialGroupingAggregation,
                     expectedGroups,
                     maxPartialMemory,
                     spillEnabled,
@@ -271,6 +282,9 @@ public class HashAggregationOperator
     private final List<AggregatorFactory> aggregatorFactories;
     private final Optional<Integer> hashChannel;
     private final Optional<Integer> groupIdChannel;
+    private final Optional<PartialGroupingAggregation> partialGroupingAggregation;
+    @Nullable
+    private final Block[] nullBlocks;
     private final int expectedGroups;
     private final Optional<DataSize> maxPartialMemory;
     private final boolean spillEnabled;
@@ -295,6 +309,9 @@ public class HashAggregationOperator
     private long numberOfInputRowsProcessed;
     private long numberOfUniqueRowsProduced;
 
+    @Nullable
+    private Page passthroughPage;
+
     private HashAggregationOperator(
             OperatorContext operatorContext,
             List<Type> groupByTypes,
@@ -305,6 +322,7 @@ public class HashAggregationOperator
             List<AggregatorFactory> aggregatorFactories,
             Optional<Integer> hashChannel,
             Optional<Integer> groupIdChannel,
+            Optional<PartialGroupingAggregation> partialGroupingAggregation,
             int expectedGroups,
             Optional<DataSize> maxPartialMemory,
             boolean spillEnabled,
@@ -328,6 +346,7 @@ public class HashAggregationOperator
         this.aggregatorFactories = ImmutableList.copyOf(aggregatorFactories);
         this.hashChannel = requireNonNull(hashChannel, "hashChannel is null");
         this.groupIdChannel = requireNonNull(groupIdChannel, "groupIdChannel is null");
+        this.partialGroupingAggregation = requireNonNull(partialGroupingAggregation, "partialGroupingAggregation is null");
         this.step = step;
         this.produceDefaultOutput = produceDefaultOutput;
         this.expectedGroups = expectedGroups;
@@ -343,6 +362,19 @@ public class HashAggregationOperator
         operatorContext.setInfoSupplier(hashCollisionsCounter);
 
         this.memoryContext = operatorContext.localUserMemoryContext();
+
+        if (partialGroupingAggregation.isPresent()) {
+            // it's easier to create null blocks for every group by column even though we only null out some grouping column outputs
+            nullBlocks = new Block[groupByTypes.size()];
+            for (int i = 0; i < groupByTypes.size(); i++) {
+                nullBlocks[i] = groupByTypes.get(i).createBlockBuilder(null, 1)
+                        .appendNull()
+                        .build();
+            }
+        }
+        else {
+            nullBlocks = null;
+        }
     }
 
     @Override
@@ -383,6 +415,11 @@ public class HashAggregationOperator
         checkState(unfinishedWork == null, "Operator has unfinished work");
         checkState(!finishing, "Operator is already finishing");
         requireNonNull(page, "page is null");
+
+        if (partialGroupingAggregation.isPresent()) {
+
+        }
+
         inputProcessed = true;
 
         if (aggregationBuilder == null) {
@@ -600,5 +637,34 @@ public class HashAggregationOperator
             }
         }
         return result;
+    }
+
+    public static class PartialGroupingAggregation
+    {
+        private final long inputGroupId;
+        private final long outputGroupId;
+        private final List<Integer> groupingColumns;
+
+        public PartialGroupingAggregation(long inputGroupId, long outputGroupId, List<Integer> groupingColumns)
+        {
+            this.inputGroupId = inputGroupId;
+            this.outputGroupId = outputGroupId;
+            this.groupingColumns = requireNonNull(groupingColumns, "groupingColumns is null");
+        }
+
+        public long getInputGroupId()
+        {
+            return inputGroupId;
+        }
+
+        public long getOutputGroupId()
+        {
+            return outputGroupId;
+        }
+
+        public List<Integer> getGroupingColumns()
+        {
+            return groupingColumns;
+        }
     }
 }

@@ -3853,6 +3853,7 @@ public class LocalExecutionPlanner
                         aggregatorFactories,
                         hashChannel,
                         groupIdChannel,
+                        Optional.empty(),
                         expectedGroups,
                         maxPartialAggregationMemorySize,
                         spillEnabled,

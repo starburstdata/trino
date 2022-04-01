@@ -118,6 +118,7 @@ public class HandTpchQuery1
                         countFunction.bind(ImmutableList.of(2))),
                 Optional.empty(),
                 Optional.empty(),
+                Optional.empty(),
                 10_000,
                 Optional.of(DataSize.of(16, MEGABYTE)),
                 new JoinCompiler(localQueryRunner.getTypeOperators()),

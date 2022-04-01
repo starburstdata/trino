@@ -259,6 +259,7 @@ public class BenchmarkHashAndStreamingAggregationOperators
                             LONG_SUM.createAggregatorFactory(SINGLE, ImmutableList.of(sumChannel), OptionalInt.empty())),
                     hashChannel,
                     Optional.empty(),
+                    Optional.empty(),
                     100_000,
                     Optional.of(DataSize.of(16, MEGABYTE)),
                     false,
