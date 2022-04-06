@@ -138,7 +138,8 @@ public class RewriteSpatialPartitioningAggregation
                         node.getPreGroupedSymbols(),
                         node.getStep(),
                         node.getHashSymbol(),
-                        node.getGroupIdSymbol()));
+                        node.getGroupIdSymbol(),
+                        node.getRawInputMaskSymbol()));
     }
 
     private boolean isStEnvelopeFunctionCall(Expression expression, ResolvedFunction stEnvelopeFunction)

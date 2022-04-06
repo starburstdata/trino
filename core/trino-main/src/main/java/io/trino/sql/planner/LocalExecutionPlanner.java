@@ -3172,6 +3172,7 @@ public class LocalExecutionPlanner
                         PARTIAL,
                         Optional.empty(),
                         Optional.empty(),
+                        Optional.empty(),
                         source,
                         false,
                         false,
@@ -3252,6 +3253,7 @@ public class LocalExecutionPlanner
                         ImmutableSet.of(),
                         groupingSymbols,
                         FINAL,
+                        Optional.empty(),
                         Optional.empty(),
                         Optional.empty(),
                         source,
@@ -3578,7 +3580,8 @@ public class LocalExecutionPlanner
         private AggregatorFactory buildAggregatorFactory(
                 PhysicalOperation source,
                 Aggregation aggregation,
-                Step step)
+                Step step,
+                OptionalInt rawInputMaskChannel)
         {
             List<Integer> argumentChannels = new ArrayList<>();
             for (Expression argument : aggregation.getArguments()) {
@@ -3668,6 +3671,7 @@ public class LocalExecutionPlanner
                     intermediateType,
                     finalType,
                     argumentChannels,
+                    rawInputMaskChannel,
                     maskChannel,
                     !aggregation.isDistinct() && aggregation.getOrderingScheme().isEmpty(),
                     lambdaProviders);
@@ -3755,7 +3759,7 @@ public class LocalExecutionPlanner
             for (Map.Entry<Symbol, Aggregation> entry : aggregations.entrySet()) {
                 Symbol symbol = entry.getKey();
                 Aggregation aggregation = entry.getValue();
-                aggregatorFactories.add(buildAggregatorFactory(source, aggregation, step));
+                aggregatorFactories.add(buildAggregatorFactory(source, aggregation, step, OptionalInt.empty()));
                 outputMappings.put(symbol, outputChannel); // one aggregation per channel
                 outputChannel++;
             }
@@ -3778,6 +3782,7 @@ public class LocalExecutionPlanner
                     node.getStep(),
                     node.getHashSymbol(),
                     node.getGroupIdSymbol(),
+                    node.getRawInputMaskSymbol(),
                     source,
                     node.hasDefaultOutput(),
                     spillEnabled,
@@ -3799,6 +3804,7 @@ public class LocalExecutionPlanner
                 Step step,
                 Optional<Symbol> hashSymbol,
                 Optional<Symbol> groupIdSymbol,
+                Optional<Symbol> rawInputMaskSymbol,
                 PhysicalOperation source,
                 boolean hasDefaultOutput,
                 boolean spillEnabled,
@@ -3812,11 +3818,15 @@ public class LocalExecutionPlanner
         {
             List<Symbol> aggregationOutputSymbols = new ArrayList<>();
             List<AggregatorFactory> aggregatorFactories = new ArrayList<>();
+            OptionalInt rawInputMaskChannel = rawInputMaskSymbol
+                    .filter(symbol -> !step.isInputRaw())
+                    .map(symbol -> OptionalInt.of(source.getLayout().get(symbol)))
+                    .orElseGet(OptionalInt::empty);
             for (Map.Entry<Symbol, Aggregation> entry : aggregations.entrySet()) {
                 Symbol symbol = entry.getKey();
                 Aggregation aggregation = entry.getValue();
 
-                aggregatorFactories.add(buildAggregatorFactory(source, aggregation, step));
+                aggregatorFactories.add(buildAggregatorFactory(source, aggregation, step, rawInputMaskChannel));
                 aggregationOutputSymbols.add(symbol);
             }
 
@@ -3841,6 +3851,32 @@ public class LocalExecutionPlanner
                 outputMappings.put(symbol, channel);
                 channel++;
             }
+            Map<Symbol, Integer> outputMappingsSoFar = outputMappings.build();
+            List<Symbol> aggregationInputs = rawInputMaskSymbol.isPresent() ?
+                    ImmutableList.copyOf(aggregations.values().stream()
+//                    .sorted(comparingByKey())
+//                    .map(Map.Entry::getValue)
+                            .flatMap(Aggregation::getInputs)
+                            .filter(input -> !outputMappingsSoFar.containsKey(input))
+                            .collect(toImmutableSet()))
+                    : ImmutableList.of();
+            if (step.isOutputPartial() && rawInputMaskSymbol.isPresent()) {
+                // add mask channels
+                for (Symbol symbol : aggregations.values().stream()
+                        .map(Aggregation::getMask)
+                        .flatMap(Optional::stream)
+                        .collect(toImmutableSet())) {
+                    outputMappings.put(symbol, channel);
+                    channel++;
+                }
+                // add inputs to the aggregations to be used by adaptive partial aggregation
+                for (Symbol symbol : aggregationInputs) {
+                    outputMappings.put(symbol, channel);
+                    channel++;
+                }
+                outputMappings.put(rawInputMaskSymbol.orElseThrow(), channel);
+                channel++;
+            }
 
             List<Integer> groupByChannels = getChannelsForSymbols(groupBySymbols, source.getLayout());
             List<Type> groupByTypes = groupByChannels.stream()
@@ -3858,12 +3894,18 @@ public class LocalExecutionPlanner
                         joinCompiler);
             }
             else {
+                List<Integer> aggregationInputChannels = getChannelsForSymbols(aggregationInputs, source.getLayout());
+                List<Type> aggregationInputTypes = aggregationInputChannels.stream()
+                        .map(entry -> source.getTypes().get(entry))
+                        .collect(toImmutableList());
                 Optional<Integer> hashChannel = hashSymbol.map(channelGetter(source));
                 return new HashAggregationOperatorFactory(
                         context.getNextOperatorId(),
                         planNodeId,
                         groupByTypes,
                         groupByChannels,
+                        aggregationInputTypes,
+                        aggregationInputChannels,
                         ImmutableList.copyOf(globalGroupingSets),
                         step,
                         hasDefaultOutput,

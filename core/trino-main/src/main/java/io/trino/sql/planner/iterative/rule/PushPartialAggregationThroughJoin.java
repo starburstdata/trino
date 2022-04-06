@@ -64,6 +64,11 @@ public class PushPartialAggregationThroughJoin
             // TODO: add support for hash symbol in aggregation node
             return false;
         }
+
+        if (aggregationNode.getRawInputMaskSymbol().isPresent()) {
+            // TODO: add support for rawInputMaskSymbol in aggregation node
+            return false;
+        }
         return aggregationNode.getStep() == PARTIAL && aggregationNode.getGroupingSetCount() == 1;
     }
 
@@ -166,7 +171,8 @@ public class PushPartialAggregationThroughJoin
                 ImmutableList.of(),
                 aggregation.getStep(),
                 aggregation.getHashSymbol(),
-                aggregation.getGroupIdSymbol());
+                aggregation.getGroupIdSymbol(),
+                aggregation.getRawInputMaskSymbol());
     }
 
     private PlanNode pushPartialToJoin(

@@ -67,6 +67,7 @@ import static io.airlift.units.DataSize.Unit.MEGABYTE;
 import static io.airlift.units.DataSize.succinctBytes;
 import static io.trino.RowPagesBuilder.rowPagesBuilder;
 import static io.trino.SessionTestUtils.TEST_SESSION;
+import static io.trino.block.BlockAssertions.createLongSequenceBlock;
 import static io.trino.block.BlockAssertions.createLongsBlock;
 import static io.trino.block.BlockAssertions.createRLEBlock;
 import static io.trino.operator.GroupByHashYieldAssertion.GroupByHashYieldResult;
@@ -77,6 +78,8 @@ import static io.trino.operator.OperatorAssertion.assertPagesEqualIgnoreOrder;
 import static io.trino.operator.OperatorAssertion.dropChannel;
 import static io.trino.operator.OperatorAssertion.toMaterializedResult;
 import static io.trino.operator.OperatorAssertion.toPages;
+import static io.trino.operator.aggregation.partial.PartialAggregationOutputProcessor.booleanRle;
+import static io.trino.operator.aggregation.partial.PartialAggregationOutputProcessor.nullRle;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DoubleType.DOUBLE;
@@ -180,6 +183,8 @@ public class TestHashAggregationOperator
                 ImmutableList.of(VARCHAR),
                 hashChannels,
                 ImmutableList.of(),
+                ImmutableList.of(),
+                ImmutableList.of(),
                 SINGLE,
                 false,
                 ImmutableList.of(COUNT.createAggregatorFactory(SINGLE, ImmutableList.of(0), OptionalInt.empty()),
@@ -233,6 +238,8 @@ public class TestHashAggregationOperator
                 new PlanNodeId("test"),
                 ImmutableList.of(VARCHAR, BIGINT),
                 groupByChannels,
+                ImmutableList.of(),
+                ImmutableList.of(),
                 globalAggregationGroupIds,
                 SINGLE,
                 true,
@@ -286,6 +293,8 @@ public class TestHashAggregationOperator
                 ImmutableList.of(BIGINT),
                 hashChannels,
                 ImmutableList.of(),
+                ImmutableList.of(),
+                ImmutableList.of(),
                 SINGLE,
                 true,
                 ImmutableList.of(arrayAggColumn.createAggregatorFactory(SINGLE, ImmutableList.of(0), OptionalInt.empty())),
@@ -331,6 +340,8 @@ public class TestHashAggregationOperator
                 ImmutableList.of(BIGINT),
                 hashChannels,
                 ImmutableList.of(),
+                ImmutableList.of(),
+                ImmutableList.of(),
                 SINGLE,
                 ImmutableList.of(COUNT.createAggregatorFactory(SINGLE, ImmutableList.of(0), OptionalInt.empty()),
                         LONG_MIN.createAggregatorFactory(SINGLE, ImmutableList.of(3), OptionalInt.empty()),
@@ -370,6 +381,8 @@ public class TestHashAggregationOperator
                 ImmutableList.of(VARCHAR),
                 hashChannels,
                 ImmutableList.of(),
+                ImmutableList.of(),
+                ImmutableList.of(),
                 SINGLE,
                 false,
                 ImmutableList.of(COUNT.createAggregatorFactory(SINGLE, ImmutableList.of(0), OptionalInt.empty())),
@@ -397,6 +410,8 @@ public class TestHashAggregationOperator
                 new PlanNodeId("test"),
                 ImmutableList.of(type),
                 ImmutableList.of(0),
+                ImmutableList.of(),
+                ImmutableList.of(),
                 ImmutableList.of(),
                 SINGLE,
                 ImmutableList.of(COUNT.createAggregatorFactory(SINGLE, ImmutableList.of(0), OptionalInt.empty())),
@@ -451,6 +466,8 @@ public class TestHashAggregationOperator
                 ImmutableList.of(VARCHAR),
                 hashChannels,
                 ImmutableList.of(),
+                ImmutableList.of(),
+                ImmutableList.of(),
                 SINGLE,
                 ImmutableList.of(COUNT.createAggregatorFactory(SINGLE, ImmutableList.of(0), OptionalInt.empty())),
                 rowPagesBuilder.getHashChannel(),
@@ -485,6 +502,8 @@ public class TestHashAggregationOperator
                 ImmutableList.of(BIGINT),
                 hashChannels,
                 ImmutableList.of(),
+                ImmutableList.of(),
+                ImmutableList.of(),
                 SINGLE,
                 ImmutableList.of(COUNT.createAggregatorFactory(SINGLE, ImmutableList.of(0), OptionalInt.empty()),
                         LONG_AVERAGE.createAggregatorFactory(SINGLE, ImmutableList.of(1), OptionalInt.empty())),
@@ -518,6 +537,8 @@ public class TestHashAggregationOperator
                 ImmutableList.of(BIGINT),
                 hashChannels,
                 ImmutableList.of(),
+                ImmutableList.of(),
+                ImmutableList.of(),
                 PARTIAL,
                 ImmutableList.of(LONG_MIN.createAggregatorFactory(PARTIAL, ImmutableList.of(0), OptionalInt.empty())),
                 rowPagesBuilder.getHashChannel(),
@@ -531,10 +552,10 @@ public class TestHashAggregationOperator
         DriverContext driverContext = createDriverContext(1024);
 
         try (Operator operator = operatorFactory.createOperator(driverContext)) {
-            List<Page> expectedPages = rowPagesBuilder(BIGINT, BIGINT)
-                    .addSequencePage(2000, 0, 0)
+            List<Page> expectedPages = rowPagesBuilder(BIGINT, BIGINT, BOOLEAN)
+                    .addBlocksPage(createLongSequenceBlock(0, 2000), createLongSequenceBlock(0, 2000), nullRle(BOOLEAN, 2000))
                     .build();
-            MaterializedResult expected = resultBuilder(driverContext.getSession(), BIGINT, BIGINT)
+            MaterializedResult expected = resultBuilder(driverContext.getSession(), BIGINT, BIGINT, BOOLEAN)
                     .pages(expectedPages)
                     .build();
 
@@ -599,6 +620,8 @@ public class TestHashAggregationOperator
                 ImmutableList.of(BIGINT),
                 ImmutableList.of(0),
                 ImmutableList.of(),
+                ImmutableList.of(),
+                ImmutableList.of(),
                 SINGLE,
                 false,
                 ImmutableList.of(LONG_MIN.createAggregatorFactory(SINGLE, ImmutableList.of(0), OptionalInt.empty())),
@@ -651,6 +674,8 @@ public class TestHashAggregationOperator
                 ImmutableList.of(BIGINT),
                 hashChannels,
                 ImmutableList.of(),
+                ImmutableList.of(),
+                ImmutableList.of(),
                 SINGLE,
                 false,
                 ImmutableList.of(COUNT.createAggregatorFactory(SINGLE, ImmutableList.of(0), OptionalInt.empty()),
@@ -689,6 +714,8 @@ public class TestHashAggregationOperator
                 ImmutableList.of(BIGINT),
                 hashChannels,
                 ImmutableList.of(),
+                ImmutableList.of(),
+                ImmutableList.of(),
                 SINGLE,
                 ImmutableList.of(LONG_MIN.createAggregatorFactory(SINGLE, ImmutableList.of(0), OptionalInt.empty())),
                 rowPagesBuilder.getHashChannel(),
@@ -726,6 +753,8 @@ public class TestHashAggregationOperator
                 ImmutableList.of(BIGINT),
                 hashChannels,
                 ImmutableList.of(),
+                ImmutableList.of(),
+                ImmutableList.of(),
                 PARTIAL,
                 ImmutableList.of(LONG_MIN.createAggregatorFactory(PARTIAL, ImmutableList.of(0), OptionalInt.empty())),
                 Optional.empty(),
@@ -744,9 +773,9 @@ public class TestHashAggregationOperator
                 .addBlocksPage(createLongsBlock(0, 1, 2, 3, 4, 5, 6, 7, 8, 8)) // first page will be hashed but the values are almost unique, so it will trigger adaptation
                 .addBlocksPage(createRLEBlock(1, 10)) // second page would be hashed to existing value 1. but if adaptive PA kicks in, the raw values will be passed on
                 .build();
-        List<Page> operator1Expected = rowPagesBuilder(BIGINT, BIGINT)
-                .addBlocksPage(createLongsBlock(0, 1, 2, 3, 4, 5, 6, 7, 8), createLongsBlock(0, 1, 2, 3, 4, 5, 6, 7, 8)) // the last position was aggregated
-                .addBlocksPage(createRLEBlock(1, 10), createRLEBlock(1, 10)) // we are expecting second page with raw values
+        List<Page> operator1Expected = rowPagesBuilder(BIGINT, BIGINT, BOOLEAN)
+                .addBlocksPage(createLongsBlock(0, 1, 2, 3, 4, 5, 6, 7, 8), createLongsBlock(0, 1, 2, 3, 4, 5, 6, 7, 8), nullRle(BOOLEAN, 9)) // the last position was aggregated
+                .addBlocksPage(createRLEBlock(1, 10), nullRle(BIGINT, 10), booleanRle(true, 10)) // we are expecting second page with raw values
                 .build();
         assertOperatorEquals(operatorFactory, operator1Input, operator1Expected);
 
@@ -757,9 +786,9 @@ public class TestHashAggregationOperator
                 .addBlocksPage(createRLEBlock(1, 10))
                 .addBlocksPage(createRLEBlock(2, 10))
                 .build();
-        List<Page> operator2Expected = rowPagesBuilder(BIGINT, BIGINT)
-                .addBlocksPage(createRLEBlock(1, 10), createRLEBlock(1, 10))
-                .addBlocksPage(createRLEBlock(2, 10), createRLEBlock(2, 10))
+        List<Page> operator2Expected = rowPagesBuilder(BIGINT, BIGINT, BOOLEAN)
+                .addBlocksPage(createRLEBlock(1, 10), nullRle(BIGINT, 10), booleanRle(true, 10))
+                .addBlocksPage(createRLEBlock(2, 10), nullRle(BIGINT, 10), booleanRle(true, 10))
                 .build();
 
         assertOperatorEquals(operatorFactory, operator2Input, operator2Expected);
@@ -777,6 +806,8 @@ public class TestHashAggregationOperator
                 ImmutableList.of(BIGINT),
                 hashChannels,
                 ImmutableList.of(),
+                ImmutableList.of(),
+                ImmutableList.of(),
                 PARTIAL,
                 ImmutableList.of(LONG_MIN.createAggregatorFactory(PARTIAL, ImmutableList.of(0), OptionalInt.empty())),
                 Optional.empty(),
@@ -792,9 +823,9 @@ public class TestHashAggregationOperator
                 .addSequencePage(10, 0) // first page are unique values, so it would trigger adaptation, but it won't because flush is not called
                 .addBlocksPage(createRLEBlock(1, 2)) // second page will be hashed to existing value 1
                 .build();
-        // the total unique ows ratio for the first operator will be 10/12 so > 0.8 (adaptive partial aggregation uniqueRowsRatioThreshold)
-        List<Page> operator1Expected = rowPagesBuilder(BIGINT, BIGINT)
-                .addSequencePage(10, 0, 0) // we are expecting second page to be squashed with the first
+        // the total unique rows ratio for the first operator will be 10/12 so > 0.8 (adaptive partial aggregation uniqueRowsRatioThreshold)
+        List<Page> operator1Expected = rowPagesBuilder(BIGINT, BIGINT, BOOLEAN)
+                .addBlocksPage(createLongSequenceBlock(0, 10), createLongSequenceBlock(0, 10), nullRle(BOOLEAN, 10)) // we are expecting second page to be squashed with the first
                 .build();
         assertOperatorEquals(operatorFactory, operator1Input, operator1Expected);
 
@@ -806,9 +837,9 @@ public class TestHashAggregationOperator
                 .addBlocksPage(createRLEBlock(1, 10))
                 .addBlocksPage(createRLEBlock(2, 10))
                 .build();
-        List<Page> operator2Expected = rowPagesBuilder(BIGINT, BIGINT)
-                .addBlocksPage(createRLEBlock(1, 10), createRLEBlock(1, 10))
-                .addBlocksPage(createRLEBlock(2, 10), createRLEBlock(2, 10))
+        List<Page> operator2Expected = rowPagesBuilder(BIGINT, BIGINT, BOOLEAN)
+                .addBlocksPage(createRLEBlock(1, 10), nullRle(BIGINT, 10), booleanRle(true, 10))
+                .addBlocksPage(createRLEBlock(2, 10), nullRle(BIGINT, 10), booleanRle(true, 10))
                 .build();
 
         assertOperatorEquals(operatorFactory, operator2Input, operator2Expected);
@@ -817,7 +848,7 @@ public class TestHashAggregationOperator
     private void assertOperatorEquals(OperatorFactory operatorFactory, List<Page> input, List<Page> expectedPages)
     {
         DriverContext driverContext = createDriverContext(1024);
-        MaterializedResult expected = resultBuilder(driverContext.getSession(), BIGINT, BIGINT)
+        MaterializedResult expected = resultBuilder(driverContext.getSession(), BIGINT, BIGINT, BOOLEAN)
                 .pages(expectedPages)
                 .build();
         OperatorAssertion.assertOperatorEquals(operatorFactory, driverContext, input, expected, false, false);

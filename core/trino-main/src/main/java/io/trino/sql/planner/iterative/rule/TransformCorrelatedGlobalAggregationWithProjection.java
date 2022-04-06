@@ -216,7 +216,8 @@ public class TransformCorrelatedGlobalAggregationWithProjection
                     ImmutableList.of(),
                     distinct.getStep(),
                     Optional.empty(),
-                    Optional.empty());
+                    Optional.empty(),
+                    distinct.getRawInputMaskSymbol());
         }
 
         // prepare mask symbols for aggregations
@@ -265,7 +266,8 @@ public class TransformCorrelatedGlobalAggregationWithProjection
                 ImmutableList.of(),
                 globalAggregation.getStep(),
                 Optional.empty(),
-                Optional.empty());
+                Optional.empty(),
+                globalAggregation.getRawInputMaskSymbol());
 
         // restrict outputs and apply projection
         Set<Symbol> outputSymbols = new HashSet<>(correlatedJoinNode.getOutputSymbols());

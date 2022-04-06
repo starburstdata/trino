@@ -492,7 +492,8 @@ public class PlanBuilder
                     preGroupedSymbols,
                     step,
                     hashSymbol,
-                    groupIdSymbol);
+                    groupIdSymbol,
+                    Optional.empty()); // TODO lysy:
         }
     }
 

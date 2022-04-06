@@ -193,7 +193,8 @@ public class TransformCorrelatedGroupedAggregationWithProjection
                     ImmutableList.of(),
                     distinct.getStep(),
                     Optional.empty(),
-                    Optional.empty());
+                    Optional.empty(),
+                    distinct.getRawInputMaskSymbol());
         }
 
         // restore grouped aggregation
@@ -209,7 +210,8 @@ public class TransformCorrelatedGroupedAggregationWithProjection
                 ImmutableList.of(),
                 groupedAggregation.getStep(),
                 Optional.empty(),
-                Optional.empty());
+                Optional.empty(),
+                groupedAggregation.getRawInputMaskSymbol());
 
         // restrict outputs and apply projection
         Set<Symbol> outputSymbols = new HashSet<>(correlatedJoinNode.getOutputSymbols());

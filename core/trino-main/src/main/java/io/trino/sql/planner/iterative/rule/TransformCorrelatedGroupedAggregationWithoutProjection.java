@@ -184,7 +184,8 @@ public class TransformCorrelatedGroupedAggregationWithoutProjection
                     ImmutableList.of(),
                     distinct.getStep(),
                     Optional.empty(),
-                    Optional.empty());
+                    Optional.empty(),
+                    distinct.getRawInputMaskSymbol());
         }
 
         // restore grouped aggregation
@@ -200,7 +201,8 @@ public class TransformCorrelatedGroupedAggregationWithoutProjection
                 ImmutableList.of(),
                 groupedAggregation.getStep(),
                 Optional.empty(),
-                Optional.empty());
+                Optional.empty(),
+                groupedAggregation.getRawInputMaskSymbol());
 
         // restrict outputs
         Optional<PlanNode> project = restrictOutputs(context.getIdAllocator(), groupedAggregation, ImmutableSet.copyOf(correlatedJoinNode.getOutputSymbols()));

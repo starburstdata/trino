@@ -217,7 +217,8 @@ public class ExpressionRewriteRuleSet
                         aggregationNode.getPreGroupedSymbols(),
                         aggregationNode.getStep(),
                         aggregationNode.getHashSymbol(),
-                        aggregationNode.getGroupIdSymbol()));
+                        aggregationNode.getGroupIdSymbol(),
+                        aggregationNode.getRawInputMaskSymbol()));
             }
             return Result.empty();
         }
