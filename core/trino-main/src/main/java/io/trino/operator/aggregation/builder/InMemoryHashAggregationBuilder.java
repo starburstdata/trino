@@ -29,6 +29,7 @@ import io.trino.operator.WorkProcessor;
 import io.trino.operator.WorkProcessor.ProcessState;
 import io.trino.operator.aggregation.AggregatorFactory;
 import io.trino.operator.aggregation.GroupedAggregator;
+import io.trino.operator.aggregation.partial.PartialAggregationOutputProcessor;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.block.BlockBuilder;
@@ -45,6 +46,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static io.trino.operator.GroupByHash.createGroupByHash;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static java.util.Objects.requireNonNull;
@@ -57,6 +59,7 @@ public class InMemoryHashAggregationBuilder
     private final boolean partial;
     private final OptionalLong maxPartialMemory;
     private final UpdateMemory updateMemory;
+    private final Optional<PartialAggregationOutputProcessor> partialAggregationOutputProcessor;
 
     private boolean full;
 
@@ -66,6 +69,7 @@ public class InMemoryHashAggregationBuilder
             int expectedGroups,
             List<Type> groupByTypes,
             List<Integer> groupByChannels,
+            Optional<PartialAggregationOutputProcessor> partialAggregationOutputProcessor,
             Optional<Integer> hashChannel,
             OperatorContext operatorContext,
             Optional<DataSize> maxPartialMemory,
@@ -78,6 +82,7 @@ public class InMemoryHashAggregationBuilder
                 expectedGroups,
                 groupByTypes,
                 groupByChannels,
+                partialAggregationOutputProcessor,
                 hashChannel,
                 operatorContext,
                 maxPartialMemory,
@@ -93,6 +98,7 @@ public class InMemoryHashAggregationBuilder
             int expectedGroups,
             List<Type> groupByTypes,
             List<Integer> groupByChannels,
+            Optional<PartialAggregationOutputProcessor> partialAggregationOutputProcessor,
             Optional<Integer> hashChannel,
             OperatorContext operatorContext,
             Optional<DataSize> maxPartialMemory,
@@ -113,7 +119,10 @@ public class InMemoryHashAggregationBuilder
         this.partial = step.isOutputPartial();
         this.maxPartialMemory = maxPartialMemory.map(dataSize -> OptionalLong.of(dataSize.toBytes())).orElseGet(OptionalLong::empty);
         this.updateMemory = requireNonNull(updateMemory, "updateMemory is null");
-
+        this.partialAggregationOutputProcessor = requireNonNull(partialAggregationOutputProcessor, "partialAggregationOutputProcessor is null");
+        if (partial) {
+            checkArgument(partialAggregationOutputProcessor.isPresent(), "partialAggregationOutputProcessor must be present in the partial step");
+        }
         // wrapper each function with an aggregator
         ImmutableList.Builder<GroupedAggregator> builder = ImmutableList.builder();
         requireNonNull(aggregatorFactories, "aggregatorFactories is null");
@@ -290,7 +299,12 @@ public class InMemoryHashAggregationBuilder
                 }
             }
 
-            return ProcessState.ofResult(pageBuilder.build());
+            Page page = pageBuilder.build();
+            if (partial) {
+                page = partialAggregationOutputProcessor.get().processAggregatedPage(page);
+            }
+
+            return ProcessState.ofResult(page);
         });
     }
 

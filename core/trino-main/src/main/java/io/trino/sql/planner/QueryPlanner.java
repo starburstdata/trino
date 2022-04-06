@@ -823,7 +823,8 @@ class QueryPlanner
                 ImmutableList.of(),
                 AggregationNode.Step.SINGLE,
                 Optional.empty(),
-                groupIdSymbol);
+                groupIdSymbol,
+                Optional.empty());
 
         return new PlanBuilder(
                 subPlan.getTranslations()

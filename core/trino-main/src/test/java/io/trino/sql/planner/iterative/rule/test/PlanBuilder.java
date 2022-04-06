@@ -124,6 +124,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.VarbinaryType.VARBINARY;
 import static io.trino.sql.planner.SystemPartitioningHandle.FIXED_HASH_DISTRIBUTION;
 import static io.trino.sql.planner.SystemPartitioningHandle.SINGLE_DISTRIBUTION;
@@ -398,6 +399,7 @@ public class PlanBuilder
         private Optional<Symbol> hashSymbol = Optional.empty();
         private Optional<Symbol> groupIdSymbol = Optional.empty();
         private Optional<PlanNodeId> nodeId = Optional.empty();
+        private Optional<Symbol> rawInputMaskSymbol = Optional.empty();
 
         public AggregationBuilder source(PlanNode source)
         {
@@ -423,6 +425,28 @@ public class PlanBuilder
             return addAggregation(output, new Aggregation(
                     resolvedFunction,
                     aggregation.getArguments(),
+                    aggregation.isDistinct(),
+                    aggregation.getFilter().map(Symbol::from),
+                    aggregation.getOrderBy().map(OrderingScheme::fromOrderBy),
+                    mask));
+        }
+
+        public AggregationBuilder addFinalAggregation(Symbol output, Expression expression, List<Type> inputTypes, List<Symbol> rawInputs)
+        {
+            return addFinalAggregation(output, expression, inputTypes, Optional.empty(), rawInputs);
+        }
+
+        private AggregationBuilder addFinalAggregation(Symbol output, Expression expression, List<Type> inputTypes, Optional<Symbol> mask, List<Symbol> rawInputs)
+        {
+            checkArgument(expression instanceof FunctionCall);
+            FunctionCall aggregation = (FunctionCall) expression;
+            ResolvedFunction resolvedFunction = metadata.resolveFunction(session, aggregation.getName(), TypeSignatureProvider.fromTypes(inputTypes));
+            return addAggregation(output, new Aggregation(
+                    resolvedFunction,
+                    ImmutableList.<Expression>builder()
+                            .addAll(aggregation.getArguments())
+                            .addAll(rawInputs.stream().map(Symbol::toSymbolReference).collect(toImmutableList()))
+                            .build(),
                     aggregation.isDistinct(),
                     aggregation.getFilter().map(Symbol::from),
                     aggregation.getOrderBy().map(OrderingScheme::fromOrderBy),
@@ -485,6 +509,22 @@ public class PlanBuilder
             return this;
         }
 
+        public AggregationBuilder rawInputMaskSymbol()
+        {
+            return rawInputMaskSymbol(symbol("rawInputMask", BOOLEAN));
+        }
+
+        public AggregationBuilder rawInputMaskSymbol(Symbol rawInputMaskSymbol)
+        {
+            return rawInputMaskSymbol(Optional.of(rawInputMaskSymbol));
+        }
+
+        private AggregationBuilder rawInputMaskSymbol(Optional<Symbol> rawInputMaskSymbol)
+        {
+            this.rawInputMaskSymbol = rawInputMaskSymbol;
+            return this;
+        }
+
         protected AggregationNode build()
         {
             checkState(groupingSets != null, "No grouping sets defined; use globalGrouping/groupingKeys method");
@@ -496,7 +536,20 @@ public class PlanBuilder
                     preGroupedSymbols,
                     step,
                     hashSymbol,
-                    groupIdSymbol);
+                    groupIdSymbol,
+                    rawInputMaskSymbol);
+        }
+
+        public AggregationNode partialAggregation(Consumer<AggregationBuilder> aggregationBuilderConsumer)
+        {
+            return aggregation(aggregation -> aggregationBuilderConsumer.accept(aggregation
+                    .step(Step.PARTIAL)
+                    .rawInputMaskSymbol(rawInputMaskSymbol)));
+        }
+
+        public AggregationBuilder finalAggregation()
+        {
+            return step(AggregationNode.Step.FINAL).rawInputMaskSymbol(symbol("rawInputMask", BOOLEAN));
         }
     }
 

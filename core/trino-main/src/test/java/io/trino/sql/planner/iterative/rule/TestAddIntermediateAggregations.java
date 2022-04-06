@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableMap;
 import io.trino.sql.planner.assertions.ExpectedValueProvider;
 import io.trino.sql.planner.assertions.PlanMatchPattern;
 import io.trino.sql.planner.iterative.rule.test.BaseRuleTest;
-import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.Assignments;
 import io.trino.sql.planner.plan.ExchangeNode;
 import io.trino.sql.tree.FunctionCall;
@@ -57,13 +56,12 @@ public class TestAddIntermediateAggregations
                 .setSystemProperty(TASK_CONCURRENCY, "4")
                 .on(p -> p.aggregation(af -> {
                     af.globalGrouping()
-                            .step(AggregationNode.Step.FINAL)
+                            .finalAggregation()
                             .addAggregation(p.symbol("c"), expression("count(b)"), ImmutableList.of(BIGINT))
                             .source(
                                     p.gatheringExchange(
                                             ExchangeNode.Scope.REMOTE,
-                                            p.aggregation(ap -> ap.globalGrouping()
-                                                    .step(AggregationNode.Step.PARTIAL)
+                                            af.partialAggregation(ap -> ap.globalGrouping()
                                                     .addAggregation(p.symbol("b"), expression("count(a)"), ImmutableList.of(BIGINT))
                                                     .source(
                                                             p.values(p.symbol("a"))))));
@@ -108,13 +106,12 @@ public class TestAddIntermediateAggregations
                 .setSystemProperty(TASK_CONCURRENCY, "4")
                 .on(p -> p.aggregation(af -> {
                     af.globalGrouping()
-                            .step(AggregationNode.Step.FINAL)
+                            .finalAggregation()
                             .addAggregation(p.symbol("c"), expression("count(b)"), ImmutableList.of(BIGINT))
                             .source(
                                     p.gatheringExchange(
                                             ExchangeNode.Scope.REMOTE,
-                                            p.aggregation(ap -> ap.globalGrouping()
-                                                    .step(AggregationNode.Step.PARTIAL)
+                                            af.partialAggregation(ap -> ap.globalGrouping()
                                                     .addAggregation(p.symbol("b"), expression("count(*)"), ImmutableList.of())
                                                     .source(
                                                             p.values(p.symbol("a"))))));
@@ -157,15 +154,14 @@ public class TestAddIntermediateAggregations
                 .setSystemProperty(TASK_CONCURRENCY, "4")
                 .on(p -> p.aggregation(af -> {
                     af.globalGrouping()
-                            .step(AggregationNode.Step.FINAL)
+                            .finalAggregation()
                             .addAggregation(p.symbol("c"), expression("count(b)"), ImmutableList.of(BIGINT))
                             .source(
                                     p.gatheringExchange(
                                             ExchangeNode.Scope.REMOTE,
                                             p.gatheringExchange(
                                                     ExchangeNode.Scope.REMOTE,
-                                                    p.aggregation(ap -> ap.globalGrouping()
-                                                            .step(AggregationNode.Step.PARTIAL)
+                                                    af.partialAggregation(ap -> ap.globalGrouping()
                                                             .addAggregation(p.symbol("b"), expression("count(a)"), ImmutableList.of(BIGINT))
                                                             .source(
                                                                     p.values(p.symbol("a")))))));
@@ -207,13 +203,12 @@ public class TestAddIntermediateAggregations
                 .setSystemProperty(TASK_CONCURRENCY, "4")
                 .on(p -> p.aggregation(af -> {
                     af.globalGrouping()
-                            .step(AggregationNode.Step.FINAL)
+                            .finalAggregation()
                             .addAggregation(p.symbol("c"), expression("count(b)"), ImmutableList.of(BIGINT))
                             .source(
                                     p.gatheringExchange(
                                             ExchangeNode.Scope.REMOTE,
-                                            p.aggregation(ap -> ap.globalGrouping()
-                                                    .step(AggregationNode.Step.PARTIAL)
+                                            af.partialAggregation(ap -> ap.globalGrouping()
                                                     .addAggregation(p.symbol("b"), expression("count(a)"), ImmutableList.of(BIGINT))
                                                     .source(
                                                             p.values(p.symbol("a"))))));
@@ -231,13 +226,12 @@ public class TestAddIntermediateAggregations
                 .setSystemProperty(TASK_CONCURRENCY, "1")
                 .on(p -> p.aggregation(af -> {
                     af.globalGrouping()
-                            .step(AggregationNode.Step.FINAL)
+                            .finalAggregation()
                             .addAggregation(p.symbol("c"), expression("count(b)"), ImmutableList.of(BIGINT))
                             .source(
                                     p.gatheringExchange(
                                             ExchangeNode.Scope.REMOTE,
-                                            p.aggregation(ap -> ap.globalGrouping()
-                                                    .step(AggregationNode.Step.PARTIAL)
+                                            af.partialAggregation(ap -> ap.globalGrouping()
                                                     .addAggregation(p.symbol("b"), expression("count(a)"), ImmutableList.of(BIGINT))
                                                     .source(
                                                             p.values(p.symbol("a"))))));
@@ -271,13 +265,12 @@ public class TestAddIntermediateAggregations
                 .setSystemProperty(TASK_CONCURRENCY, "4")
                 .on(p -> p.aggregation(af -> {
                     af.singleGroupingSet(p.symbol("c"))
-                            .step(AggregationNode.Step.FINAL)
-                            .addAggregation(p.symbol("c"), expression("count(b)"), ImmutableList.of(BIGINT))
+                            .finalAggregation()
+                            .addFinalAggregation(p.symbol("c"), expression("count(b)"), ImmutableList.of(BIGINT), ImmutableList.of(p.symbol("a")))
                             .source(
                                     p.gatheringExchange(
                                             ExchangeNode.Scope.REMOTE,
-                                            p.aggregation(ap -> ap.singleGroupingSet(p.symbol("b"))
-                                                    .step(AggregationNode.Step.PARTIAL)
+                                            af.partialAggregation(ap -> ap.singleGroupingSet(p.symbol("b"))
                                                     .addAggregation(p.symbol("b"), expression("count(a)"), ImmutableList.of(BIGINT))
                                                     .source(
                                                             p.values(p.symbol("a"))))));
@@ -295,15 +288,14 @@ public class TestAddIntermediateAggregations
                 .setSystemProperty(TASK_CONCURRENCY, "4")
                 .on(p -> p.aggregation(af -> {
                     af.globalGrouping()
-                            .step(AggregationNode.Step.FINAL)
+                            .finalAggregation()
                             .addAggregation(p.symbol("c"), expression("count(b)"), ImmutableList.of(BIGINT))
                             .source(
                                     p.gatheringExchange(
                                             ExchangeNode.Scope.REMOTE,
                                             p.project(
                                                     Assignments.identity(p.symbol("b")),
-                                                    p.aggregation(ap -> ap.globalGrouping()
-                                                            .step(AggregationNode.Step.PARTIAL)
+                                                    af.partialAggregation(ap -> ap.globalGrouping()
                                                             .addAggregation(p.symbol("b"), expression("count(a)"), ImmutableList.of(BIGINT))
                                                             .source(
                                                                     p.values(p.symbol("a")))))));

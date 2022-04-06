@@ -18,9 +18,12 @@ import io.trino.operator.GroupByIdBlock;
 import io.trino.spi.Page;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
+import io.trino.spi.block.ByteArrayBlock;
+import io.trino.spi.block.RunLengthEncodedBlock;
 import io.trino.spi.type.Type;
 import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.AggregationNode.Step;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
 
 import java.util.List;
 import java.util.Optional;
@@ -35,18 +38,30 @@ public class GroupedAggregator
     private AggregationNode.Step step;
     private final Type intermediateType;
     private final Type finalType;
-    private final int[] inputChannels;
+    private final int[] rawInputChannels;
+    private final OptionalInt intermediateStateChannel;
+    private final OptionalInt rawInputMaskChannel;
     private final OptionalInt maskChannel;
 
-    public GroupedAggregator(GroupedAccumulator accumulator, Step step, Type intermediateType, Type finalType, List<Integer> inputChannels, OptionalInt maskChannel)
+    public GroupedAggregator(
+            GroupedAccumulator accumulator,
+            Step step,
+            Type intermediateType,
+            Type finalType,
+            List<Integer> rawInputChannels,
+            OptionalInt intermediateStateChannel,
+            OptionalInt rawInputMaskChannel,
+            OptionalInt maskChannel)
     {
         this.accumulator = requireNonNull(accumulator, "accumulator is null");
         this.step = requireNonNull(step, "step is null");
         this.intermediateType = requireNonNull(intermediateType, "intermediateType is null");
         this.finalType = requireNonNull(finalType, "finalType is null");
-        this.inputChannels = Ints.toArray(requireNonNull(inputChannels, "inputChannels is null"));
+        this.rawInputChannels = Ints.toArray(requireNonNull(rawInputChannels, "inputChannels is null"));
+        this.intermediateStateChannel = requireNonNull(intermediateStateChannel, "intermediateStateChannel is null");
+        this.rawInputMaskChannel = requireNonNull(rawInputMaskChannel, "rawInputMaskChannel is null");
         this.maskChannel = requireNonNull(maskChannel, "maskChannel is null");
-        checkArgument(step.isInputRaw() || inputChannels.size() == 1, "expected 1 input channel for intermediate aggregation");
+        checkArgument(step.isInputRaw() || intermediateStateChannel.isPresent(), "expected intermediateStateChannel for intermediate aggregation but got %s ", intermediateStateChannel);
     }
 
     public long getEstimatedSize()
@@ -67,11 +82,55 @@ public class GroupedAggregator
     public void processPage(GroupByIdBlock groupIds, Page page)
     {
         if (step.isInputRaw()) {
-            accumulator.addInput(groupIds, page.getColumns(inputChannels), getMaskBlock(page));
+            accumulator.addInput(groupIds, page.getColumns(rawInputChannels), getMaskBlock(page));
+            return;
         }
-        else {
-            accumulator.addIntermediate(groupIds, page.getBlock(inputChannels[0]));
+
+        if (rawInputMaskChannel.isEmpty()) {
+            // process partially aggregated data
+            accumulator.addIntermediate(groupIds, page.getBlock(intermediateStateChannel.getAsInt()));
+            return;
         }
+        Block rawInputMaskBlock = page.getBlock(rawInputMaskChannel.getAsInt());
+        if (rawInputMaskBlock instanceof RunLengthEncodedBlock) {
+            if (rawInputMaskBlock.isNull(0)) {
+                // process partially aggregated data
+                accumulator.addIntermediate(groupIds, page.getBlock(intermediateStateChannel.getAsInt()));
+            }
+            else {
+                // process raw data
+                accumulator.addInput(groupIds, page.getColumns(rawInputChannels), getMaskBlock(page));
+            }
+            return;
+        }
+
+        // rawInputMaskBlock has potentially mixed partially aggregated and raw data
+        Block maskBlock = getMaskBlock(page)
+                .map(mask -> andMasks(mask, rawInputMaskBlock))
+                .orElse(rawInputMaskBlock);
+        accumulator.addInput(groupIds, page.getColumns(rawInputChannels), Optional.of(maskBlock));
+        IntArrayList intermediatePositions = filterByNull(rawInputMaskBlock);
+        Block intermediateStateBlock = page.getBlock(intermediateStateChannel.getAsInt());
+
+        if (intermediatePositions.size() != rawInputMaskBlock.getPositionCount()) {
+            // some rows were eliminated by the filter
+            intermediateStateBlock = intermediateStateBlock.getPositions(intermediatePositions.elements(), 0, intermediatePositions.size());
+            groupIds = new GroupByIdBlock(
+                    groupIds.getGroupCount(),
+                    groupIds.getPositions(intermediatePositions.elements(), 0, intermediatePositions.size()));
+        }
+
+        accumulator.addIntermediate(groupIds, intermediateStateBlock);
+    }
+
+    private Block andMasks(Block mask1, Block mask2)
+    {
+        int positionCount = mask1.getPositionCount();
+        byte[] mask = new byte[positionCount];
+        for (int i = 0; i < positionCount; i++) {
+            mask[i] = (byte) ((!mask1.isNull(i) && mask1.getByte(i, 0) == 1 && !mask2.isNull(i) && mask2.getByte(i, 0) == 1) ? 1 : 0);
+        }
+        return new ByteArrayBlock(positionCount, Optional.empty(), mask);
     }
 
     private Optional<Block> getMaskBlock(Page page)
@@ -106,5 +165,19 @@ public class GroupedAggregator
     public Type getSpillType()
     {
         return intermediateType;
+    }
+
+    private static IntArrayList filterByNull(Block mask)
+    {
+        int positions = mask.getPositionCount();
+
+        IntArrayList ids = new IntArrayList(positions);
+        for (int i = 0; i < positions; ++i) {
+            if (mask.isNull(i)) {
+                ids.add(i);
+            }
+        }
+
+        return ids;
     }
 }

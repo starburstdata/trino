@@ -221,7 +221,7 @@ public class TestLogicalPlanner
         assertDistributedPlan("SELECT orderstatus, sum(totalprice) FROM orders GROUP BY orderstatus",
                 anyTree(
                         aggregation(
-                                ImmutableMap.of("final_sum", functionCall("sum", ImmutableList.of("partial_sum"))),
+                                ImmutableMap.of("final_sum", functionCall("sum", ImmutableList.of("partial_sum", "totalprice"))),
                                 FINAL,
                                 exchange(LOCAL, GATHER,
                                         exchange(REMOTE, REPARTITION,
@@ -234,7 +234,7 @@ public class TestLogicalPlanner
         assertDistributedPlan("SELECT orderstatus, sum(totalprice) FROM orders WHERE orderstatus='O' GROUP BY orderstatus",
                 anyTree(
                         aggregation(
-                                ImmutableMap.of("final_sum", functionCall("sum", ImmutableList.of("partial_sum"))),
+                                ImmutableMap.of("final_sum", functionCall("sum", ImmutableList.of("partial_sum", "totalprice"))),
                                 FINAL,
                                 exchange(LOCAL, GATHER,
                                         exchange(REMOTE, REPARTITION,
@@ -1739,7 +1739,7 @@ public class TestLogicalPlanner
                 output(
                         anyTree(
                                 aggregation(
-                                        ImmutableMap.of("final_count", functionCall("count", ImmutableList.of("partial_count"))),
+                                        ImmutableMap.of("final_count", functionCall("count", ImmutableList.of("partial_count", "CONSTANT"))),
                                         FINAL,
                                         exchange(
                                                 LOCAL,

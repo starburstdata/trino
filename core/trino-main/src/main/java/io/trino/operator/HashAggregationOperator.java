@@ -23,6 +23,7 @@ import io.trino.operator.aggregation.builder.HashAggregationBuilder;
 import io.trino.operator.aggregation.builder.InMemoryHashAggregationBuilder;
 import io.trino.operator.aggregation.builder.SpillableHashAggregationBuilder;
 import io.trino.operator.aggregation.partial.PartialAggregationController;
+import io.trino.operator.aggregation.partial.PartialAggregationOutputProcessor;
 import io.trino.operator.aggregation.partial.SkipAggregationBuilder;
 import io.trino.operator.scalar.CombineHashFunction;
 import io.trino.spi.Page;
@@ -62,6 +63,7 @@ public class HashAggregationOperator
         private final Step step;
         private final boolean produceDefaultOutput;
         private final List<AggregatorFactory> aggregatorFactories;
+        private final Optional<PartialAggregationOutputProcessor> partialAggregationOutputProcessor;
         private final Optional<Integer> hashChannel;
         private final Optional<Integer> groupIdChannel;
 
@@ -83,6 +85,8 @@ public class HashAggregationOperator
                 PlanNodeId planNodeId,
                 List<? extends Type> groupByTypes,
                 List<Integer> groupByChannels,
+                List<? extends Type> aggregationRawInputTypes,
+                List<Integer> aggregationInputChannels,
                 List<Integer> globalAggregationGroupIds,
                 Step step,
                 List<AggregatorFactory> aggregatorFactories,
@@ -98,6 +102,14 @@ public class HashAggregationOperator
                     planNodeId,
                     groupByTypes,
                     groupByChannels,
+                    step.isOutputPartial() ?
+                            Optional.of(new PartialAggregationOutputProcessor(
+                                    groupByChannels,
+                                    hashChannel,
+                                    aggregatorFactories,
+                                    aggregationRawInputTypes,
+                                    aggregationInputChannels)) :
+                            Optional.empty(),
                     globalAggregationGroupIds,
                     step,
                     false,
@@ -122,6 +134,8 @@ public class HashAggregationOperator
                 PlanNodeId planNodeId,
                 List<? extends Type> groupByTypes,
                 List<Integer> groupByChannels,
+                List<? extends Type> aggregationRawInputTypes,
+                List<Integer> aggregationInputChannels,
                 List<Integer> globalAggregationGroupIds,
                 Step step,
                 boolean produceDefaultOutput,
@@ -141,6 +155,14 @@ public class HashAggregationOperator
                     planNodeId,
                     groupByTypes,
                     groupByChannels,
+                    step.isOutputPartial() ?
+                            Optional.of(new PartialAggregationOutputProcessor(
+                                    groupByChannels,
+                                    hashChannel,
+                                    aggregatorFactories,
+                                    aggregationRawInputTypes,
+                                    aggregationInputChannels)) :
+                            Optional.empty(),
                     globalAggregationGroupIds,
                     step,
                     produceDefaultOutput,
@@ -164,6 +186,7 @@ public class HashAggregationOperator
                 PlanNodeId planNodeId,
                 List<? extends Type> groupByTypes,
                 List<Integer> groupByChannels,
+                Optional<PartialAggregationOutputProcessor> partialAggregationOutputProcessor,
                 List<Integer> globalAggregationGroupIds,
                 Step step,
                 boolean produceDefaultOutput,
@@ -186,6 +209,10 @@ public class HashAggregationOperator
             this.groupIdChannel = requireNonNull(groupIdChannel, "groupIdChannel is null");
             this.groupByTypes = ImmutableList.copyOf(groupByTypes);
             this.groupByChannels = ImmutableList.copyOf(groupByChannels);
+            if (step.isOutputPartial()) {
+                checkArgument(partialAggregationOutputProcessor.isPresent(), "partialAggregationOutputProcessor must be present in the partial step");
+            }
+            this.partialAggregationOutputProcessor = requireNonNull(partialAggregationOutputProcessor, "partialAggregationOutputProcessor is null");
             this.globalAggregationGroupIds = ImmutableList.copyOf(globalAggregationGroupIds);
             this.step = step;
             this.produceDefaultOutput = produceDefaultOutput;
@@ -211,6 +238,7 @@ public class HashAggregationOperator
                     operatorContext,
                     groupByTypes,
                     groupByChannels,
+                    partialAggregationOutputProcessor,
                     globalAggregationGroupIds,
                     step,
                     produceDefaultOutput,
@@ -243,6 +271,7 @@ public class HashAggregationOperator
                     planNodeId,
                     groupByTypes,
                     groupByChannels,
+                    partialAggregationOutputProcessor,
                     globalAggregationGroupIds,
                     step,
                     produceDefaultOutput,
@@ -265,6 +294,7 @@ public class HashAggregationOperator
     private final Optional<PartialAggregationController> partialAggregationController;
     private final List<Type> groupByTypes;
     private final List<Integer> groupByChannels;
+    private final Optional<PartialAggregationOutputProcessor> partialAggregationOutputProcessor;
     private final List<Integer> globalAggregationGroupIds;
     private final Step step;
     private final boolean produceDefaultOutput;
@@ -299,6 +329,7 @@ public class HashAggregationOperator
             OperatorContext operatorContext,
             List<Type> groupByTypes,
             List<Integer> groupByChannels,
+            Optional<PartialAggregationOutputProcessor> partialAggregationOutputProcessor,
             List<Integer> globalAggregationGroupIds,
             Step step,
             boolean produceDefaultOutput,
@@ -321,9 +352,12 @@ public class HashAggregationOperator
         requireNonNull(aggregatorFactories, "aggregatorFactories is null");
         requireNonNull(operatorContext, "operatorContext is null");
         checkArgument(partialAggregationController.isEmpty() || step.isOutputPartial(), "partialAggregationController should be present only for partial aggregation");
-
+        if (step.isOutputPartial()) {
+            checkArgument(partialAggregationOutputProcessor.isPresent(), "partialAggregationOutputProcessor must be present in the partial step");
+        }
         this.groupByTypes = ImmutableList.copyOf(groupByTypes);
         this.groupByChannels = ImmutableList.copyOf(groupByChannels);
+        this.partialAggregationOutputProcessor = requireNonNull(partialAggregationOutputProcessor, "partialAggregationOutputProcessor is null");
         this.globalAggregationGroupIds = ImmutableList.copyOf(globalAggregationGroupIds);
         this.aggregatorFactories = ImmutableList.copyOf(aggregatorFactories);
         this.hashChannel = requireNonNull(hashChannel, "hashChannel is null");
@@ -390,7 +424,7 @@ public class HashAggregationOperator
                     .map(PartialAggregationController::isPartialAggregationDisabled)
                     .orElse(false);
             if (step.isOutputPartial() && partialAggregationDisabled) {
-                aggregationBuilder = new SkipAggregationBuilder(groupByChannels, hashChannel, aggregatorFactories, memoryContext);
+                aggregationBuilder = new SkipAggregationBuilder(partialAggregationOutputProcessor.get(), memoryContext);
             }
             else if (step.isOutputPartial() || !spillEnabled || !isSpillable()) {
                 // TODO: We ignore spillEnabled here if any aggregate has ORDER BY clause or DISTINCT because they are not yet implemented for spilling.
@@ -400,6 +434,7 @@ public class HashAggregationOperator
                         expectedGroups,
                         groupByTypes,
                         groupByChannels,
+                        partialAggregationOutputProcessor,
                         hashChannel,
                         operatorContext,
                         maxPartialMemory,
@@ -421,6 +456,7 @@ public class HashAggregationOperator
                         expectedGroups,
                         groupByTypes,
                         groupByChannels,
+                        partialAggregationOutputProcessor,
                         hashChannel,
                         operatorContext,
                         memoryLimitForMerge,
@@ -584,7 +620,13 @@ public class HashAggregationOperator
         if (output.isEmpty()) {
             return null;
         }
-        return output.build();
+
+        Page page = output.build();
+        if (step.isOutputPartial()) {
+            page = partialAggregationOutputProcessor.get().processAggregatedPage(page);
+        }
+
+        return page;
     }
 
     private static long calculateDefaultOutputHash(List<Type> groupByChannels, int groupIdChannel, int groupId)
