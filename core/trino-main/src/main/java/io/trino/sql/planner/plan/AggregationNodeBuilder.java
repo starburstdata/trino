@@ -42,6 +42,8 @@ public class AggregationNodeBuilder
     private Optional<Symbol> hashSymbol;
     @Nullable
     private Optional<Symbol> groupIdSymbol;
+    @Nullable
+    Optional<Symbol> rawInputMaskSymbol;
 
     public AggregationNodeBuilder(AggregationNode node)
     {
@@ -106,6 +108,7 @@ public class AggregationNodeBuilder
                 preGroupedSymbols != null ? preGroupedSymbols : node.getPreGroupedSymbols(),
                 step != null ? step : node.getStep(),
                 hashSymbol != null ? hashSymbol : node.getHashSymbol(),
-                groupIdSymbol != null ? groupIdSymbol : node.getGroupIdSymbol());
+                groupIdSymbol != null ? groupIdSymbol : node.getGroupIdSymbol(),
+                rawInputMaskSymbol != null ? rawInputMaskSymbol : node.getRawInputMaskSymbol());
     }
 }
