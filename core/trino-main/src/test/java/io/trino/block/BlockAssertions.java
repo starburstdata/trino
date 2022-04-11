@@ -514,6 +514,17 @@ public final class BlockAssertions
         return builder.build();
     }
 
+    public static Block createShortTimestampBlock(TimestampType type, Long... values)
+    {
+        return createTypedLongsBlock(type, Arrays.asList(values));
+    }
+
+    public static Block createLongTimestampBlock(TimestampType type, LongTimestamp... values)
+    {
+        requireNonNull(values, "values is null");
+        return createLongTimestampBlock(type, Arrays.asList(values));
+    }
+
     public static Block createLongTimestampBlock(TimestampType type, Iterable<LongTimestamp> values)
     {
         BlockBuilder builder = type.createBlockBuilder(null, 100);
@@ -533,6 +544,60 @@ public final class BlockAssertions
     public static Block createCharsBlock(CharType charType, List<String> values)
     {
         return createBlock(charType, charType::writeString, values);
+    }
+
+    public static Block createIpAddressesBlock(Int128... values)
+    {
+        requireNonNull(values, "values is null");
+
+        return createIpAddressesBlock(Arrays.asList(values));
+    }
+
+    public static Block createIpAddressesBlock(Iterable<Int128> values)
+    {
+        return createBlock(
+                IPADDRESS,
+                (blockBuilder, value) -> IPADDRESS.writeSlice(blockBuilder, Slices.wrappedLongArray(value.getHigh(), value.getLow())),
+                values);
+    }
+
+    public static Block createUUIDsBlock(Int128... values)
+    {
+        requireNonNull(values, "values is null");
+
+        return createUUIDsBlock(Arrays.asList(values));
+    }
+
+    public static Block createUUIDsBlock(Iterable<Int128> values)
+    {
+        return createBlock(
+                UUID,
+                (blockBuilder, value) -> UUID.writeSlice(blockBuilder, Slices.wrappedLongArray(value.getHigh(), value.getLow())),
+                values);
+    }
+
+    public static Block createTinyintsBlock(Integer... values)
+    {
+        requireNonNull(values, "values is null");
+
+        return createTinyintsBlock(Arrays.asList(values));
+    }
+
+    public static Block createTinyintsBlock(Iterable<Integer> values)
+    {
+        return createBlock(TINYINT, (ValueWriter<Integer>) TINYINT::writeLong, values);
+    }
+
+    public static Block createSmallintsBlock(Integer... values)
+    {
+        requireNonNull(values, "values is null");
+
+        return createSmallintsBlock(Arrays.asList(values));
+    }
+
+    public static Block createSmallintsBlock(Iterable<Integer> values)
+    {
+        return createBlock(SMALLINT, (ValueWriter<Integer>) SMALLINT::writeLong, values);
     }
 
     public static Block createIntsBlock(Integer... values)
