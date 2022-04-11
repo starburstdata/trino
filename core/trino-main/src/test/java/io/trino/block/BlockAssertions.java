@@ -514,6 +514,12 @@ public final class BlockAssertions
         return builder.build();
     }
 
+    public static Block createLongTimestampBlock(TimestampType type, LongTimestamp... values)
+    {
+        requireNonNull(values, "values is null");
+        return createLongTimestampBlock(type, Arrays.asList(values));
+    }
+
     public static Block createLongTimestampBlock(TimestampType type, Iterable<LongTimestamp> values)
     {
         BlockBuilder builder = type.createBlockBuilder(null, 100);
@@ -533,6 +539,30 @@ public final class BlockAssertions
     public static Block createCharsBlock(CharType charType, List<String> values)
     {
         return createBlock(charType, charType::writeString, values);
+    }
+
+    public static Block createTinyintsBlock(Integer... values)
+    {
+        requireNonNull(values, "values is null");
+
+        return createTinyintsBlock(Arrays.asList(values));
+    }
+
+    public static Block createTinyintsBlock(Iterable<Integer> values)
+    {
+        return createBlock(TINYINT, (ValueWriter<Integer>) TINYINT::writeLong, values);
+    }
+
+    public static Block createSmallintsBlock(Integer... values)
+    {
+        requireNonNull(values, "values is null");
+
+        return createSmallintsBlock(Arrays.asList(values));
+    }
+
+    public static Block createSmallintsBlock(Iterable<Integer> values)
+    {
+        return createBlock(SMALLINT, (ValueWriter<Integer>) SMALLINT::writeLong, values);
     }
 
     public static Block createIntsBlock(Integer... values)
