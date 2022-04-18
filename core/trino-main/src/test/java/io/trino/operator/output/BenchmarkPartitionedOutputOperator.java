@@ -63,9 +63,15 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
+import org.testcontainers.shaded.org.apache.commons.io.FileUtils;
 import org.testng.annotations.Test;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -208,7 +214,14 @@ public class BenchmarkPartitionedOutputOperator
                             createRandomLongsBlock(positionCount, 2));
                 }
             },
-            DICTIONARY_BIGINT(BigintType.BIGINT, 3000) {
+            DICTIONARY_BIGINT(BigintType.BIGINT, 5000) {
+                @Override
+                public Page createPage(List<Type> types, int positionCount, float nullRate)
+                {
+                    return createRandomDictionaryPage(types, positionCount, nullRate);
+                }
+            },
+            DICTIONARY_BOOLEAN(BooleanType.BOOLEAN, 5000) {
                 @Override
                 public Page createPage(List<Type> types, int positionCount, float nullRate)
                 {
@@ -584,8 +597,41 @@ public class BenchmarkPartitionedOutputOperator
     public static void main(String[] args)
             throws Exception
     {
+        String profilerOutputDir = profilerOutputDir();
         Benchmarks.benchmark(BenchmarkPartitionedOutputOperator.class)
-                .withOptions(optionsBuilder -> optionsBuilder.jvmArgs("-Xmx16g"))
+                .withOptions(optionsBuilder -> optionsBuilder.jvmArgs("-Xmx16g")
+//                        .addProfiler(AsyncProfiler.class, String.format("dir=%s;output=text;output=flamegraph", profilerOutputDir))
+//                        .addProfiler(DTraceAsmProfiler.class, String.format("hotThreshold=0.1;tooBigThreshold=3000;saveLog=true;saveLogTo=%s", profilerOutputDir, profilerOutputDir))
+                        .param("enableCompression", "false")
+                        .param("channelCount", "1")
+                        .param("nullRate", "0", "0.2")
+                        .param("partitionCount", "1")
+//                                .param("type", "ARRAY_VARCHAR", "ARRAY_BIGINT", "MAP_BIGINT_BIGINT", "MAP_BIGINT_MAP_BIGINT_BIGINT", "ROW_BIGINT_BIGINT")
+                        .param("type", "BIGINT", "DICTIONARY_BIGINT", "VARCHAR", "DICTIONARY_VARCHAR", "INTEGER", "SMALLINT", "BOOLEAN")
+//                        .param("type", "BIGINT")
+                        .forks(2)
+                        .warmupIterations(20))
                 .run();
+        File dir = new File(profilerOutputDir);
+        if (dir.list().length == 0) {
+            FileUtils.deleteDirectory(dir);
+        }
+    }
+
+    private static String profilerOutputDir()
+    {
+        try {
+            String jmhDir = "jmh";
+            new File(jmhDir).mkdirs();
+            String outDir = jmhDir + "/" + String.valueOf(Files.list(Paths.get(jmhDir))
+                    .map(path -> Integer.parseInt(path.getFileName().toString()) + 1)
+                    .sorted(Comparator.reverseOrder())
+                    .findFirst().orElse(0));
+            new File(outDir).mkdirs();
+            return outDir;
+        }
+        catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

@@ -32,6 +32,7 @@ import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.type.Type;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
+import org.openjdk.jmh.annotations.CompilerControl;
 
 import javax.annotation.Nullable;
 
@@ -407,6 +408,7 @@ public class PagePartitioner
         partitionGeneric(page, position, aPosition -> dictionaryPartitions[dictionaryBlock.getId(aPosition)], partitionPositions);
     }
 
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     private void partitionGeneric(Page page, int position, IntUnaryOperator partitionFunction, IntArrayList[] partitionPositions)
     {
         // Skip null block checks if mayHaveNull reports that no positions will be null
@@ -418,6 +420,7 @@ public class PagePartitioner
         }
     }
 
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     private IntArrayList[] partitionNullablePositions(Page page, int position, IntArrayList[] partitionPositions, IntUnaryOperator partitionFunction)
     {
         Block nullsBlock = page.getBlock(nullChannel);

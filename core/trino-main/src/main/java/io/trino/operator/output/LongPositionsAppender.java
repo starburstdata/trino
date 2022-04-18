@@ -68,19 +68,7 @@ public class LongPositionsAppender
         ensureCapacity(positionCount + newPositionCount);
 
         if (block.mayHaveNull()) {
-            for (int i = 0; i < newPositionCount; i++) {
-                int position = positionArray[i];
-                int positionIndex = positionCount + i;
-                boolean isNull = block.isNull(position);
-                if (isNull) {
-                    valueIsNull[positionIndex] = true;
-                    hasNullValue = true;
-                }
-                else {
-                    values[positionIndex] = block.getLong(position, 0);
-                    hasNonNullValue = true;
-                }
-            }
+            appendNullable(block, positionArray, newPositionCount);
             this.positionCount += newPositionCount;
         }
         else {
@@ -97,38 +85,59 @@ public class LongPositionsAppender
         }
     }
 
+    private void appendNullable(Block block, int[] positionArray, int newPositionCount)
+    {
+//        boolean hasNullValue = false;
+//        boolean hasNonNullValue = false;
+        for (int i = 0; i < newPositionCount; i++) {
+            int position = positionArray[i];
+            int positionIndex = positionCount + i;
+            boolean isNull = block.isNull(position);
+            if (isNull) {
+                valueIsNull[positionIndex] = true;
+                hasNullValue = true;
+            }
+            else {
+                values[positionIndex] = block.getLong(position, 0);
+                hasNonNullValue = true;
+            }
+        }
+//        this.hasNullValue |= hasNullValue;
+//        this.hasNonNullValue |= hasNonNullValue;
+    }
+
+    private void appendNullableBranchless(Block block, int[] positionArray, int newPositionCount)
+    {
+        boolean hasNullValue = false;
+        boolean hasNonNullValue = false;
+        for (int i = 0; i < newPositionCount; i++) {
+            int position = positionArray[i];
+            boolean isNull = block.isNull(position);
+            int positionIndex = positionCount + i;
+
+            valueIsNull[positionIndex] = isNull;
+            hasNullValue = isNull;
+
+            values[positionIndex] = isNull ? values[positionIndex] : block.getLong(position, 0);
+            hasNonNullValue = !isNull;
+        }
+        this.hasNullValue |= hasNullValue;
+        this.hasNonNullValue |= hasNonNullValue;
+    }
+
     @Override
     public void appendDictionary(IntArrayList positions, DictionaryBlock block)
     {
-        int[] positionArray = positions.elements();
-        int newPositionCount = positions.size();
-        ensureCapacity(positionCount + newPositionCount);
-        if (block.mayHaveNull()) {
-            for (int i = 0; i < newPositionCount; i++) {
-                int position = positionArray[i];
-                if (block.isNull(position)) {
-                    valueIsNull[positionCount] = true;
-                    hasNullValue = true;
-                }
-                else {
-                    values[positionCount] = block.getLong(position, 0);
-                    hasNonNullValue = true;
-                }
-                positionCount++;
-            }
-        }
-        else {
-            for (int i = 0; i < newPositionCount; i++) {
-                int position = positionArray[i];
-                values[positionCount] = block.getLong(position, 0);
-                positionCount++;
-            }
-            hasNonNullValue = true;
-        }
+        append(mapPositions(positions, block), block.getDictionary());
+    }
 
-        if (blockBuilderStatus != null) {
-            blockBuilderStatus.addBytes(LongArrayBlock.SIZE_IN_BYTES_PER_POSITION * newPositionCount);
+    private IntArrayList mapPositions(IntArrayList positions, DictionaryBlock block)
+    {
+        int[] positionArray = new int[positions.size()];
+        for (int i = 0; i < positions.size(); i++) {
+            positionArray[i] = block.getId(positions.getInt(i));
         }
+        return IntArrayList.wrap(positionArray);
     }
 
     @Override

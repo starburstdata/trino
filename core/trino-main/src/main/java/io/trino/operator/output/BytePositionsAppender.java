@@ -20,6 +20,7 @@ import io.trino.spi.block.ByteArrayBlock;
 import io.trino.spi.block.DictionaryBlock;
 import io.trino.spi.block.RunLengthEncodedBlock;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import org.openjdk.jmh.annotations.CompilerControl;
 import org.openjdk.jol.info.ClassLayout;
 
 import javax.annotation.Nullable;
@@ -61,6 +62,7 @@ public class BytePositionsAppender
     }
 
     @Override
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void append(IntArrayList positions, Block block)
     {
         int[] positionArray = positions.elements();
@@ -68,28 +70,12 @@ public class BytePositionsAppender
         ensureCapacity(positionCount + newPositionCount);
 
         if (block.mayHaveNull()) {
-            for (int i = 0; i < newPositionCount; i++) {
-                int position = positionArray[i];
-                boolean isNull = block.isNull(position);
-                int positionIndex = positionCount + i;
-                if (isNull) {
-                    valueIsNull[positionIndex] = true;
-                    hasNullValue = true;
-                }
-                else {
-                    values[positionIndex] = block.getByte(position, 0);
-                    hasNonNullValue = true;
-                }
-            }
+            appendNullable(block, positionArray, newPositionCount);
             this.positionCount += newPositionCount;
         }
         else {
-            for (int i = 0; i < newPositionCount; i++) {
-                int position = positionArray[i];
-                values[positionCount + i] = block.getByte(position, 0);
-            }
+            appendNotNull(block, positionArray, newPositionCount);
             positionCount += newPositionCount;
-            this.hasNonNullValue = true;
         }
 
         if (blockBuilderStatus != null) {
@@ -97,8 +83,60 @@ public class BytePositionsAppender
         }
     }
 
-    @Override
-    public void appendDictionary(IntArrayList positions, DictionaryBlock block)
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    private void appendNotNull(Block block, int[] positionArray, int newPositionCount)
+    {
+        for (int i = 0; i < newPositionCount; i++) {
+            int position = positionArray[i];
+            values[positionCount + i] = block.getByte(position, 0);
+        }
+        this.hasNonNullValue = true;
+    }
+
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    private void appendNullableBranchless(Block block, int[] positionArray, int newPositionCount)
+    {
+        boolean hasNullValue = false;
+        boolean hasNonNullValue = false;
+        for (int i = 0; i < newPositionCount; i++) {
+            int position = positionArray[i];
+            boolean isNull = block.isNull(position);
+            int positionIndex = positionCount + i;
+
+            valueIsNull[positionIndex] = isNull;
+            hasNullValue = isNull;
+
+            values[positionIndex] = isNull ? values[positionIndex] : block.getByte(position, 0);
+            hasNonNullValue = !isNull;
+        }
+        this.hasNullValue |= hasNullValue;
+        this.hasNonNullValue |= hasNonNullValue;
+    }
+
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    private void appendNullable(Block block, int[] positionArray, int newPositionCount)
+    {
+//        boolean hasNullValue = false;
+//        boolean hasNonNullValue = false;
+        for (int i = 0; i < newPositionCount; i++) {
+            int position = positionArray[i];
+            boolean isNull = block.isNull(position);
+            int positionIndex = positionCount + i;
+            if (isNull) {
+                valueIsNull[positionIndex] = true;
+                hasNullValue = true;
+            }
+            else {
+                values[positionIndex] = block.getByte(position, 0);
+                hasNonNullValue = true;
+            }
+        }
+//        this.hasNullValue |= hasNullValue;
+//        this.hasNonNullValue |= hasNonNullValue;
+    }
+
+    //    @Override
+    public void appendDictionary2(IntArrayList positions, DictionaryBlock block)
     {
         int[] positionArray = positions.elements();
         int newPositionCount = positions.size();
@@ -129,6 +167,21 @@ public class BytePositionsAppender
         if (blockBuilderStatus != null) {
             blockBuilderStatus.addBytes(ByteArrayBlock.SIZE_IN_BYTES_PER_POSITION * newPositionCount);
         }
+    }
+
+    //    @Override
+    public void appendDictionary(IntArrayList positions, DictionaryBlock block)
+    {
+        append(mapPositions(positions, block), block.getDictionary());
+    }
+
+    private IntArrayList mapPositions(IntArrayList positions, DictionaryBlock block)
+    {
+        int[] positionArray = new int[positions.size()];
+        for (int i = 0; i < positions.size(); i++) {
+            positionArray[i] = block.getId(positions.getInt(i));
+        }
+        return IntArrayList.wrap(positionArray);
     }
 
     @Override
