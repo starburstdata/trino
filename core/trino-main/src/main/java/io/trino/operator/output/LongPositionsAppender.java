@@ -20,6 +20,7 @@ import io.trino.spi.block.DictionaryBlock;
 import io.trino.spi.block.LongArrayBlock;
 import io.trino.spi.block.RunLengthEncodedBlock;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import org.openjdk.jmh.annotations.CompilerControl;
 import org.openjdk.jol.info.ClassLayout;
 
 import javax.annotation.Nullable;
@@ -85,6 +86,7 @@ public class LongPositionsAppender
         }
     }
 
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     private void appendNullable(Block block, int[] positionArray, int newPositionCount)
     {
 //        boolean hasNullValue = false;
@@ -106,6 +108,7 @@ public class LongPositionsAppender
 //        this.hasNonNullValue |= hasNonNullValue;
     }
 
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     private void appendNullableBranchless(Block block, int[] positionArray, int newPositionCount)
     {
         boolean hasNullValue = false;
@@ -116,10 +119,9 @@ public class LongPositionsAppender
             int positionIndex = positionCount + i;
 
             valueIsNull[positionIndex] = isNull;
-            hasNullValue = isNull;
-
+            hasNullValue |= isNull;
             values[positionIndex] = isNull ? values[positionIndex] : block.getLong(position, 0);
-            hasNonNullValue = !isNull;
+            hasNonNullValue |= !isNull;
         }
         this.hasNullValue |= hasNullValue;
         this.hasNonNullValue |= hasNonNullValue;

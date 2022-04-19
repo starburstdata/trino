@@ -63,6 +63,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
+import org.openjdk.jmh.profile.AsyncProfiler;
 import org.testcontainers.shaded.org.apache.commons.io.FileUtils;
 import org.testng.annotations.Test;
 
@@ -600,16 +601,16 @@ public class BenchmarkPartitionedOutputOperator
         String profilerOutputDir = profilerOutputDir();
         Benchmarks.benchmark(BenchmarkPartitionedOutputOperator.class)
                 .withOptions(optionsBuilder -> optionsBuilder.jvmArgs("-Xmx16g")
-//                        .addProfiler(AsyncProfiler.class, String.format("dir=%s;output=text;output=flamegraph", profilerOutputDir))
+                        .addProfiler(AsyncProfiler.class, String.format("dir=%s;output=text;output=flamegraph", profilerOutputDir))
 //                        .addProfiler(DTraceAsmProfiler.class, String.format("hotThreshold=0.1;tooBigThreshold=3000;saveLog=true;saveLogTo=%s", profilerOutputDir, profilerOutputDir))
                         .param("enableCompression", "false")
                         .param("channelCount", "1")
                         .param("nullRate", "0", "0.2")
                         .param("partitionCount", "1")
 //                                .param("type", "ARRAY_VARCHAR", "ARRAY_BIGINT", "MAP_BIGINT_BIGINT", "MAP_BIGINT_MAP_BIGINT_BIGINT", "ROW_BIGINT_BIGINT")
-                        .param("type", "BIGINT", "DICTIONARY_BIGINT", "VARCHAR", "DICTIONARY_VARCHAR", "INTEGER", "SMALLINT", "BOOLEAN")
-//                        .param("type", "BIGINT")
-                        .forks(2)
+//                        .param("type", "BIGINT", "DICTIONARY_BIGINT", "INTEGER", "SMALLINT", "BOOLEAN")
+                        .param("type", "BIGINT")
+                        .forks(1)
                         .warmupIterations(20))
                 .run();
         File dir = new File(profilerOutputDir);

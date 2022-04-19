@@ -104,10 +104,10 @@ public class BytePositionsAppender
             int positionIndex = positionCount + i;
 
             valueIsNull[positionIndex] = isNull;
-            hasNullValue = isNull;
+            hasNullValue |= isNull;
 
             values[positionIndex] = isNull ? values[positionIndex] : block.getByte(position, 0);
-            hasNonNullValue = !isNull;
+            hasNonNullValue |= !isNull;
         }
         this.hasNullValue |= hasNullValue;
         this.hasNonNullValue |= hasNonNullValue;

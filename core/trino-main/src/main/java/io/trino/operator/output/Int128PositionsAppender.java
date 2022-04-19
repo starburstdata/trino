@@ -20,6 +20,7 @@ import io.trino.spi.block.DictionaryBlock;
 import io.trino.spi.block.Int128ArrayBlock;
 import io.trino.spi.block.RunLengthEncodedBlock;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import org.openjdk.jmh.annotations.CompilerControl;
 import org.openjdk.jol.info.ClassLayout;
 
 import javax.annotation.Nullable;
@@ -69,22 +70,7 @@ public class Int128PositionsAppender
         ensureCapacity(positionCount + newPositionCount);
 
         if (block.mayHaveNull()) {
-            int positionIndex = positionCount * 2;
-            for (int i = 0; i < newPositionCount; i++) {
-                int position = positionArray[i];
-                boolean isNull = block.isNull(position);
-
-                if (isNull) {
-                    valueIsNull[positionCount + i] = true;
-                    hasNullValue = true;
-                }
-                else {
-                    values[positionIndex] = block.getLong(position, 0);
-                    values[positionIndex + 1] = block.getLong(position, SIZE_OF_LONG);
-                    hasNonNullValue = true;
-                }
-                positionIndex += 2;
-            }
+            appendNullable(block, positionArray, newPositionCount);
             this.positionCount += newPositionCount;
         }
         else {
@@ -101,6 +87,48 @@ public class Int128PositionsAppender
 
         if (blockBuilderStatus != null) {
             blockBuilderStatus.addBytes(Int128ArrayBlock.SIZE_IN_BYTES_PER_POSITION * newPositionCount);
+        }
+    }
+
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    private void appendNullableBranchless(Block block, int[] positionArray, int newPositionCount)
+    {
+        boolean hasNullValue = false;
+        boolean hasNonNullValue = false;
+        int positionIndex = positionCount * 2;
+        for (int i = 0; i < newPositionCount; i++) {
+            int position = positionArray[i];
+            boolean isNull = block.isNull(position);
+
+            valueIsNull[positionCount + i] = isNull;
+            hasNullValue |= isNull;
+
+            values[positionIndex] = isNull ? values[positionIndex] : block.getLong(position, 0);
+            values[positionIndex + 1] = isNull ? values[positionIndex + 1] : block.getLong(position, SIZE_OF_LONG);
+            hasNonNullValue |= !isNull;
+            positionIndex += 2;
+        }
+        this.hasNullValue |= hasNullValue;
+        this.hasNonNullValue |= hasNonNullValue;
+    }
+
+    private void appendNullable(Block block, int[] positionArray, int newPositionCount)
+    {
+        int positionIndex = positionCount * 2;
+        for (int i = 0; i < newPositionCount; i++) {
+            int position = positionArray[i];
+            boolean isNull = block.isNull(position);
+
+            if (isNull) {
+                valueIsNull[positionCount + i] = true;
+                hasNullValue = true;
+            }
+            else {
+                values[positionIndex] = block.getLong(position, 0);
+                values[positionIndex + 1] = block.getLong(position, SIZE_OF_LONG);
+                hasNonNullValue = true;
+            }
+            positionIndex += 2;
         }
     }
 

@@ -23,6 +23,7 @@ import io.trino.spi.block.PageBuilderStatus;
 import io.trino.spi.block.RunLengthEncodedBlock;
 import io.trino.spi.block.VariableWidthBlock;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import org.openjdk.jmh.annotations.CompilerControl;
 import org.openjdk.jol.info.ClassLayout;
 
 import javax.annotation.Nullable;
@@ -90,21 +91,7 @@ public class SlicePositionsAppender
         int[] lengths = new int[positions.size()];
 
         if (block.mayHaveNull()) {
-            for (int i = 0; i < positions.size(); i++) {
-                int position = positionArray[i];
-                if (block.isNull(position)) {
-                    this.offsets[positionCount + i + 1] = this.offsets[positionCount + i];
-                    valueIsNull[positionCount + i] = true;
-                    hasNullValue = true;
-                }
-                else {
-                    int length = block.getSliceLength(position);
-                    lengths[i] = length;
-                    newByteCount += length;
-                    this.offsets[positionCount + i + 1] = this.offsets[positionCount + i] + length;
-                    hasNonNullValue = true;
-                }
-            }
+            newByteCount = appendNullable(block, positionArray, positions.size(), lengths);
         }
         else {
             for (int i = 0; i < positions.size(); i++) {
@@ -146,21 +133,7 @@ public class SlicePositionsAppender
         int[] lengths = new int[positions.size()];
 
         if (block.mayHaveNull()) {
-            for (int i = 0; i < positions.size(); i++) {
-                int position = positionArray[i];
-                if (block.isNull(position)) {
-                    this.offsets[positionCount + i + 1] = this.offsets[positionCount + i];
-                    valueIsNull[positionCount + i] = true;
-                    hasNullValue = true;
-                }
-                else {
-                    int length = block.getSliceLength(position);
-                    lengths[i] = length;
-                    newByteCount += length;
-                    this.offsets[positionCount + i + 1] = this.offsets[positionCount + i] + length;
-                    hasNonNullValue = true;
-                }
-            }
+            newByteCount = appendNullable(block, positionArray, positions.size(), lengths);
         }
         else {
             for (int i = 0; i < positions.size(); i++) {
@@ -173,6 +146,53 @@ public class SlicePositionsAppender
             hasNonNullValue = true;
         }
         copyBytes(block, lengths, positionArray, positions.size(), this.offsets, positionCount, newByteCount);
+    }
+
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    private int appendNullableBranchless(Block block, int[] positionArray, int newPositionCount, int[] lengths)
+    {
+        int newByteCount = 0;
+        boolean hasNullValue = false;
+        boolean hasNonNullValue = false;
+        for (int i = 0; i < newPositionCount; i++) {
+            int position = positionArray[i];
+            boolean isNull = block.isNull(position);
+            int positionIndex = positionCount + i;
+
+            valueIsNull[positionIndex] = isNull;
+            hasNullValue |= isNull;
+
+            int length = isNull ? 0 : block.getSliceLength(position);
+            lengths[i] = length;
+            newByteCount += length;
+            this.offsets[positionCount + i + 1] = this.offsets[positionCount + i] + length;
+
+            hasNonNullValue |= !isNull;
+        }
+        this.hasNullValue |= hasNullValue;
+        this.hasNonNullValue |= hasNonNullValue;
+        return newByteCount;
+    }
+
+    private int appendNullable(Block block, int[] positionArray, int newPositionCount, int[] lengths)
+    {
+        int newByteCount = 0;
+        for (int i = 0; i < newPositionCount; i++) {
+            int position = positionArray[i];
+            if (block.isNull(position)) {
+                this.offsets[positionCount + i + 1] = this.offsets[positionCount + i];
+                valueIsNull[positionCount + i] = true;
+                hasNullValue = true;
+            }
+            else {
+                int length = block.getSliceLength(position);
+                lengths[i] = length;
+                newByteCount += length;
+                this.offsets[positionCount + i + 1] = this.offsets[positionCount + i] + length;
+                hasNonNullValue = true;
+            }
+        }
+        return newByteCount;
     }
 
     @Override
