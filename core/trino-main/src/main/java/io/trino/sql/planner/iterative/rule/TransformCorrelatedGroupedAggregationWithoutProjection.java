@@ -24,6 +24,7 @@ import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.optimizations.PlanNodeDecorrelator;
 import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.AssignUniqueId;
 import io.trino.sql.planner.plan.CorrelatedJoinNode;
 import io.trino.sql.planner.plan.JoinNode;
@@ -184,18 +185,18 @@ public class TransformCorrelatedGroupedAggregationWithoutProjection
 
         // restore grouped aggregation
         AggregationNode groupedAggregation = captures.get(AGGREGATION);
-        groupedAggregation = new AggregationNode(
-                groupedAggregation.getId(),
-                distinct != null ? distinct : join,
-                groupedAggregation.getAggregations(),
-                singleGroupingSet(ImmutableList.<Symbol>builder()
-                        .addAll(join.getLeftOutputSymbols())
-                        .addAll(groupedAggregation.getGroupingKeys())
-                        .build()),
-                ImmutableList.of(),
-                groupedAggregation.getStep(),
-                Optional.empty(),
-                Optional.empty());
+        groupedAggregation = new AggregationNodeBuilder(groupedAggregation)
+                .setSource(distinct != null ? distinct : join)
+                .setAggregations(groupedAggregation.getAggregations())
+                .setGroupingSets(
+                        singleGroupingSet(ImmutableList.<Symbol>builder()
+                                .addAll(join.getLeftOutputSymbols())
+                                .addAll(groupedAggregation.getGroupingKeys())
+                                .build()))
+                .setPreGroupedSymbols(ImmutableList.of())
+                .setHashSymbol(Optional.empty())
+                .setGroupIdSymbol(Optional.empty())
+                .build();
 
         // restrict outputs
         Optional<PlanNode> project = restrictOutputs(context.getIdAllocator(), groupedAggregation, ImmutableSet.copyOf(correlatedJoinNode.getOutputSymbols()));

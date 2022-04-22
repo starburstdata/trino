@@ -24,6 +24,7 @@ import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.optimizations.PlanNodeDecorrelator;
 import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.AssignUniqueId;
 import io.trino.sql.planner.plan.CorrelatedJoinNode;
 import io.trino.sql.planner.plan.JoinNode;
@@ -130,18 +131,19 @@ public class TransformCorrelatedDistinctAggregationWithoutProjection
 
         // restore aggregation
         AggregationNode aggregation = captures.get(AGGREGATION);
-        aggregation = new AggregationNode(
-                aggregation.getId(),
-                join,
-                aggregation.getAggregations(),
-                singleGroupingSet(ImmutableList.<Symbol>builder()
-                        .addAll(join.getLeftOutputSymbols())
-                        .addAll(aggregation.getGroupingKeys())
-                        .build()),
-                ImmutableList.of(),
-                aggregation.getStep(),
-                Optional.empty(),
-                Optional.empty());
+        aggregation = new AggregationNodeBuilder(aggregation)
+                .setSource(join)
+                .setGroupingSets(
+                        singleGroupingSet(ImmutableList.<Symbol>builder()
+                                .addAll(join.getLeftOutputSymbols())
+                                .addAll(aggregation.getGroupingKeys())
+                                .build()))
+                .setPreGroupedSymbols(
+                        ImmutableList.of())
+                .setHashSymbol(
+                        Optional.empty())
+                .setGroupIdSymbol(Optional.empty())
+                .build();
 
         // restrict outputs
         Optional<PlanNode> project = restrictOutputs(context.getIdAllocator(), aggregation, ImmutableSet.copyOf(correlatedJoinNode.getOutputSymbols()));

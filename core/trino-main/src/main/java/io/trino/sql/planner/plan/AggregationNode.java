@@ -232,7 +232,9 @@ public class AggregationNode
     @Override
     public PlanNode replaceChildren(List<PlanNode> newChildren)
     {
-        return new AggregationNode(getId(), Iterables.getOnlyElement(newChildren), aggregations, groupingSets, preGroupedSymbols, step, hashSymbol, groupIdSymbol);
+        return new AggregationNodeBuilder(this)
+                .setSource(Iterables.getOnlyElement(newChildren))
+                .build();
     }
 
     public boolean producesDistinctRows()

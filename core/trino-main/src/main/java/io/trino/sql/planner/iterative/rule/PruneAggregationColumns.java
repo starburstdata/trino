@@ -16,6 +16,7 @@ package io.trino.sql.planner.iterative.rule;
 import com.google.common.collect.Maps;
 import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.PlanNode;
 
 import java.util.Map;
@@ -48,14 +49,8 @@ public class PruneAggregationColumns
 
         // PruneAggregationSourceColumns will subsequently project off any newly unused inputs.
         return Optional.of(
-                new AggregationNode(
-                        aggregationNode.getId(),
-                        aggregationNode.getSource(),
-                        prunedAggregations,
-                        aggregationNode.getGroupingSets(),
-                        aggregationNode.getPreGroupedSymbols(),
-                        aggregationNode.getStep(),
-                        aggregationNode.getHashSymbol(),
-                        aggregationNode.getGroupIdSymbol()));
+                new AggregationNodeBuilder(aggregationNode)
+                        .setAggregations(prunedAggregations)
+                        .build());
     }
 }

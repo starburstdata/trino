@@ -16,6 +16,7 @@ package io.trino.sql.planner;
 import io.trino.metadata.Metadata;
 import io.trino.sql.planner.optimizations.UnaliasSymbolReferences;
 import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.ApplyNode;
 import io.trino.sql.planner.plan.CorrelatedJoinNode;
 import io.trino.sql.planner.plan.EnforceSingleRowNode;
@@ -79,7 +80,10 @@ public final class PlanCopier
         @Override
         public PlanNode visitAggregation(AggregationNode node, RewriteContext<Void> context)
         {
-            return new AggregationNode(idAllocator.getNextId(), context.rewrite(node.getSource()), node.getAggregations(), node.getGroupingSets(), node.getPreGroupedSymbols(), node.getStep(), node.getHashSymbol(), node.getGroupIdSymbol());
+            return new AggregationNodeBuilder(node)
+                    .setId(idAllocator.getNextId())
+                    .setSource(context.rewrite(node.getSource()))
+                    .build();
         }
 
         @Override

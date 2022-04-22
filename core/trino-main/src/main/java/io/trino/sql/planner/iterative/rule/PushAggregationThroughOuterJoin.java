@@ -29,6 +29,7 @@ import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.optimizations.SymbolMapper;
 import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.AggregationNode.Aggregation;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.Assignments;
 import io.trino.sql.planner.plan.JoinNode;
 import io.trino.sql.planner.plan.PlanNode;
@@ -137,15 +138,11 @@ public class PushAggregationThroughOuterJoin
         List<Symbol> groupingKeys = join.getCriteria().stream()
                 .map(join.getType() == JoinNode.Type.RIGHT ? JoinNode.EquiJoinClause::getLeft : JoinNode.EquiJoinClause::getRight)
                 .collect(toImmutableList());
-        AggregationNode rewrittenAggregation = new AggregationNode(
-                aggregation.getId(),
-                getInnerTable(join),
-                aggregation.getAggregations(),
-                singleGroupingSet(groupingKeys),
-                ImmutableList.of(),
-                aggregation.getStep(),
-                aggregation.getHashSymbol(),
-                aggregation.getGroupIdSymbol());
+        AggregationNode rewrittenAggregation = new AggregationNodeBuilder(aggregation)
+                .setSource(getInnerTable(join))
+                .setGroupingSets(singleGroupingSet(groupingKeys))
+                .setPreGroupedSymbols(ImmutableList.of())
+                .build();
 
         JoinNode rewrittenJoin;
         if (join.getType() == JoinNode.Type.LEFT) {

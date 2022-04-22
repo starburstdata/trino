@@ -24,6 +24,7 @@ import io.trino.sql.planner.SymbolsExtractor;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.AggregationNode.Aggregation;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.Assignments;
 import io.trino.sql.planner.plan.FilterNode;
 import io.trino.sql.planner.plan.JoinNode;
@@ -209,15 +210,9 @@ public class ExpressionRewriteRuleSet
                 }
             }
             if (anyRewritten) {
-                return Result.ofPlanNode(new AggregationNode(
-                        aggregationNode.getId(),
-                        aggregationNode.getSource(),
-                        aggregations.buildOrThrow(),
-                        aggregationNode.getGroupingSets(),
-                        aggregationNode.getPreGroupedSymbols(),
-                        aggregationNode.getStep(),
-                        aggregationNode.getHashSymbol(),
-                        aggregationNode.getGroupIdSymbol()));
+                return Result.ofPlanNode(new AggregationNodeBuilder(aggregationNode)
+                        .setAggregations(aggregations.buildOrThrow())
+                        .build());
             }
             return Result.empty();
         }

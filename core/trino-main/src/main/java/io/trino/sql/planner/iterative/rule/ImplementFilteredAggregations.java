@@ -22,6 +22,7 @@ import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.AggregationNode.Aggregation;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.Assignments;
 import io.trino.sql.planner.plan.FilterNode;
 import io.trino.sql.planner.plan.ProjectNode;
@@ -140,20 +141,17 @@ public class ImplementFilteredAggregations
         newAssignments.putIdentities(aggregationNode.getSource().getOutputSymbols());
 
         return Result.ofPlanNode(
-                new AggregationNode(
-                        context.getIdAllocator().getNextId(),
-                        new FilterNode(
+                new AggregationNodeBuilder(aggregationNode)
+                        .setId(context.getIdAllocator().getNextId())
+                        .setSource(new FilterNode(
                                 context.getIdAllocator().getNextId(),
                                 new ProjectNode(
                                         context.getIdAllocator().getNextId(),
                                         aggregationNode.getSource(),
                                         newAssignments.build()),
-                                predicate),
-                        aggregations.buildOrThrow(),
-                        aggregationNode.getGroupingSets(),
-                        ImmutableList.of(),
-                        aggregationNode.getStep(),
-                        aggregationNode.getHashSymbol(),
-                        aggregationNode.getGroupIdSymbol()));
+                                predicate))
+                        .setAggregations(aggregations.buildOrThrow())
+                        .setPreGroupedSymbols(ImmutableList.of())
+                        .build());
     }
 }

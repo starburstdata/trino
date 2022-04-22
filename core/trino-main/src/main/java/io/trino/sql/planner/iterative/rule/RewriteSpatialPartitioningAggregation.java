@@ -25,6 +25,7 @@ import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.AggregationNode.Aggregation;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.Assignments;
 import io.trino.sql.planner.plan.ProjectNode;
 import io.trino.sql.tree.Expression;
@@ -123,22 +124,17 @@ public class RewriteSpatialPartitioningAggregation
         }
 
         return Result.ofPlanNode(
-                new AggregationNode(
-                        node.getId(),
-                        new ProjectNode(
+                new AggregationNodeBuilder(node)
+                        .setSource(new ProjectNode(
                                 context.getIdAllocator().getNextId(),
                                 node.getSource(),
                                 Assignments.builder()
                                         .putIdentities(node.getSource().getOutputSymbols())
                                         .put(partitionCountSymbol, new LongLiteral(Integer.toString(getHashPartitionCount(context.getSession()))))
                                         .putAll(envelopeAssignments.buildOrThrow())
-                                        .build()),
-                        aggregations.buildOrThrow(),
-                        node.getGroupingSets(),
-                        node.getPreGroupedSymbols(),
-                        node.getStep(),
-                        node.getHashSymbol(),
-                        node.getGroupIdSymbol()));
+                                        .build()))
+                        .setAggregations(aggregations.buildOrThrow())
+                        .build());
     }
 
     private boolean isStEnvelopeFunctionCall(Expression expression, ResolvedFunction stEnvelopeFunction)

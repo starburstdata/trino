@@ -24,6 +24,7 @@ import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.AggregationNode.Aggregation;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.MarkDistinctNode;
 import io.trino.sql.planner.plan.PlanNode;
 
@@ -159,14 +160,10 @@ public class MultipleDistinctAggregationToMarkDistinct
         }
 
         return Result.ofPlanNode(
-                new AggregationNode(
-                        parent.getId(),
-                        subPlan,
-                        newAggregations,
-                        parent.getGroupingSets(),
-                        ImmutableList.of(),
-                        parent.getStep(),
-                        parent.getHashSymbol(),
-                        parent.getGroupIdSymbol()));
+                new AggregationNodeBuilder(parent)
+                        .setSource(subPlan)
+                        .setAggregations(newAggregations)
+                        .setPreGroupedSymbols(ImmutableList.of())
+                        .build());
     }
 }

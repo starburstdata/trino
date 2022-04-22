@@ -37,6 +37,7 @@ import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.SymbolAllocator;
 import io.trino.sql.planner.TypeProvider;
 import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.ApplyNode;
 import io.trino.sql.planner.plan.Assignments;
 import io.trino.sql.planner.plan.CorrelatedJoinNode;
@@ -182,15 +183,10 @@ public class HashGenerationOptimizer
             Optional<Symbol> hashSymbol = groupByHash.map(child::getRequiredHashSymbol);
 
             return new PlanWithProperties(
-                    new AggregationNode(
-                            node.getId(),
-                            child.getNode(),
-                            node.getAggregations(),
-                            node.getGroupingSets(),
-                            node.getPreGroupedSymbols(),
-                            node.getStep(),
-                            hashSymbol,
-                            node.getGroupIdSymbol()),
+                    new AggregationNodeBuilder(node)
+                            .setSource(child.getNode())
+                            .setHashSymbol(hashSymbol)
+                            .build(),
                     hashSymbol.isPresent() ? ImmutableMap.of(groupByHash.get(), hashSymbol.get()) : ImmutableMap.of());
         }
 

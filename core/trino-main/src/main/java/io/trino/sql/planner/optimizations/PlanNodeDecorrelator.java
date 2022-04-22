@@ -33,6 +33,7 @@ import io.trino.sql.planner.SymbolsExtractor;
 import io.trino.sql.planner.iterative.GroupReference;
 import io.trino.sql.planner.iterative.Lookup;
 import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.Assignments;
 import io.trino.sql.planner.plan.EnforceSingleRowNode;
 import io.trino.sql.planner.plan.FilterNode;
@@ -435,18 +436,14 @@ public class PlanNodeDecorrelator
                 return Optional.empty();
             }
 
-            AggregationNode newAggregation = new AggregationNode(
-                    decorrelatedAggregation.getId(),
-                    decorrelatedAggregation.getSource(),
-                    decorrelatedAggregation.getAggregations(),
-                    AggregationNode.singleGroupingSet(ImmutableList.<Symbol>builder()
-                            .addAll(node.getGroupingKeys())
-                            .addAll(symbolsToAdd)
-                            .build()),
-                    ImmutableList.of(),
-                    decorrelatedAggregation.getStep(),
-                    decorrelatedAggregation.getHashSymbol(),
-                    decorrelatedAggregation.getGroupIdSymbol());
+            AggregationNode newAggregation = new AggregationNodeBuilder(decorrelatedAggregation)
+                    .setGroupingSets(
+                            AggregationNode.singleGroupingSet(ImmutableList.<Symbol>builder()
+                                    .addAll(node.getGroupingKeys())
+                                    .addAll(symbolsToAdd)
+                                    .build()))
+                    .setPreGroupedSymbols(ImmutableList.of())
+                    .build();
 
             return Optional.of(new DecorrelationResult(
                     newAggregation,

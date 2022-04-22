@@ -19,6 +19,7 @@ import io.trino.matching.Pattern;
 import io.trino.sql.planner.iterative.Lookup;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.ExceptNode;
 import io.trino.sql.planner.plan.IntersectNode;
 import io.trino.sql.planner.plan.PlanNode;
@@ -139,15 +140,10 @@ public class PruneDistinctAggregation
                 return rewrittenNode;
             }
 
-            return new AggregationNode(
-                    node.getId(),
-                    rewrittenNode,
-                    node.getAggregations(),
-                    node.getGroupingSets(),
-                    ImmutableList.of(),
-                    node.getStep(),
-                    node.getHashSymbol(),
-                    node.getGroupIdSymbol());
+            return new AggregationNodeBuilder(node)
+                    .setSource(rewrittenNode)
+                    .setPreGroupedSymbols(ImmutableList.of())
+                    .build();
         }
     }
 }

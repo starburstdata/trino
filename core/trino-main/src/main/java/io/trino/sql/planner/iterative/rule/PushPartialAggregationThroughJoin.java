@@ -25,6 +25,7 @@ import io.trino.sql.planner.SymbolsExtractor;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.AggregationNode.Aggregation;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.JoinNode;
 import io.trino.sql.planner.plan.PlanNode;
 
@@ -158,15 +159,11 @@ public class PushPartialAggregationThroughJoin
             PlanNode source,
             List<Symbol> groupingKeys)
     {
-        return new AggregationNode(
-                aggregation.getId(),
-                source,
-                aggregation.getAggregations(),
-                singleGroupingSet(groupingKeys),
-                ImmutableList.of(),
-                aggregation.getStep(),
-                aggregation.getHashSymbol(),
-                aggregation.getGroupIdSymbol());
+        return new AggregationNodeBuilder(aggregation)
+                .setSource(source)
+                .setGroupingSets(singleGroupingSet(groupingKeys))
+                .setPreGroupedSymbols(ImmutableList.of())
+                .build();
     }
 
     private PlanNode pushPartialToJoin(

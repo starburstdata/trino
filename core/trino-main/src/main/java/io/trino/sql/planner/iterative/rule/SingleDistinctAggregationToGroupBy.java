@@ -22,6 +22,7 @@ import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.AggregationNode.Aggregation;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.tree.Expression;
 
 import java.util.HashSet;
@@ -34,7 +35,6 @@ import java.util.stream.Stream;
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.trino.sql.planner.plan.AggregationNode.singleGroupingSet;
 import static io.trino.sql.planner.plan.Patterns.aggregation;
-import static java.util.Collections.emptyList;
 
 /**
  * Implements distinct aggregations with similar inputs by transforming plans of the following shape:
@@ -121,27 +121,25 @@ public class SingleDistinctAggregationToGroupBy
                 .collect(Collectors.toSet());
 
         return Result.ofPlanNode(
-                new AggregationNode(
-                        aggregation.getId(),
-                        AggregationNode.simpleSingleAggregation(
-                                context.getIdAllocator().getNextId(),
-                                aggregation.getSource(),
-                                ImmutableMap.of(),
-                                singleGroupingSet(ImmutableList.<Symbol>builder()
-                                        .addAll(aggregation.getGroupingKeys())
-                                        .addAll(symbols)
-                                        .build())),
-                        // remove DISTINCT flag from function calls
-                        aggregation.getAggregations()
-                                .entrySet().stream()
-                                .collect(Collectors.toMap(
-                                        Map.Entry::getKey,
-                                        e -> removeDistinct(e.getValue()))),
-                        aggregation.getGroupingSets(),
-                        emptyList(),
-                        aggregation.getStep(),
-                        aggregation.getHashSymbol(),
-                        aggregation.getGroupIdSymbol()));
+                new AggregationNodeBuilder(aggregation)
+                        .setSource(
+                                AggregationNode.simpleSingleAggregation(
+                                        context.getIdAllocator().getNextId(),
+                                        aggregation.getSource(),
+                                        ImmutableMap.of(),
+                                        singleGroupingSet(ImmutableList.<Symbol>builder()
+                                                .addAll(aggregation.getGroupingKeys())
+                                                .addAll(symbols)
+                                                .build())))
+                        .setAggregations(
+                                // remove DISTINCT flag from function calls
+                                aggregation.getAggregations()
+                                        .entrySet().stream()
+                                        .collect(Collectors.toMap(
+                                                Map.Entry::getKey,
+                                                e -> removeDistinct(e.getValue()))))
+                        .setPreGroupedSymbols(ImmutableList.of())
+                        .build());
     }
 
     private static Aggregation removeDistinct(Aggregation aggregation)

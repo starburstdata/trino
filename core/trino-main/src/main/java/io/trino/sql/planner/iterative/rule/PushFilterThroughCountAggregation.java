@@ -33,6 +33,7 @@ import io.trino.sql.planner.iterative.Rule.Context;
 import io.trino.sql.planner.iterative.Rule.Result;
 import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.AggregationNode.Aggregation;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.FilterNode;
 import io.trino.sql.planner.plan.PlanNode;
 import io.trino.sql.planner.plan.ProjectNode;
@@ -212,15 +213,10 @@ public class PushFilterThroughCountAggregation
                 aggregation.getOrderingScheme(),
                 Optional.empty());
 
-        AggregationNode newAggregationNode = new AggregationNode(
-                aggregationNode.getId(),
-                source,
-                ImmutableMap.of(countSymbol, newAggregation),
-                aggregationNode.getGroupingSets(),
-                aggregationNode.getPreGroupedSymbols(),
-                aggregationNode.getStep(),
-                aggregationNode.getHashSymbol(),
-                aggregationNode.getGroupIdSymbol());
+        AggregationNode newAggregationNode = new AggregationNodeBuilder(aggregationNode)
+                .setSource(source)
+                .setAggregations(ImmutableMap.of(countSymbol, newAggregation))
+                .build();
 
         // Restore identity projection if it is present in the original plan.
         PlanNode filterSource = projectNode.map(project -> project.replaceChildren(ImmutableList.of(newAggregationNode))).orElse(newAggregationNode);

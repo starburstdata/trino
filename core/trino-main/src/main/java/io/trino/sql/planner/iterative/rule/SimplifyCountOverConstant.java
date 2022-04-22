@@ -27,6 +27,7 @@ import io.trino.sql.PlannerContext;
 import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.Assignments;
 import io.trino.sql.planner.plan.ProjectNode;
 import io.trino.sql.tree.Expression;
@@ -98,15 +99,11 @@ public class SimplifyCountOverConstant
             return Result.empty();
         }
 
-        return Result.ofPlanNode(new AggregationNode(
-                parent.getId(),
-                child,
-                aggregations,
-                parent.getGroupingSets(),
-                ImmutableList.of(),
-                parent.getStep(),
-                parent.getHashSymbol(),
-                parent.getGroupIdSymbol()));
+        return Result.ofPlanNode(new AggregationNodeBuilder(parent)
+                .setSource(child)
+                .setAggregations(aggregations)
+                .setPreGroupedSymbols(ImmutableList.of())
+                .build());
     }
 
     private boolean isCountOverConstant(Session session, AggregationNode.Aggregation aggregation, Assignments inputs)

@@ -38,6 +38,7 @@ import io.trino.sql.planner.SymbolsExtractor;
 import io.trino.sql.planner.TypeAnalyzer;
 import io.trino.sql.planner.TypeProvider;
 import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.AssignUniqueId;
 import io.trino.sql.planner.plan.Assignments;
 import io.trino.sql.planner.plan.DynamicFilterId;
@@ -1509,14 +1510,10 @@ public class PredicatePushDown
 
             PlanNode output = node;
             if (rewrittenSource != node.getSource()) {
-                output = new AggregationNode(node.getId(),
-                        rewrittenSource,
-                        node.getAggregations(),
-                        node.getGroupingSets(),
-                        ImmutableList.of(),
-                        node.getStep(),
-                        node.getHashSymbol(),
-                        node.getGroupIdSymbol());
+                output = new AggregationNodeBuilder(node)
+                        .setSource(rewrittenSource)
+                        .setPreGroupedSymbols(ImmutableList.of())
+                        .build();
             }
             if (!postAggregationConjuncts.isEmpty()) {
                 output = new FilterNode(idAllocator.getNextId(), output, combineConjuncts(metadata, postAggregationConjuncts));

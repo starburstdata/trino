@@ -32,6 +32,7 @@ import io.trino.sql.planner.TypeAnalyzer;
 import io.trino.sql.planner.TypeProvider;
 import io.trino.sql.planner.optimizations.StreamPropertyDerivations.StreamProperties;
 import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 import io.trino.sql.planner.plan.ApplyNode;
 import io.trino.sql.planner.plan.CorrelatedJoinNode;
 import io.trino.sql.planner.plan.DistinctLimitNode;
@@ -368,15 +369,10 @@ public class AddLocalExchanges
                 preGroupedSymbols = groupingKeys;
             }
 
-            AggregationNode result = new AggregationNode(
-                    node.getId(),
-                    child.getNode(),
-                    node.getAggregations(),
-                    node.getGroupingSets(),
-                    preGroupedSymbols,
-                    node.getStep(),
-                    node.getHashSymbol(),
-                    node.getGroupIdSymbol());
+            AggregationNode result = new AggregationNodeBuilder(node)
+                    .setSource(child.getNode())
+                    .setPreGroupedSymbols(preGroupedSymbols)
+                    .build();
 
             return deriveProperties(result, child.getProperties());
         }

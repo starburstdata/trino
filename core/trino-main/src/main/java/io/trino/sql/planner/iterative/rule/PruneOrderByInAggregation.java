@@ -20,6 +20,7 @@ import io.trino.metadata.Metadata;
 import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.AggregationNodeBuilder;
 
 import java.util.Map;
 import java.util.Optional;
@@ -78,14 +79,8 @@ public class PruneOrderByInAggregation
         if (!anyRewritten) {
             return Result.empty();
         }
-        return Result.ofPlanNode(new AggregationNode(
-                node.getId(),
-                node.getSource(),
-                aggregations.buildOrThrow(),
-                node.getGroupingSets(),
-                node.getPreGroupedSymbols(),
-                node.getStep(),
-                node.getHashSymbol(),
-                node.getGroupIdSymbol()));
+        return Result.ofPlanNode(new AggregationNodeBuilder(node)
+                .setAggregations(aggregations.buildOrThrow())
+                .build());
     }
 }
