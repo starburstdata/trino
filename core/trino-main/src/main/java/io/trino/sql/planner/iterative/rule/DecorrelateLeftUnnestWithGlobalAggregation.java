@@ -13,7 +13,6 @@
  */
 package io.trino.sql.planner.iterative.rule;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Streams;
 import io.trino.matching.Captures;
@@ -264,14 +263,10 @@ public class DecorrelateLeftUnnestWithGlobalAggregation
                 .distinct()
                 .collect(toImmutableList()));
 
-        return new AggregationNode(
+        return AggregationNode.simpleSingleAggregation(
                 aggregationNode.getId(),
                 source,
                 aggregationNode.getAggregations(),
-                groupingSet,
-                ImmutableList.of(),
-                SINGLE,
-                Optional.empty(),
-                Optional.empty());
+                groupingSet);
     }
 }

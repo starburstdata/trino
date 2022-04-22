@@ -216,18 +216,14 @@ public class TransformCorrelatedInPredicateToJoin
         Symbol countMatchesSymbol = symbolAllocator.newSymbol("countMatches", BIGINT);
         Symbol countNullMatchesSymbol = symbolAllocator.newSymbol("countNullMatches", BIGINT);
 
-        AggregationNode aggregation = new AggregationNode(
+        AggregationNode aggregation = AggregationNode.simpleSingleAggregation(
                 idAllocator.getNextId(),
                 preProjection,
                 ImmutableMap.<Symbol, AggregationNode.Aggregation>builder()
                         .put(countMatchesSymbol, countWithFilter(session, matchConditionSymbol))
                         .put(countNullMatchesSymbol, countWithFilter(session, nullMatchConditionSymbol))
                         .buildOrThrow(),
-                singleGroupingSet(probeSide.getOutputSymbols()),
-                ImmutableList.of(),
-                AggregationNode.Step.SINGLE,
-                Optional.empty(),
-                Optional.empty());
+                singleGroupingSet(probeSide.getOutputSymbols()));
 
         // TODO since we care only about "some count > 0", we could have specialized node instead of leftOuterJoin that does the job without materializing join results
         SearchedCaseExpression inPredicateEquivalent = new SearchedCaseExpression(

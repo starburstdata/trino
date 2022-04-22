@@ -229,15 +229,11 @@ public class PlanNodeDecorrelator
             }
 
             // rewrite Limit to aggregation on constant symbols
-            AggregationNode aggregationNode = new AggregationNode(
+            AggregationNode aggregationNode = AggregationNode.simpleSingleAggregation(
                     nodeId,
                     decorrelatedChildNode,
                     ImmutableMap.of(),
-                    singleGroupingSet(decorrelatedChildNode.getOutputSymbols()),
-                    ImmutableList.of(),
-                    AggregationNode.Step.SINGLE,
-                    Optional.empty(),
-                    Optional.empty());
+                    singleGroupingSet(decorrelatedChildNode.getOutputSymbols()));
 
             return Optional.of(new DecorrelationResult(
                     aggregationNode,

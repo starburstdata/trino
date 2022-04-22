@@ -180,14 +180,10 @@ public class SetOperationNodeTranslator
                     Optional.empty()));
         }
 
-        return new AggregationNode(idAllocator.getNextId(),
+        return AggregationNode.simpleSingleAggregation(idAllocator.getNextId(),
                 sourceNode,
                 aggregations.buildOrThrow(),
-                singleGroupingSet(originalColumns),
-                ImmutableList.of(),
-                AggregationNode.Step.SINGLE,
-                Optional.empty(),
-                Optional.empty());
+                singleGroupingSet(originalColumns));
     }
 
     private WindowNode appendCounts(UnionNode sourceNode, List<Symbol> originalColumns, List<Symbol> markers, List<Symbol> countOutputs, Symbol rowNumberSymbol)

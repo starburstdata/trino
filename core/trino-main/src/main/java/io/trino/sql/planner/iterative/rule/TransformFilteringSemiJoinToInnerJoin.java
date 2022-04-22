@@ -43,7 +43,6 @@ import static io.trino.matching.Capture.newCapture;
 import static io.trino.sql.ExpressionUtils.and;
 import static io.trino.sql.ExpressionUtils.extractConjuncts;
 import static io.trino.sql.planner.ExpressionSymbolInliner.inlineSymbols;
-import static io.trino.sql.planner.plan.AggregationNode.Step.SINGLE;
 import static io.trino.sql.planner.plan.AggregationNode.singleGroupingSet;
 import static io.trino.sql.planner.plan.JoinNode.Type.INNER;
 import static io.trino.sql.planner.plan.Patterns.filter;
@@ -124,15 +123,11 @@ public class TransformFilteringSemiJoinToInnerJoin
 
         Optional<Expression> joinFilter = simplifiedPredicate.equals(TRUE_LITERAL) ? Optional.empty() : Optional.of(simplifiedPredicate);
 
-        PlanNode filteringSourceDistinct = new AggregationNode(
+        PlanNode filteringSourceDistinct = AggregationNode.simpleSingleAggregation(
                 context.getIdAllocator().getNextId(),
                 semiJoin.getFilteringSource(),
                 ImmutableMap.of(),
-                singleGroupingSet(ImmutableList.of(semiJoin.getFilteringSourceJoinSymbol())),
-                ImmutableList.of(),
-                SINGLE,
-                Optional.empty(),
-                Optional.empty());
+                singleGroupingSet(ImmutableList.of(semiJoin.getFilteringSourceJoinSymbol())));
 
         JoinNode innerJoin = new JoinNode(
                 semiJoin.getId(),

@@ -824,15 +824,11 @@ public class TestCostCalculator
                 Optional.empty(),
                 Optional.empty());
 
-        return new AggregationNode(
+        return AggregationNode.simpleSingleAggregation(
                 new PlanNodeId(id),
                 source,
                 ImmutableMap.of(new Symbol("count"), aggregation),
-                singleGroupingSet(source.getOutputSymbols()),
-                ImmutableList.of(),
-                AggregationNode.Step.SINGLE,
-                Optional.empty(),
-                Optional.empty());
+                singleGroupingSet(source.getOutputSymbols()));
     }
 
     /**

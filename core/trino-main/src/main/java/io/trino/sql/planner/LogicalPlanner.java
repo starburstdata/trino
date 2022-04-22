@@ -362,15 +362,11 @@ public class LogicalPlanner
 
         PlanNode planNode = new StatisticsWriterNode(
                 idAllocator.getNextId(),
-                new AggregationNode(
+                AggregationNode.simpleSingleAggregation(
                         idAllocator.getNextId(),
                         TableScanNode.newInstance(idAllocator.getNextId(), targetTable, tableScanOutputs.build(), symbolToColumnHandle.buildOrThrow(), false, Optional.empty()),
                         statisticAggregations.getAggregations(),
-                        singleGroupingSet(groupingSymbols),
-                        ImmutableList.of(),
-                        AggregationNode.Step.SINGLE,
-                        Optional.empty(),
-                        Optional.empty()),
+                        singleGroupingSet(groupingSymbols)),
                 new StatisticsWriterNode.WriteStatisticsReference(targetTable),
                 symbolAllocator.newSymbol("rows", BIGINT),
                 tableStatisticsMetadata.getTableStatistics().contains(ROW_COUNT),

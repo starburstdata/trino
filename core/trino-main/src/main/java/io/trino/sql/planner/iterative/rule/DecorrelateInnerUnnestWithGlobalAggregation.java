@@ -337,15 +337,11 @@ public class DecorrelateInnerUnnestWithGlobalAggregation
                             .build());
         }
 
-        return new AggregationNode(
+        return AggregationNode.simpleSingleAggregation(
                 aggregationNode.getId(),
                 source,
                 rewriteWithMasks(aggregationNode.getAggregations(), masks.buildOrThrow()),
-                singleGroupingSet(groupingSymbols),
-                ImmutableList.of(),
-                SINGLE,
-                Optional.empty(),
-                Optional.empty());
+                singleGroupingSet(groupingSymbols));
     }
 
     private static AggregationNode withGrouping(AggregationNode aggregationNode, List<Symbol> groupingSymbols, PlanNode source)
@@ -354,14 +350,10 @@ public class DecorrelateInnerUnnestWithGlobalAggregation
                 .distinct()
                 .collect(toImmutableList()));
 
-        return new AggregationNode(
+        return AggregationNode.simpleSingleAggregation(
                 aggregationNode.getId(),
                 source,
                 aggregationNode.getAggregations(),
-                groupingSet,
-                ImmutableList.of(),
-                SINGLE,
-                Optional.empty(),
-                Optional.empty());
+                groupingSet);
     }
 }

@@ -309,15 +309,11 @@ public class PushAggregationThroughOuterJoin
         Map<Symbol, Symbol> aggregationsSymbolMapping = aggregationsSymbolMappingBuilder.buildOrThrow();
 
         // create an aggregation node whose source is the null row.
-        AggregationNode aggregationOverNullRow = new AggregationNode(
+        AggregationNode aggregationOverNullRow = AggregationNode.simpleSingleAggregation(
                 idAllocator.getNextId(),
                 nullRow,
                 aggregationsOverNullBuilder.buildOrThrow(),
-                globalAggregation(),
-                ImmutableList.of(),
-                AggregationNode.Step.SINGLE,
-                Optional.empty(),
-                Optional.empty());
+                globalAggregation());
 
         return new MappedAggregationInfo(aggregationOverNullRow, aggregationsSymbolMapping);
     }

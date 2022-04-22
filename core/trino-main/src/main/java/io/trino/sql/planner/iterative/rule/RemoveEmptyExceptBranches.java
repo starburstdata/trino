@@ -22,7 +22,6 @@ import io.trino.matching.Pattern;
 import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.plan.AggregationNode;
-import io.trino.sql.planner.plan.AggregationNode.Step;
 import io.trino.sql.planner.plan.Assignments;
 import io.trino.sql.planner.plan.ExceptNode;
 import io.trino.sql.planner.plan.PlanNode;
@@ -30,7 +29,6 @@ import io.trino.sql.planner.plan.ProjectNode;
 import io.trino.sql.planner.plan.ValuesNode;
 
 import java.util.List;
-import java.util.Optional;
 
 import static io.trino.sql.planner.optimizations.QueryCardinalityUtil.isEmpty;
 import static io.trino.sql.planner.plan.AggregationNode.singleGroupingSet;
@@ -96,18 +94,14 @@ public class RemoveEmptyExceptBranches
 
             if (node.isDistinct()) {
                 return Result.ofPlanNode(
-                        new AggregationNode(
+                        AggregationNode.simpleSingleAggregation(
                                 node.getId(),
                                 new ProjectNode(
                                         context.getIdAllocator().getNextId(),
                                         newSources.get(0),
                                         assignments.build()),
                                 ImmutableMap.of(),
-                                singleGroupingSet(node.getOutputSymbols()),
-                                ImmutableList.of(),
-                                Step.SINGLE,
-                                Optional.empty(),
-                                Optional.empty()));
+                                singleGroupingSet(node.getOutputSymbols())));
             }
 
             return Result.ofPlanNode(

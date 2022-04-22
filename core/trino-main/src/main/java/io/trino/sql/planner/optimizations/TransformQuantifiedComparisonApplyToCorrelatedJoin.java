@@ -140,7 +140,7 @@ public class TransformQuantifiedComparisonApplyToCorrelatedJoin
 
             List<Expression> outputColumnReferences = ImmutableList.of(outputColumn.toSymbolReference());
 
-            subqueryPlan = new AggregationNode(
+            subqueryPlan = AggregationNode.simpleSingleAggregation(
                     idAllocator.getNextId(),
                     subqueryPlan,
                     ImmutableMap.of(
@@ -172,11 +172,7 @@ public class TransformQuantifiedComparisonApplyToCorrelatedJoin
                                     Optional.empty(),
                                     Optional.empty(),
                                     Optional.empty())),
-                    globalAggregation(),
-                    ImmutableList.of(),
-                    AggregationNode.Step.SINGLE,
-                    Optional.empty(),
-                    Optional.empty());
+                    globalAggregation());
 
             PlanNode join = new CorrelatedJoinNode(
                     node.getId(),

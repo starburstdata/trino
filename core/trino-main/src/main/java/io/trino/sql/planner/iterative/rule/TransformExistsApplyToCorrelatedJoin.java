@@ -174,7 +174,7 @@ public class TransformExistsApplyToCorrelatedJoin
                 applyNode.getInput(),
                 new ProjectNode(
                         context.getIdAllocator().getNextId(),
-                        new AggregationNode(
+                        AggregationNode.simpleSingleAggregation(
                                 context.getIdAllocator().getNextId(),
                                 applyNode.getSubquery(),
                                 ImmutableMap.of(count, new Aggregation(
@@ -184,11 +184,7 @@ public class TransformExistsApplyToCorrelatedJoin
                                         Optional.empty(),
                                         Optional.empty(),
                                         Optional.empty())),
-                                globalAggregation(),
-                                ImmutableList.of(),
-                                AggregationNode.Step.SINGLE,
-                                Optional.empty(),
-                                Optional.empty()),
+                                globalAggregation()),
                         Assignments.of(exists, new ComparisonExpression(GREATER_THAN, count.toSymbolReference(), new Cast(new LongLiteral("0"), toSqlType(BIGINT))))),
                 applyNode.getCorrelation(),
                 INNER,

@@ -1118,14 +1118,10 @@ class RelationPlanner
 
     private PlanNode distinct(PlanNode node)
     {
-        return new AggregationNode(idAllocator.getNextId(),
+        return AggregationNode.simpleSingleAggregation(idAllocator.getNextId(),
                 node,
                 ImmutableMap.of(),
-                singleGroupingSet(node.getOutputSymbols()),
-                ImmutableList.of(),
-                AggregationNode.Step.SINGLE,
-                Optional.empty(),
-                Optional.empty());
+                singleGroupingSet(node.getOutputSymbols()));
     }
 
     private static final class SetOperationPlan

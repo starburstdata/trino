@@ -57,7 +57,6 @@ import static io.trino.sql.analyzer.TypeSignatureProvider.fromTypes;
 import static io.trino.sql.analyzer.TypeSignatureTranslator.toSqlType;
 import static io.trino.sql.planner.TestingPlannerContext.PLANNER_CONTEXT;
 import static io.trino.sql.planner.TypeAnalyzer.createTestingTypeAnalyzer;
-import static io.trino.sql.planner.plan.AggregationNode.Step.SINGLE;
 import static io.trino.sql.planner.plan.AggregationNode.singleGroupingSet;
 import static io.trino.testing.TestingHandles.TEST_TABLE_HANDLE;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -178,7 +177,7 @@ public class TestTypeValidator
     {
         Symbol aggregationSymbol = symbolAllocator.newSymbol("sum", DOUBLE);
 
-        PlanNode node = new AggregationNode(
+        PlanNode node = AggregationNode.simpleSingleAggregation(
                 newId(),
                 baseTableScan,
                 ImmutableMap.of(aggregationSymbol, new Aggregation(
@@ -188,11 +187,7 @@ public class TestTypeValidator
                         Optional.empty(),
                         Optional.empty(),
                         Optional.empty())),
-                singleGroupingSet(ImmutableList.of(columnA, columnB)),
-                ImmutableList.of(),
-                SINGLE,
-                Optional.empty(),
-                Optional.empty());
+                singleGroupingSet(ImmutableList.of(columnA, columnB)));
 
         assertTypesValid(node);
     }
@@ -234,7 +229,7 @@ public class TestTypeValidator
     {
         Symbol aggregationSymbol = symbolAllocator.newSymbol("sum", DOUBLE);
 
-        PlanNode node = new AggregationNode(
+        PlanNode node = AggregationNode.simpleSingleAggregation(
                 newId(),
                 baseTableScan,
                 ImmutableMap.of(aggregationSymbol, new Aggregation(
@@ -244,11 +239,7 @@ public class TestTypeValidator
                         Optional.empty(),
                         Optional.empty(),
                         Optional.empty())),
-                singleGroupingSet(ImmutableList.of(columnA, columnB)),
-                ImmutableList.of(),
-                SINGLE,
-                Optional.empty(),
-                Optional.empty());
+                singleGroupingSet(ImmutableList.of(columnA, columnB)));
 
         assertThatThrownBy(() -> assertTypesValid(node))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -260,7 +251,7 @@ public class TestTypeValidator
     {
         Symbol aggregationSymbol = symbolAllocator.newSymbol("sum", BIGINT);
 
-        PlanNode node = new AggregationNode(
+        PlanNode node = AggregationNode.simpleSingleAggregation(
                 newId(),
                 baseTableScan,
                 ImmutableMap.of(aggregationSymbol, new Aggregation(
@@ -270,11 +261,7 @@ public class TestTypeValidator
                         Optional.empty(),
                         Optional.empty(),
                         Optional.empty())),
-                singleGroupingSet(ImmutableList.of(columnA, columnB)),
-                ImmutableList.of(),
-                SINGLE,
-                Optional.empty(),
-                Optional.empty());
+                singleGroupingSet(ImmutableList.of(columnA, columnB)));
 
         assertThatThrownBy(() -> assertTypesValid(node))
                 .isInstanceOf(IllegalArgumentException.class)

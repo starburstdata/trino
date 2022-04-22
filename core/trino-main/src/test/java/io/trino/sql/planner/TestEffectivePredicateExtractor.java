@@ -209,7 +209,7 @@ public class TestEffectivePredicateExtractor
     @Test
     public void testAggregation()
     {
-        PlanNode node = new AggregationNode(
+        PlanNode node = AggregationNode.simpleSingleAggregation(
                 newId(),
                 filter(
                         baseTableScan,
@@ -236,11 +236,7 @@ public class TestEffectivePredicateExtractor
                                 Optional.empty(),
                                 Optional.empty(),
                                 Optional.empty())),
-                singleGroupingSet(ImmutableList.of(A, B, C)),
-                ImmutableList.of(),
-                AggregationNode.Step.SINGLE,
-                Optional.empty(),
-                Optional.empty());
+                singleGroupingSet(ImmutableList.of(A, B, C)));
 
         Expression effectivePredicate = effectivePredicateExtractor.extract(SESSION, node, TypeProvider.empty(), typeAnalyzer);
 

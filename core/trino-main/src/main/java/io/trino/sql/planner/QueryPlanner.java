@@ -333,15 +333,11 @@ class QueryPlanner
         PlanNode result = new UnionNode(idAllocator.getNextId(), nodesToUnion, unionSymbolMapping.build(), unionOutputSymbols);
 
         if (union.isDistinct()) {
-            result = new AggregationNode(
+            result = AggregationNode.simpleSingleAggregation(
                     idAllocator.getNextId(),
                     result,
                     ImmutableMap.of(),
-                    singleGroupingSet(result.getOutputSymbols()),
-                    ImmutableList.of(),
-                    AggregationNode.Step.SINGLE,
-                    Optional.empty(),
-                    Optional.empty());
+                    singleGroupingSet(result.getOutputSymbols()));
         }
 
         return new RelationPlan(result, anchorPlan.getScope(), unionOutputSymbols, outerContext);
@@ -1654,15 +1650,11 @@ class QueryPlanner
                     .collect(Collectors.toList());
 
             return subPlan.withNewRoot(
-                    new AggregationNode(
+                    AggregationNode.simpleSingleAggregation(
                             idAllocator.getNextId(),
                             subPlan.getRoot(),
                             ImmutableMap.of(),
-                            singleGroupingSet(symbols),
-                            ImmutableList.of(),
-                            AggregationNode.Step.SINGLE,
-                            Optional.empty(),
-                            Optional.empty()));
+                            singleGroupingSet(symbols)));
         }
 
         return subPlan;
