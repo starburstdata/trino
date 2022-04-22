@@ -65,6 +65,22 @@ public class AggregationNode
         return new AggregationNode(id, source, aggregations, groupingSets, ImmutableList.of(), SINGLE, Optional.empty(), Optional.empty());
     }
 
+    public static AggregationNode restoreDistinctAggregation(
+            AggregationNode distinct,
+            PlanNode source,
+            List<Symbol> groupingKeys)
+    {
+        return new AggregationNode(
+                distinct.getId(),
+                source,
+                ImmutableMap.of(),
+                singleGroupingSet(groupingKeys),
+                ImmutableList.of(),
+                distinct.getStep(),
+                Optional.empty(),
+                Optional.empty());
+    }
+
     @JsonCreator
     public AggregationNode(
             @JsonProperty("id") PlanNodeId id,

@@ -197,19 +197,14 @@ public class TransformCorrelatedGlobalAggregationWithoutProjection
 
         // restore distinct aggregation
         if (distinct != null) {
-            root = new AggregationNode(
-                    distinct.getId(),
+            root = AggregationNode.restoreDistinctAggregation(
+                    distinct,
                     join,
-                    distinct.getAggregations(),
-                    singleGroupingSet(ImmutableList.<Symbol>builder()
+                    ImmutableList.<Symbol>builder()
                             .addAll(join.getLeftOutputSymbols())
                             .add(nonNull)
                             .addAll(distinct.getGroupingKeys())
-                            .build()),
-                    ImmutableList.of(),
-                    distinct.getStep(),
-                    Optional.empty(),
-                    Optional.empty());
+                            .build());
         }
 
         // prepare mask symbols for aggregations

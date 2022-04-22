@@ -173,18 +173,13 @@ public class TransformCorrelatedGroupedAggregationWithoutProjection
 
         // restore distinct aggregation
         if (distinct != null) {
-            distinct = new AggregationNode(
-                    distinct.getId(),
+            distinct = AggregationNode.restoreDistinctAggregation(
+                    distinct,
                     join,
-                    distinct.getAggregations(),
-                    singleGroupingSet(ImmutableList.<Symbol>builder()
+                    ImmutableList.<Symbol>builder()
                             .addAll(join.getLeftOutputSymbols())
                             .addAll(distinct.getGroupingKeys())
-                            .build()),
-                    ImmutableList.of(),
-                    distinct.getStep(),
-                    Optional.empty(),
-                    Optional.empty());
+                            .build());
         }
 
         // restore grouped aggregation
