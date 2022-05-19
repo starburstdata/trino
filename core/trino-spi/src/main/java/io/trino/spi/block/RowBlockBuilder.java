@@ -207,11 +207,11 @@ public class RowBlockBuilder
         hasNonNullRow |= !isNull;
         positionCount++;
 
-        for (int i = 0; i < numFields; i++) {
-            if (fieldBlockBuilders[i].getPositionCount() != fieldBlockOffsets[positionCount]) {
-                throw new IllegalStateException(format("field %s has unexpected position count. Expected: %s, actual: %s", i, fieldBlockOffsets[positionCount], fieldBlockBuilders[i].getPositionCount()));
-            }
-        }
+//        for (int i = 0; i < numFields; i++) {
+//            if (fieldBlockBuilders[i].getPositionCount() != fieldBlockOffsets[positionCount]) {
+//                throw new IllegalStateException(format("field %s has unexpected position count. Expected: %s, actual: %s", i, fieldBlockOffsets[positionCount], fieldBlockBuilders[i].getPositionCount()));
+//            }
+//        }
 
         if (blockBuilderStatus != null) {
             blockBuilderStatus.addBytes(Integer.BYTES + Byte.BYTES);
@@ -223,6 +223,11 @@ public class RowBlockBuilder
     {
         if (currentEntryOpened) {
             throw new IllegalStateException("Current entry must be closed before the block can be built");
+        }
+        for (int i = 0; i < numFields; i++) {
+            if (fieldBlockBuilders[i].getPositionCount() != fieldBlockOffsets[positionCount]) {
+                throw new IllegalStateException(format("field %s has unexpected position count. Expected: %s, actual: %s", i, fieldBlockOffsets[positionCount], fieldBlockBuilders[i].getPositionCount()));
+            }
         }
         if (!hasNonNullRow) {
             return nullRle(positionCount);
