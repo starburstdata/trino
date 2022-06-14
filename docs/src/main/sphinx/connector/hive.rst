@@ -547,6 +547,9 @@ Thrift metastore configuration properties
        metastore service.
    * - ``hive.metastore.client.keytab``
      - Hive metastore client keytab location.
+   * - ``hive.metastore.thrift.delete-files-on-drop``
+     - Delete files on drop in case the metastore doesn't do it. Default is
+       ``false``.
 
 .. _hive-glue-metastore:
 
