@@ -40,6 +40,7 @@ import io.trino.plugin.hive.acid.AcidOperation;
 import io.trino.plugin.hive.acid.AcidTransaction;
 import io.trino.plugin.hive.metastore.HivePrivilegeInfo.HivePrivilege;
 import io.trino.plugin.hive.security.SqlStandardAccessControlMetadataMetastore;
+import io.trino.plugin.hive.util.RetryDriver;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.SchemaNotFoundException;
@@ -94,6 +95,7 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static io.airlift.concurrent.MoreFutures.getFutureValue;
+import static io.trino.hadoop.ConfigurationInstantiator.newEmptyConfiguration;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_CORRUPTED_COLUMN_STATISTICS;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_FILESYSTEM_ERROR;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_METASTORE_ERROR;
@@ -121,6 +123,7 @@ import static io.trino.spi.security.PrincipalType.USER;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.hadoop.hive.common.FileUtils.makePartName;
 import static org.apache.hadoop.hive.metastore.TableType.MANAGED_TABLE;
 import static org.apache.hadoop.hive.metastore.conf.MetastoreConf.ConfVars.TXN_TIMEOUT;
@@ -132,6 +135,10 @@ public class SemiTransactionalHiveMetastore
     private static final Logger log = Logger.get(SemiTransactionalHiveMetastore.class);
     private static final int PARTITION_COMMIT_BATCH_SIZE = 8;
     private static final Pattern DELTA_DIRECTORY_MATCHER = Pattern.compile("(delete_)?delta_[\\d]+_[\\d]+_[\\d]+$");
+
+    private static final RetryDriver DELETE_RETRY = RetryDriver.retry()
+            .maxAttempts(3)
+            .exponentialBackoff(new Duration(1, SECONDS), new Duration(1, SECONDS), new Duration(10, SECONDS), 2.0);
 
     private final HiveMetastoreClosure delegate;
     private final HdfsEnvironment hdfsEnvironment;
@@ -1341,26 +1348,28 @@ public class SemiTransactionalHiveMetastore
     private long getServerExpectedHeartbeatIntervalMillis()
     {
         String hiveServerTransactionTimeout = delegate.getConfigValue(TXN_TIMEOUT.getVarname()).orElseGet(() -> TXN_TIMEOUT.getDefaultVal().toString());
-        Configuration configuration = new Configuration(false);
+        Configuration configuration = newEmptyConfiguration();
         configuration.set(TXN_TIMEOUT.toString(), hiveServerTransactionTimeout);
         return getTimeVar(configuration, TXN_TIMEOUT, MILLISECONDS) / 2;
     }
 
-    public synchronized Optional<ValidTxnWriteIdList> getValidWriteIds(ConnectorSession session, HiveTableHandle tableHandle)
+    public Optional<ValidTxnWriteIdList> getValidWriteIds(ConnectorSession session, HiveTableHandle tableHandle)
     {
-        String queryId = session.getQueryId();
-        checkState(currentQueryId.equals(Optional.of(queryId)), "Invalid query id %s while current query is", queryId, currentQueryId);
-        if (!AcidUtils.isTransactionalTable(tableHandle.getTableParameters().orElseThrow(() -> new IllegalStateException("tableParameters missing")))) {
-            return Optional.empty();
+        HiveTransaction hiveTransaction;
+        synchronized (this) {
+            String queryId = session.getQueryId();
+            checkState(currentQueryId.equals(Optional.of(queryId)), "Invalid query id %s while current query is", queryId, currentQueryId);
+            if (!AcidUtils.isTransactionalTable(tableHandle.getTableParameters().orElseThrow(() -> new IllegalStateException("tableParameters missing")))) {
+                return Optional.empty();
+            }
+            if (currentHiveTransaction.isEmpty()) {
+                currentHiveTransaction = Optional.of(hiveTransactionSupplier
+                        .orElseThrow(() -> new IllegalStateException("hiveTransactionSupplier is not set"))
+                        .get());
+            }
+            hiveTransaction = currentHiveTransaction.get();
         }
-
-        if (currentHiveTransaction.isEmpty()) {
-            currentHiveTransaction = Optional.of(hiveTransactionSupplier
-                    .orElseThrow(() -> new IllegalStateException("hiveTransactionSupplier is not set"))
-                    .get());
-        }
-
-        return Optional.of(currentHiveTransaction.get().getValidWriteIds(new AcidTransactionOwner(session.getUser()), delegate, tableHandle));
+        return Optional.of(hiveTransaction.getValidWriteIds(new AcidTransactionOwner(session.getUser()), delegate, tableHandle));
     }
 
     public synchronized void cleanupQuery(ConnectorSession session)
@@ -3660,8 +3669,12 @@ public class SemiTransactionalHiveMetastore
             Iterator<String> filesToDeleteIterator = filesToDelete.iterator();
             while (filesToDeleteIterator.hasNext()) {
                 String fileName = filesToDeleteIterator.next();
-                log.debug("Deleting failed attempt file %s/%s for query %s", path, fileName, queryId);
-                checkedDelete(fileSystem, new Path(path, fileName), false);
+                Path filePath = new Path(path, fileName);
+                log.debug("Deleting failed attempt file %s for query %s", filePath, queryId);
+                DELETE_RETRY.run("delete " + filePath, () -> {
+                    checkedDelete(fileSystem, filePath, false);
+                    return null;
+                });
                 deletedFilesBuilder.add(fileName);
                 filesToDeleteIterator.remove();
             }
@@ -3671,7 +3684,10 @@ public class SemiTransactionalHiveMetastore
                 log.info("Deleted failed attempt files %s from %s for query %s", deletedFiles, path, queryId);
             }
         }
-        catch (IOException e) {
+        catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             // If we fail here query will be rolled back. The optimal outcome would be for rollback to complete successfully and clean up everything for query.
             // Yet if we have problem here, probably rollback will also fail.
             //

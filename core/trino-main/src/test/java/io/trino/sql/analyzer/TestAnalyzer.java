@@ -367,6 +367,127 @@ public class TestAnalyzer
     }
 
     @Test
+    public void testTemporalTableVersion()
+    {
+        // valid temporal version pointer
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF DATE '2022-01-01'")
+                .hasErrorCode(NOT_SUPPORTED)
+                .hasMessage("This connector does not support versioned tables");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF TIMESTAMP '2022-01-01'")
+                .hasErrorCode(NOT_SUPPORTED)
+                .hasMessage("This connector does not support versioned tables");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF TIMESTAMP '2022-01-01 01:02:03.123456789012'")
+                .hasErrorCode(NOT_SUPPORTED)
+                .hasMessage("This connector does not support versioned tables");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF TIMESTAMP '2022-01-01 UTC'")
+                .hasErrorCode(NOT_SUPPORTED)
+                .hasMessage("This connector does not support versioned tables");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF TIMESTAMP '2022-01-01 01:02:03.123456789012 Asia/Kathmandu'")
+                .hasErrorCode(NOT_SUPPORTED)
+                .hasMessage("This connector does not support versioned tables");
+
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF CURRENT_TIMESTAMP(12) - INTERVAL '0.001' SECOND")
+                .hasErrorCode(NOT_SUPPORTED)
+                .hasMessage("This connector does not support versioned tables");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF LOCALTIMESTAMP(12) - INTERVAL '0.001' SECOND")
+                .hasErrorCode(NOT_SUPPORTED)
+                .hasMessage("This connector does not support versioned tables");
+
+        // wrong type
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF '2022-01-01'")
+                .hasErrorCode(TYPE_MISMATCH)
+                .hasMessage("line 1:18: Type varchar(10) invalid. Temporal pointers must be of type Timestamp, Timestamp with Time Zone, or Date.");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF '2022-01-01 01:02:03'")
+                .hasErrorCode(TYPE_MISMATCH)
+                .hasMessage("line 1:18: Type varchar(19) invalid. Temporal pointers must be of type Timestamp, Timestamp with Time Zone, or Date.");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF '2022-01-01 01:02:03 UTC'")
+                .hasErrorCode(TYPE_MISMATCH)
+                .hasMessage("line 1:18: Type varchar(23) invalid. Temporal pointers must be of type Timestamp, Timestamp with Time Zone, or Date.");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF 1654594283421")
+                .hasErrorCode(TYPE_MISMATCH)
+                .hasMessage("line 1:18: Type bigint invalid. Temporal pointers must be of type Timestamp, Timestamp with Time Zone, or Date.");
+
+        // null value with right type
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF CAST(NULL AS date)")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessage("line 1:18: Pointer value cannot be NULL");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF CAST(NULL AS timestamp(3))")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessage("line 1:18: Pointer value cannot be NULL");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF CAST(NULL AS timestamp(3) with time zone)")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessage("line 1:18: Pointer value cannot be NULL");
+
+        // null value with wrong type
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF NULL")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessage("line 1:18: Pointer value cannot be NULL");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF CAST(NULL AS bigint)")
+                .hasErrorCode(TYPE_MISMATCH)
+                .hasMessage("line 1:18: Type bigint invalid. Temporal pointers must be of type Timestamp, Timestamp with Time Zone, or Date.");
+
+        // temporal version pointer in the future -- invalid, because future state can change
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF DATE '2999-01-01'")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessage("line 1:18: Pointer value '2999-01-01' is not in the past");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF TIMESTAMP '2999-01-01'")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessage("line 1:18: Pointer value '2999-01-01 00:00:00' is not in the past");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF TIMESTAMP '2999-01-01 01:02:03.123456789012'")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessage("line 1:18: Pointer value '2999-01-01 01:02:03.123456789012' is not in the past");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF TIMESTAMP '2999-01-01 UTC'")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessage("line 1:18: Pointer value '2999-01-01 00:00:00 UTC' is not in the past");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF TIMESTAMP '2999-01-01 01:02:03.123456789012 Asia/Kathmandu'")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessage("line 1:18: Pointer value '2999-01-01 01:02:03.123456789012 Asia/Kathmandu' is not in the past");
+
+        // temporal version pointer at "current moment" -- invalid, because due to time granularity, the current time's state may still change
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF CURRENT_TIMESTAMP(12)")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessageMatching("line 1:18: Pointer value '.*' is not in the past");
+        assertFails("SELECT * FROM t1 FOR TIMESTAMP AS OF LOCALTIMESTAMP(12)")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessageMatching("line 1:18: Pointer value '.*' is not in the past");
+    }
+
+    @Test
+    public void testRangeIdTableVersion()
+    {
+        // integer
+        assertFails("SELECT * FROM t1 FOR VERSION AS OF 123")
+                .hasErrorCode(NOT_SUPPORTED)
+                .hasMessage("This connector does not support versioned tables");
+
+        // bigint
+        assertFails("SELECT * FROM t1 FOR VERSION AS OF BIGINT '123'")
+                .hasErrorCode(NOT_SUPPORTED)
+                .hasMessage("This connector does not support versioned tables");
+
+        // varchar
+        assertFails("SELECT * FROM t1 FOR VERSION AS OF '2022-01-01'")
+                .hasErrorCode(NOT_SUPPORTED)
+                .hasMessage("This connector does not support versioned tables");
+
+        // date
+        assertFails("SELECT * FROM t1 FOR VERSION AS OF DATE '2022-01-01'")
+                .hasErrorCode(NOT_SUPPORTED)
+                .hasMessage("This connector does not support versioned tables");
+
+        // null value
+        assertFails("SELECT * FROM t1 FOR VERSION AS OF NULL")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessage("line 1:18: Pointer value cannot be NULL");
+        assertFails("SELECT * FROM t1 FOR VERSION AS OF CAST(NULL AS bigint)")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessage("line 1:18: Pointer value cannot be NULL");
+        assertFails("SELECT * FROM t1 FOR VERSION AS OF CAST(NULL AS varchar)")
+                .hasErrorCode(INVALID_ARGUMENTS)
+                .hasMessage("line 1:18: Pointer value cannot be NULL");
+    }
+
+    @Test
     public void testGroupByWithWildcard()
     {
         assertFails("SELECT * FROM t1 GROUP BY 1")
@@ -700,6 +821,10 @@ public class TestAnalyzer
         assertFails("SELECT * FROM foo.t")
                 .hasErrorCode(SCHEMA_NOT_FOUND);
         assertFails("SELECT * FROM foo")
+                .hasErrorCode(TABLE_NOT_FOUND);
+        assertFails("SELECT * FROM foo FOR TIMESTAMP AS OF TIMESTAMP '2021-03-01 00:00:01'")
+                .hasErrorCode(TABLE_NOT_FOUND);
+        assertFails("SELECT * FROM foo FOR VERSION AS OF 'version1'")
                 .hasErrorCode(TABLE_NOT_FOUND);
     }
 
@@ -5417,12 +5542,18 @@ public class TestAnalyzer
     @Test
     public void testJsonPathParameterTypes()
     {
-        assertFails("SELECT JSON_EXISTS( " +
+        analyze("SELECT JSON_EXISTS( " +
                 "                           json_column, " +
                 "                           'lax $.abs()' PASSING INTERVAL '2' DAY AS parameter_1) " +
-                "       FROM (VALUES '-1', 'ala') t(json_column)")
-                .hasErrorCode(INVALID_FUNCTION_ARGUMENT)
-                .hasMessage("line 1:110: Invalid type of JSON path parameter: interval day to second");
+                "       FROM (VALUES '-1', 'ala') t(json_column)");
+
+        analyze("SELECT JSON_EXISTS('[]', 'lax $[2]' PASSING INTERVAL '2' DAY AS parameter_interval)");
+
+        analyze("SELECT JSON_EXISTS('[]', 'lax $[2]' PASSING UUID '12151fd2-7586-11e9-8f9e-2a86e4085a59' AS parameter_uuid)");
+
+        assertFails("SELECT JSON_EXISTS('[]', 'lax $[2]' PASSING approx_set(1) AS parameter_hll)")
+                .hasErrorCode(NOT_SUPPORTED)
+                .hasMessage("line 1:8: Unsupported type of JSON path parameter: HyperLogLog");
     }
 
     @Test
