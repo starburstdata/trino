@@ -74,7 +74,7 @@ Type mapping
 Trino supports the following MariaDB data types:
 
 ==================================  ===============================
-MariaDB Type                        Trino Type
+MariaDB type                        Trino type
 ==================================  ===============================
 ``boolean``                         ``tinyint``
 ``tinyint``                         ``tinyint``
