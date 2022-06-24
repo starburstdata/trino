@@ -23,6 +23,7 @@ import io.trino.matching.Pattern;
 import io.trino.operator.join.LookupJoinOperator;
 import io.trino.sql.planner.Partitioning;
 import io.trino.sql.planner.PartitioningScheme;
+import io.trino.sql.planner.iterative.GroupReference;
 import io.trino.sql.planner.iterative.Lookup;
 import io.trino.sql.planner.iterative.Rule;
 import io.trino.sql.planner.optimizations.PlanNodeSearcher;
@@ -35,6 +36,7 @@ import io.trino.sql.planner.plan.ValuesNode;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static io.trino.SystemSessionProperties.getJoinPartitionedBuildMinRowCount;
 import static io.trino.sql.planner.SystemPartitioningHandle.SINGLE_DISTRIBUTION;
@@ -43,6 +45,8 @@ import static io.trino.sql.planner.plan.ExchangeNode.Type.GATHER;
 import static io.trino.sql.planner.plan.Patterns.Join.right;
 import static io.trino.sql.planner.plan.Patterns.exchange;
 import static io.trino.sql.planner.plan.Patterns.join;
+import static java.lang.Double.NaN;
+import static java.lang.Double.isNaN;
 
 /**
  * Rule that transforms
@@ -86,7 +90,7 @@ public class UseNonPartitionedJoinLookupSource
     @Override
     public Result apply(JoinNode node, Captures captures, Context context)
     {
-        double buildSideRowCount = getSourceTablesRowCount(node.getRight(), context);
+        double buildSideRowCount = getFirstKnownOutputRowCount(node.getRight(), context);
         if (Double.isNaN(buildSideRowCount)) {
             // buildSideRowCount = NaN means stats are not available or build side contains join
             return Result.empty();
@@ -128,6 +132,64 @@ public class UseNonPartitionedJoinLookupSource
     {
         return exchangeNode.getType() == GATHER
                 && exchangeNode.getPartitioningScheme().getPartitioning().getHandle() == SINGLE_DISTRIBUTION;
+    }
+
+    private static final List<Class<? extends PlanNode>> EXPANDING_NODE_CLASSES = ImmutableList.of(JoinNode.class, UnnestNode.class);
+
+    private static double getFirstKnownOutputRowCount(PlanNode node, Context context)
+    {
+        return getFirstKnownOutputRowCount(node, context.getLookup(), context.getStatsProvider());
+    }
+
+    /**
+     * Recursively looks for the first source node with a known estimate and uses that to return an approximate output size.
+     * Returns NaN if an un-estimated expanding node (Join or Unnest) is encountered.
+     * The amount of reduction in size from un-estimated non-expanding nodes (e.g. an un-estimated filter or aggregation)
+     * is not accounted here. We make use of the first available estimate and make decision about flipping join sides only if
+     * we find a large difference in output size of both sides.
+     */
+    @VisibleForTesting
+    static double getFirstKnownOutputRowCount(PlanNode node, Lookup lookup, StatsProvider statsProvider)
+    {
+        boolean hasExpandingNodes = PlanNodeSearcher.searchFrom(node, lookup)
+                .whereIsInstanceOfAny(JoinNode.class, UnnestNode.class)
+                .matches();
+        if (hasExpandingNodes) {
+            return Double.NaN;
+        }
+        return Stream.of(node)
+                .flatMap(planNode -> {
+                    if (planNode instanceof GroupReference) {
+                        return lookup.resolveGroup(node);
+                    }
+                    return Stream.of(planNode);
+                })
+                .mapToDouble(resolvedNode -> {
+                    double outputRowCount = statsProvider.getStats(resolvedNode).getOutputRowCount();
+                    if (!isNaN(outputRowCount)) {
+                        return outputRowCount;
+                    }
+
+                    if (EXPANDING_NODE_CLASSES.stream().anyMatch(clazz -> clazz.isInstance(resolvedNode))) {
+                        return NaN;
+                    }
+
+                    List<PlanNode> sourceNodes = resolvedNode.getSources();
+                    if (sourceNodes.isEmpty()) {
+                        return NaN;
+                    }
+
+                    double sourcesOutputRowCount = 0;
+                    for (PlanNode sourceNode : sourceNodes) {
+                        double firstKnownOutputRowCount = getFirstKnownOutputRowCount(sourceNode, lookup, statsProvider);
+                        if (isNaN(firstKnownOutputRowCount)) {
+                            return NaN;
+                        }
+                        sourcesOutputRowCount += firstKnownOutputRowCount;
+                    }
+                    return sourcesOutputRowCount;
+                })
+                .sum();
     }
 
     private static double getSourceTablesRowCount(PlanNode node, Context context)
