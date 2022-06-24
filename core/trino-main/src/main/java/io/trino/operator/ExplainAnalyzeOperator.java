@@ -167,7 +167,7 @@ public class ExplainAnalyzeOperator
                         queryInfo.getOutputStage().get().getSubStages().get(0),
                         queryInfo.getQueryStats(),
                         metadata,
-                functionManager,
+                        functionManager,
                         operatorContext.getSession(),
                         verbose);
                 break;
@@ -176,6 +176,7 @@ public class ExplainAnalyzeOperator
                         queryInfo.getOutputStage().get().getSubStages().get(0),
                         queryInfo.getQueryStats(),
                         metadata,
+                        functionManager,
                         operatorContext.getSession(),
                         verbose);
                 break;

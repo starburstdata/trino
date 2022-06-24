@@ -437,13 +437,14 @@ public class PlanPrinter
             StageInfo outputStageInfo,
             QueryStats queryStats,
             Metadata metadata,
+            FunctionManager functionManager,
             Session session,
             boolean verbose)
     {
         return jsonDistributedPlan(
                 outputStageInfo,
                 queryStats,
-                new ValuePrinter(metadata, session),
+                new ValuePrinter(metadata, functionManager, session),
                 verbose);
     }
 
