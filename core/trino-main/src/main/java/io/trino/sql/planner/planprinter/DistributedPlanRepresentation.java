@@ -23,6 +23,7 @@ import io.trino.sql.planner.planprinter.NodeRepresentation.TypedSymbol;
 import javax.annotation.concurrent.Immutable;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static java.util.Objects.requireNonNull;
@@ -30,9 +31,9 @@ import static java.util.Objects.requireNonNull;
 public class DistributedPlanRepresentation
 {
     private final String name;
-    private final String identifier;
+    private final Map<String, String> descriptor;
     private final List<TypedSymbol> outputs;
-    private final String details;
+    private final List<String> details;
     private final DistributedPlanStats distributedPlanStats;
     private final Optional<PlanNodeStatsAndCostSummary> planNodeStatsAndCostSummary;
     private final List<EstimateStats> estimateStats;
@@ -42,9 +43,9 @@ public class DistributedPlanRepresentation
     @JsonCreator
     public DistributedPlanRepresentation(
             @JsonProperty("name") String name,
-            @JsonProperty("identifier") String identifier,
+            @JsonProperty("descriptor") Map<String, String> descriptor,
             @JsonProperty("layout") List<TypedSymbol> outputs,
-            @JsonProperty("details") String details,
+            @JsonProperty("details") List<String> details,
             @JsonProperty("reOrderJoinStatsAndCosts") Optional<PlanNodeStatsAndCostSummary> planNodeStatsAndCostSummary,
             @JsonProperty("estimates") List<EstimateStats> estimateStats,
             @JsonProperty("planStats") DistributedPlanStats distributedPlanStats,
@@ -52,7 +53,7 @@ public class DistributedPlanRepresentation
             @JsonProperty("windowOperatorStats") Optional<JsonWindowOperatorStats> windowOperatorStats)
     {
         this.name = requireNonNull(name, "name is null");
-        this.identifier = requireNonNull(identifier, "identifier is null");
+        this.descriptor = requireNonNull(descriptor, "descriptor is null");
         this.outputs = requireNonNull(outputs, "outputs is null");
         this.details = requireNonNull(details, "details is null");
         this.planNodeStatsAndCostSummary = planNodeStatsAndCostSummary;
@@ -69,9 +70,9 @@ public class DistributedPlanRepresentation
     }
 
     @JsonProperty
-    public String getIdentifier()
+    public Map<String, String> getDescriptor()
     {
-        return identifier;
+        return descriptor;
     }
 
     @JsonProperty
@@ -81,7 +82,7 @@ public class DistributedPlanRepresentation
     }
 
     @JsonProperty
-    public String getDetails()
+    public List<String> getDetails()
     {
         return details;
     }

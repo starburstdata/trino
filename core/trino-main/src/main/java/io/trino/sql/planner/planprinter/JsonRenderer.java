@@ -76,8 +76,6 @@ public class JsonRenderer
         return CODEC.toJson(renderJson(plan, plan.getRoot()));
     }
 
-    @VisibleForTesting
-    JsonRenderedNode renderJson(PlanRepresentation plan, NodeRepresentation node)
     public String render(JsonDistributedPlanFragments planFragments)
     {
         return DISTRIBUTED_PLAN_CODEC.toJson(planFragments);
@@ -122,7 +120,7 @@ public class JsonRenderer
 
         return new DistributedPlanRepresentation(
                 node.getName(),
-                node.getIdentifier(),
+                node.getDescriptor(),
                 node.getOutputs(),
                 node.getDetails(),
                 planNodeStatsAndCostSummary,
@@ -254,7 +252,7 @@ public class JsonRenderer
         return null;
     }
 
-    private JsonRenderedNode renderJson(PlanRepresentation plan, NodeRepresentation node)
+    JsonRenderedNode renderJson(PlanRepresentation plan, NodeRepresentation node)
     {
         List<JsonRenderedNode> children = node.getChildren().stream()
                 .map(plan::getNode)
