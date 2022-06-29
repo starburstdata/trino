@@ -198,15 +198,19 @@ public class OrcRecordReader
         ImmutableList.Builder<StripeInformation> stripes = ImmutableList.builder();
         ImmutableList.Builder<Long> stripeFilePositions = ImmutableList.builder();
         boolean allFilterOutByFileStats = false;
+        int totalStripes = 0;
         if (fileStats.isEmpty() || predicate.matches(numberOfRows, fileStats.get())) {
             // select stripes that start within the specified split
             for (StripeInfo info : stripeInfos) {
                 StripeInformation stripe = info.getStripe();
-                if (splitContainsStripe(splitOffset, splitLength, stripe) && isStripeIncluded(stripe, info.getStats(), predicate)) {
-                    stripes.add(stripe);
-                    stripeFilePositions.add(fileRowCount);
-                    totalRowCount += stripe.getNumberOfRows();
-                    totalDataLength += stripe.getDataLength();
+                if (splitContainsStripe(splitOffset, splitLength, stripe)) {
+                    totalStripes++;
+                    if (isStripeIncluded(stripe, info.getStats(), predicate)) {
+                        stripes.add(stripe);
+                        stripeFilePositions.add(fileRowCount);
+                        totalRowCount += stripe.getNumberOfRows();
+                        totalDataLength += stripe.getDataLength();
+                    }
                 }
                 fileRowCount += stripe.getNumberOfRows();
             }
@@ -217,9 +221,9 @@ public class OrcRecordReader
         this.totalRowCount = totalRowCount;
         this.totalDataLength = totalDataLength;
         this.stripes = stripes.build();
-        this.totalStripes = fileStripes.size();
-        this.filterOutByStripeStats = allFilterOutByFileStats ? 0 : stripeInfos.size() - this.stripes.size();
-        this.filterOutByFileStats = allFilterOutByFileStats ? stripeInfos.size() : 0;
+        this.totalStripes = totalStripes;
+        this.filterOutByStripeStats = allFilterOutByFileStats ? 0 : totalStripes - this.stripes.size();
+        this.filterOutByFileStats = allFilterOutByFileStats ? totalStripes : 0;
         this.stripeFilePositions = stripeFilePositions.build();
 
         orcDataSource = wrapWithCacheIfTinyStripes(orcDataSource, this.stripes, options.getMaxMergeDistance(), options.getTinyStripeThreshold());
