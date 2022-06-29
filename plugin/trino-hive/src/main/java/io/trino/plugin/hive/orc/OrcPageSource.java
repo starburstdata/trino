@@ -272,7 +272,10 @@ public class OrcPageSource
                 "stripeCount", new LongCount(stripeCount),
                 "totalFooterByteSize", new LongCount(totalFooterByteSize),
                 "totalByteSize", new LongCount(totalByteSize),
-                "totalRowCount", new LongCount(totalRowCount)));
+                "totalRowCount", new LongCount(totalRowCount),
+                "totalStripes", new LongCount(recordReader.getTotalStripes()),
+                "filterOutByFileStats", new LongCount(recordReader.getFilterOutByFileStats()),
+                "filterOutByStripeStats", new LongCount(recordReader.getFilterOutByStripeStats())));
     }
 
     public interface ColumnAdaptation

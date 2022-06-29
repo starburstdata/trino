@@ -87,6 +87,9 @@ public class OrcRecordReader
     private final long totalRowCount;
     private final long splitLength;
     private final long totalDataLength;
+    private final int totalStripes;
+    private final int filterOutByFileStats;
+    private final int filterOutByStripeStats;
     private final long maxBlockBytes;
     private final ColumnMetadata<OrcType> orcTypes;
     private long currentPosition;
@@ -194,6 +197,7 @@ public class OrcRecordReader
         long totalDataLength = 0;
         ImmutableList.Builder<StripeInformation> stripes = ImmutableList.builder();
         ImmutableList.Builder<Long> stripeFilePositions = ImmutableList.builder();
+        boolean allFilterOutByFileStats = false;
         if (fileStats.isEmpty() || predicate.matches(numberOfRows, fileStats.get())) {
             // select stripes that start within the specified split
             for (StripeInfo info : stripeInfos) {
@@ -207,9 +211,15 @@ public class OrcRecordReader
                 fileRowCount += stripe.getNumberOfRows();
             }
         }
+        else {
+            allFilterOutByFileStats = true;
+        }
         this.totalRowCount = totalRowCount;
         this.totalDataLength = totalDataLength;
         this.stripes = stripes.build();
+        this.totalStripes = fileStripes.size();
+        this.filterOutByStripeStats = allFilterOutByFileStats ? 0 : stripeInfos.size() - this.stripes.size();
+        this.filterOutByFileStats = allFilterOutByFileStats ? stripeInfos.size() : 0;
         this.stripeFilePositions = stripeFilePositions.build();
 
         orcDataSource = wrapWithCacheIfTinyStripes(orcDataSource, this.stripes, options.getMaxMergeDistance(), options.getTinyStripeThreshold());
@@ -636,6 +646,21 @@ public class OrcRecordReader
     public List<StripeInformation> getStripes()
     {
         return stripes;
+    }
+
+    public int getTotalStripes()
+    {
+        return totalStripes;
+    }
+
+    public int getFilterOutByFileStats()
+    {
+        return filterOutByFileStats;
+    }
+
+    public int getFilterOutByStripeStats()
+    {
+        return filterOutByStripeStats;
     }
 
     private static class StripeInfo
