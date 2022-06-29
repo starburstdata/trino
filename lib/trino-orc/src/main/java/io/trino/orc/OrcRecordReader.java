@@ -633,6 +633,11 @@ public class OrcRecordReader
         return memoryUsage.getBytes();
     }
 
+    public List<StripeInformation> getStripes()
+    {
+        return stripes;
+    }
+
     private static class StripeInfo
     {
         private final StripeInformation stripe;

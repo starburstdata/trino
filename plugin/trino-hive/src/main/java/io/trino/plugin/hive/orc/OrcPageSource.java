@@ -25,6 +25,7 @@ import io.trino.orc.OrcRecordReader;
 import io.trino.orc.metadata.ColumnMetadata;
 import io.trino.orc.metadata.CompressionKind;
 import io.trino.orc.metadata.OrcType;
+import io.trino.orc.metadata.StripeInformation;
 import io.trino.plugin.base.metrics.LongCount;
 import io.trino.plugin.hive.FileFormatDataSourceStats;
 import io.trino.plugin.hive.HiveColumnHandle;
@@ -256,7 +257,22 @@ public class OrcPageSource
     @Override
     public Metrics getMetrics()
     {
-        return new Metrics(ImmutableMap.of(ORC_CODEC_METRIC_PREFIX + compressionKind.name(), new LongCount(recordReader.getTotalDataLength())));
+        int stripeCount = 0;
+        long totalFooterByteSize = 0;
+        long totalByteSize = 0;
+        long totalRowCount = 0;
+        for (StripeInformation stripe : recordReader.getStripes()) {
+            stripeCount++;
+            totalFooterByteSize += stripe.getFooterLength();
+            totalByteSize += stripe.getTotalLength();
+            totalRowCount += stripe.getNumberOfRows();
+        }
+        return new Metrics(ImmutableMap.of(
+                ORC_CODEC_METRIC_PREFIX + compressionKind.name(), new LongCount(recordReader.getTotalDataLength()),
+                "stripeCount", new LongCount(stripeCount),
+                "totalFooterByteSize", new LongCount(totalFooterByteSize),
+                "totalByteSize", new LongCount(totalByteSize),
+                "totalRowCount", new LongCount(totalRowCount)));
     }
 
     public interface ColumnAdaptation
@@ -463,7 +479,7 @@ public class OrcPageSource
             for (int channel = 0; channel < sourcePage.getChannelCount(); channel++) {
                 originalFilesBlockBuilder.add(sourcePage.getBlock(channel));
             }
-            Page page = new Page(originalFilesBlockBuilder.build().toArray(new Block[]{}));
+            Page page = new Page(originalFilesBlockBuilder.build().toArray(new Block[] {}));
             return updateProcessor.createUpdateRowBlock(page, nonUpdatedSourceChannels, maskDeletedRowsFunction);
         }
     }
