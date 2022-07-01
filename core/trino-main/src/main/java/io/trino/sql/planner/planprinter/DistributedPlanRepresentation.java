@@ -15,8 +15,6 @@ package io.trino.sql.planner.planprinter;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.airlift.units.DataSize;
-import io.airlift.units.Duration;
 import io.trino.cost.PlanNodeStatsAndCostSummary;
 import io.trino.sql.planner.planprinter.NodeRepresentation.TypedSymbol;
 
@@ -248,144 +246,149 @@ public class DistributedPlanRepresentation
     @Immutable
     public static class DistributedPlanStats
     {
-        private final Duration nodeCpuTime;
-        private final Double nodeCpuFraction;
-        private final Duration nodeScheduledTime;
-        private final Double nodeScheduledFraction;
-        private final long nodeOutputRows;
-        private final DataSize nodeOutputDataSize;
-        private final String translatedOperatorType;
-        private final Double nodeInputRows;
-        private final Double nodeInputStdDev;
-        private final Double averageHashCollisions;
-        private final Double hashCollisionsRatio;
-        private final Double stdDevHashCollisions;
-        private final DataSize planNodeSpilledDataSize;
+        private final Map<String, BasicOperatorStats> operatorStats;
+        private final String planNodeId;
+        private final long planNodeScheduledTime;
+        private final long planNodeCpuTime;
+        private final long planNodeBlockedTime;
+        private final long planNodeInputPositions;
+        private final long planNodeInputDataSize;
+        private final long planNodeOutputPositions;
+        private final long planNodeOutputDataSize;
+        private final long planNodeSpilledDataSize;
+        private final double scheduledTimeFraction;
+        private final double cpuTimeFraction;
+        private final double blockedTimeFraction;
+
+        public static DistributedPlanStats of(PlanNodeStats nodeStats, PlanRepresentation plan)
+        {
+            // TODO lysy: handle HashCollisionPlanNodeStats and WindowPlanNodeStats
+            double scheduledTimeFraction = 100.0d * nodeStats.getPlanNodeScheduledTime().toMillis() / plan.getTotalScheduledTime().get().toMillis();
+            double cpuTimeFraction = 100.0d * nodeStats.getPlanNodeCpuTime().toMillis() / plan.getTotalCpuTime().get().toMillis();
+            double blockedTimeFraction = 100.0d * nodeStats.getPlanNodeBlockedTime().toMillis() / plan.getTotalBlockedTime().get().toMillis();
+            return new DistributedPlanStats(
+                    nodeStats.getOperatorStats(),
+                    nodeStats.getPlanNodeId().toString(),
+                    nodeStats.getPlanNodeScheduledTime().toMillis(),
+                    nodeStats.getPlanNodeCpuTime().toMillis(),
+                    nodeStats.getPlanNodeBlockedTime().toMillis(),
+                    nodeStats.getPlanNodeInputPositions(),
+                    nodeStats.getPlanNodeInputDataSize().toBytes(),
+                    nodeStats.getPlanNodeOutputPositions(),
+                    nodeStats.getPlanNodeOutputDataSize().toBytes(),
+                    nodeStats.getPlanNodeSpilledDataSize().toBytes(),
+                    scheduledTimeFraction,
+                    cpuTimeFraction,
+                    blockedTimeFraction);
+        }
 
         @JsonCreator
         public DistributedPlanStats(
-                @JsonProperty("nodeCpuTime") Duration nodeCpuTime,
-                @JsonProperty("nodeCpuFraction") Double nodeCpuFraction,
-                @JsonProperty("nodeScheduledTime") Duration nodeScheduledTime,
-                @JsonProperty("nodeScheduledFraction") Double nodeScheduledFraction,
-                @JsonProperty("nodeOutputRows") Long nodeOutputRows,
-                @JsonProperty("nodeOutputDataSize") DataSize nodeOutputDataSize,
-                @JsonProperty("translatedOperatorType") String translatedOperatorType,
-                @JsonProperty("nodeInputRows") Double nodeInputRows,
-                @JsonProperty("nodeInputStdDev") Double nodeInputStdDev,
-                @JsonProperty("averageHashCollisions") Double averageHashCollisions,
-                @JsonProperty("hashCollisionsRatio") Double hashCollisionsRatio,
-                @JsonProperty("stdDevHashCollisions") Double stdDevHashCollisions,
-                @JsonProperty("planNodeSpilledDataSize") DataSize planNodeSpilledDataSize)
+                @JsonProperty("operatorStats") Map<String, BasicOperatorStats> operatorStats,
+                @JsonProperty("planNodeId") String planNodeId,
+                @JsonProperty("planNodeScheduledTime") long planNodeScheduledTime,
+                @JsonProperty("planNodeCpuTime") long planNodeCpuTime,
+                @JsonProperty("planNodeBlockedTime") long planNodeBlockedTime,
+                @JsonProperty("planNodeInputPositions") long planNodeInputPositions,
+                @JsonProperty("planNodeInputDataSize") long planNodeInputDataSize,
+                @JsonProperty("planNodeOutputPositions") long planNodeOutputPositions,
+                @JsonProperty("planNodeOutputDataSize") long planNodeOutputDataSize,
+                @JsonProperty("planNodeSpilledDataSize") long planNodeSpilledDataSize,
+                @JsonProperty("scheduledTimeFraction") double scheduledTimeFraction,
+                @JsonProperty("cpuTimeFraction") double cpuTimeFraction,
+                @JsonProperty("blockedTimeFraction") double blockedTimeFraction)
         {
-            this.nodeCpuTime = nodeCpuTime;
-            this.nodeCpuFraction = nodeCpuFraction;
-            this.nodeScheduledTime = nodeScheduledTime;
-            this.nodeScheduledFraction = nodeScheduledFraction;
-            this.nodeOutputRows = nodeOutputRows;
-            this.nodeOutputDataSize = nodeOutputDataSize;
-            this.translatedOperatorType = translatedOperatorType;
-            this.nodeInputRows = nodeInputRows;
-            this.nodeInputStdDev = nodeInputStdDev;
-            this.averageHashCollisions = averageHashCollisions;
-            this.hashCollisionsRatio = hashCollisionsRatio;
-            this.stdDevHashCollisions = stdDevHashCollisions;
+            this.operatorStats = operatorStats;
+            this.planNodeId = planNodeId;
+            this.planNodeScheduledTime = planNodeScheduledTime;
+            this.planNodeCpuTime = planNodeCpuTime;
+            this.planNodeBlockedTime = planNodeBlockedTime;
+            this.planNodeInputPositions = planNodeInputPositions;
+            this.planNodeInputDataSize = planNodeInputDataSize;
+            this.planNodeOutputPositions = planNodeOutputPositions;
+            this.planNodeOutputDataSize = planNodeOutputDataSize;
             this.planNodeSpilledDataSize = planNodeSpilledDataSize;
-        }
-
-        @JsonCreator
-        public DistributedPlanStats(
-                @JsonProperty("nodeCpuTime") Duration nodeCpuTime,
-                @JsonProperty("nodeCpuFraction") Double nodeCpuFraction,
-                @JsonProperty("nodeScheduledTime") Duration nodeScheduledTime,
-                @JsonProperty("nodeScheduledFraction") Double nodeScheduledFraction,
-                @JsonProperty("nodeOutputRows") Long nodeOutputRows,
-                @JsonProperty("nodeOutputDataSize") DataSize nodeOutputDataSize,
-                @JsonProperty("translatedOperatorType") String translatedOperatorType,
-                @JsonProperty("nodeInputRows") Double nodeInputRows,
-                @JsonProperty("nodeInputStdDev") Double nodeInputStdDev,
-                @JsonProperty("planNodeSpilledDataSize") DataSize planNodeSpilledDataSize)
-        {
-            this(nodeCpuTime, nodeCpuFraction, nodeScheduledTime, nodeScheduledFraction, nodeOutputRows, nodeOutputDataSize, translatedOperatorType,
-                    nodeInputRows, nodeInputStdDev, 0.0, 0.0, 0.0, planNodeSpilledDataSize);
+            this.scheduledTimeFraction = scheduledTimeFraction;
+            this.cpuTimeFraction = cpuTimeFraction;
+            this.blockedTimeFraction = blockedTimeFraction;
         }
 
         @JsonProperty
-        public Duration getNodeCpuTime()
+        public Map<String, BasicOperatorStats> getOperatorStats()
         {
-            return nodeCpuTime;
+            return operatorStats;
         }
 
         @JsonProperty
-        public Double getNodeCpuFraction()
+        public String getPlanNodeId()
         {
-            return nodeCpuFraction;
+            return planNodeId;
         }
 
         @JsonProperty
-        public Duration getNodeScheduledTime()
+        public long getPlanNodeScheduledTime()
         {
-            return nodeScheduledTime;
+            return planNodeScheduledTime;
         }
 
         @JsonProperty
-        public Double getNodeScheduledFraction()
+        public long getPlanNodeCpuTime()
         {
-            return nodeScheduledFraction;
+            return planNodeCpuTime;
         }
 
         @JsonProperty
-        public Long getNodeOutputRows()
+        public long getPlanNodeBlockedTime()
         {
-            return nodeOutputRows;
+            return planNodeBlockedTime;
         }
 
         @JsonProperty
-        public DataSize getNodeOutputDataSize()
+        public long getPlanNodeInputPositions()
         {
-            return nodeOutputDataSize;
+            return planNodeInputPositions;
         }
 
         @JsonProperty
-        public String getTranslatedOperatorType()
+        public long getPlanNodeInputDataSize()
         {
-            return translatedOperatorType;
+            return planNodeInputDataSize;
         }
 
         @JsonProperty
-        public Double getNodeInputRows()
+        public long getPlanNodeOutputPositions()
         {
-            return nodeInputRows;
+            return planNodeOutputPositions;
         }
 
         @JsonProperty
-        public Double getNodeInputStdDev()
+        public long getPlanNodeOutputDataSize()
         {
-            return nodeInputStdDev;
+            return planNodeOutputDataSize;
         }
 
         @JsonProperty
-        public Double getAverageHashCollisions()
-        {
-            return averageHashCollisions;
-        }
-
-        @JsonProperty
-        public Double getHashCollisionsRatio()
-        {
-            return hashCollisionsRatio;
-        }
-
-        @JsonProperty
-        public Double getStdDevHashCollisions()
-        {
-            return stdDevHashCollisions;
-        }
-
-        @JsonProperty
-        public DataSize getPlanNodeSpilledDataSize()
+        public long getPlanNodeSpilledDataSize()
         {
             return planNodeSpilledDataSize;
+        }
+
+        @JsonProperty
+        public double getScheduledTimeFraction()
+        {
+            return scheduledTimeFraction;
+        }
+
+        @JsonProperty
+        public double getCpuTimeFraction()
+        {
+            return cpuTimeFraction;
+        }
+
+        @JsonProperty
+        public double getBlockedTimeFraction()
+        {
+            return blockedTimeFraction;
         }
     }
 }

@@ -14,35 +14,27 @@
 package io.trino.sql.planner.planprinter;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.annotations.VisibleForTesting;
 import io.airlift.json.JsonCodec;
 import io.trino.cost.PlanCostEstimate;
 import io.trino.cost.PlanNodeStatsAndCostSummary;
 import io.trino.cost.PlanNodeStatsEstimate;
 import io.trino.sql.planner.Symbol;
-import io.trino.sql.planner.plan.PlanFragmentId;
-import io.trino.cost.PlanNodeStatsAndCostSummary;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
-import static com.google.common.collect.Iterables.getOnlyElement;
 import static io.trino.sql.planner.planprinter.DistributedPlanRepresentation.DistributedPlanStats;
 import static io.trino.sql.planner.planprinter.DistributedPlanRepresentation.EstimateStats;
 import static io.trino.sql.planner.planprinter.DistributedPlanRepresentation.JsonWindowOperatorStats;
+import static io.trino.sql.planner.planprinter.NodeRepresentation.TypedSymbol;
 import static io.trino.sql.planner.planprinter.util.RendererUtils.formatAsCpuCost;
 import static io.trino.sql.planner.planprinter.util.RendererUtils.formatAsDataSize;
 import static io.trino.sql.planner.planprinter.util.RendererUtils.formatAsLong;
-import static java.util.Collections.emptyMap;
-import static io.trino.sql.planner.planprinter.NodeRepresentation.TypedSymbol;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.toList;
 
@@ -52,23 +44,6 @@ public class JsonRenderer
     private static final JsonCodec<JsonRenderedNode> CODEC = JsonCodec.jsonCodec(JsonRenderedNode.class);
     private static final JsonCodec<JsonDistributedPlanFragments> DISTRIBUTED_PLAN_CODEC
             = JsonCodec.jsonCodec(JsonDistributedPlanFragments.class);
-
-    private static Map<String, String> translateOperatorTypes(Set<String> operators)
-    {
-        if (operators.size() == 1) {
-            // don't display operator (plan node) name again
-            return ImmutableMap.of(getOnlyElement(operators), "");
-        }
-
-        if (operators.contains("LookupJoinOperator") && operators.contains("HashBuilderOperator")) {
-            // join plan node
-            return ImmutableMap.of(
-                    "LookupJoinOperator", "Left (probe) ",
-                    "HashBuilderOperator", "Right (build) ");
-        }
-
-        return ImmutableMap.of();
-    }
 
     @Override
     public String render(PlanRepresentation plan)
@@ -173,83 +148,7 @@ public class JsonRenderer
             return null;
         }
 
-        PlanNodeStats nodeStats = node.getStats().get();
-
-        double scheduledTimeFraction = 100.0d * nodeStats.getPlanNodeScheduledTime().toMillis() / plan.getTotalScheduledTime().get().toMillis();
-        double cpuTimeFraction = 100.0d * nodeStats.getPlanNodeCpuTime().toMillis() / plan.getTotalCpuTime().get().toMillis();
-
-        Map<String, Double> inputAverages = nodeStats.getOperatorInputPositionsAverages();
-        Map<String, Double> inputStdDevs = nodeStats.getOperatorInputPositionsStdDevs();
-
-        Map<String, Double> hashCollisionsAverages = emptyMap();
-        Map<String, Double> hashCollisionsStdDevs = emptyMap();
-        Map<String, Double> expectedHashCollisionsAverages = emptyMap();
-        if (nodeStats instanceof HashCollisionPlanNodeStats) {
-            hashCollisionsAverages = ((HashCollisionPlanNodeStats) nodeStats).getOperatorHashCollisionsAverages();
-            hashCollisionsStdDevs = ((HashCollisionPlanNodeStats) nodeStats).getOperatorHashCollisionsStdDevs();
-            expectedHashCollisionsAverages = ((HashCollisionPlanNodeStats) nodeStats).getOperatorExpectedCollisionsAverages();
-        }
-
-        Map<String, String> translatedOperatorTypes = translateOperatorTypes(nodeStats.getOperatorTypes());
-
-        for (String operator : translatedOperatorTypes.keySet()) {
-            String translatedOperatorType = translatedOperatorTypes.get(operator);
-            double inputAverage = inputAverages.get(operator);
-
-            double hashCollisionsAverage = hashCollisionsAverages.getOrDefault(operator, 0.0d);
-            double expectedHashCollisionsAverage = expectedHashCollisionsAverages.getOrDefault(operator, 0.0d);
-            if (hashCollisionsAverage != 0.0d) {
-                double hashCollisionsStdDevRatio = hashCollisionsStdDevs.get(operator) / hashCollisionsAverage;
-
-                if (expectedHashCollisionsAverage != 0.0d) {
-                    double hashCollisionsRatio = hashCollisionsAverage / expectedHashCollisionsAverage;
-                    return new DistributedPlanStats(
-                            nodeStats.getPlanNodeCpuTime().convertToMostSuccinctTimeUnit(),
-                            cpuTimeFraction,
-                            nodeStats.getPlanNodeScheduledTime().convertToMostSuccinctTimeUnit(),
-                            scheduledTimeFraction,
-                            nodeStats.getPlanNodeOutputPositions(),
-                            nodeStats.getPlanNodeOutputDataSize(),
-                            translatedOperatorType,
-                            inputAverage,
-                            100.0d * inputStdDevs.get(operator) / inputAverage,
-                            hashCollisionsAverage,
-                            hashCollisionsRatio * 100.d,
-                            hashCollisionsStdDevRatio * 100.d,
-                            nodeStats.getPlanNodeSpilledDataSize());
-                }
-                else {
-                    return new DistributedPlanStats(
-                            nodeStats.getPlanNodeCpuTime().convertToMostSuccinctTimeUnit(),
-                            cpuTimeFraction,
-                            nodeStats.getPlanNodeScheduledTime().convertToMostSuccinctTimeUnit(),
-                            scheduledTimeFraction,
-                            nodeStats.getPlanNodeOutputPositions(),
-                            nodeStats.getPlanNodeOutputDataSize(),
-                            translatedOperatorType,
-                            inputAverage,
-                            100.0d * inputStdDevs.get(operator) / inputAverage,
-                            hashCollisionsAverage,
-                            0.0,
-                            hashCollisionsStdDevRatio * 100.d,
-                            nodeStats.getPlanNodeSpilledDataSize());
-                }
-            }
-            else {
-                return new DistributedPlanStats(
-                        nodeStats.getPlanNodeCpuTime().convertToMostSuccinctTimeUnit(),
-                        cpuTimeFraction,
-                        nodeStats.getPlanNodeScheduledTime().convertToMostSuccinctTimeUnit(),
-                        scheduledTimeFraction,
-                        nodeStats.getPlanNodeOutputPositions(),
-                        nodeStats.getPlanNodeOutputDataSize(),
-                        translatedOperatorType,
-                        inputAverage,
-                        100.0d * inputStdDevs.get(operator) / inputAverage,
-                        nodeStats.getPlanNodeSpilledDataSize());
-            }
-        }
-        return null;
+        return DistributedPlanStats.of(node.getStats().get(), plan);
     }
 
     JsonRenderedNode renderJson(PlanRepresentation plan, NodeRepresentation node)

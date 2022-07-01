@@ -16,7 +16,6 @@ package io.trino.sql.planner.planprinter;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.airlift.units.Duration;
-import io.trino.operator.StageExecutionDescriptor;
 import io.trino.sql.planner.PartitioningHandle;
 import io.trino.sql.planner.plan.PlanFragmentId;
 
@@ -34,7 +33,6 @@ public class JsonDistributedFragment
     private final PartitioningHandle partitioning;
     private final String outputLayout;
     private final OutputPartitioning outputPartitioning;
-    private final StageExecutionDescriptor.StageExecutionStrategy stageExecutionStrategy;
     private final Map<Integer, List<DistributedPlanRepresentation>> distributedPlanRepresentation;
 
     @JsonCreator
@@ -44,7 +42,6 @@ public class JsonDistributedFragment
             @JsonProperty("fragmentStats") DistributedFragmentStats distributedFragmentStats,
             @JsonProperty("outputLayout") String outputLayout,
             @JsonProperty("outputPartitioning") OutputPartitioning outputPartitioning,
-            @JsonProperty("stageExecutionStrategy") StageExecutionDescriptor.StageExecutionStrategy stageExecutionStrategy,
             @JsonProperty("distributedPlan") Map<Integer, List<DistributedPlanRepresentation>> distributedPlanRepresentation)
     {
         this.id = requireNonNull(id, "id is null");
@@ -52,7 +49,6 @@ public class JsonDistributedFragment
         this.distributedFragmentStats = requireNonNull(distributedFragmentStats, "distributedFragmentStats is null");
         this.outputLayout = requireNonNull(outputLayout, "outputLayout is null");
         this.outputPartitioning = requireNonNull(outputPartitioning, "outputPartitioning is null");
-        this.stageExecutionStrategy = requireNonNull(stageExecutionStrategy, "stageExecutionStrategy is null");
         this.distributedPlanRepresentation = requireNonNull(distributedPlanRepresentation, "distributedPlanRepresentation is null");
     }
 
@@ -84,12 +80,6 @@ public class JsonDistributedFragment
     public OutputPartitioning getOutputPartitioning()
     {
         return outputPartitioning;
-    }
-
-    @JsonProperty
-    public StageExecutionDescriptor.StageExecutionStrategy getStageExecutionStrategy()
-    {
-        return stageExecutionStrategy;
     }
 
     @JsonProperty

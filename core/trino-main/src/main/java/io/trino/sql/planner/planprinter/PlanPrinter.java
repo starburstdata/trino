@@ -227,7 +227,6 @@ public class PlanPrinter
         return new JsonRenderer().render(representation);
     }
 
-
     @VisibleForTesting
     PlanRepresentation getRepresentation()
     {
@@ -420,14 +419,14 @@ public class PlanPrinter
         }
 
         builder.append(
-                new PlanPrinter(
-                        fragment.getRoot(),
-                        typeProvider,
-                        tableInfoSupplier,
-                        dynamicFilterDomainStats,
-                        valuePrinter,
-                        fragment.getStatsAndCosts(),
-                        planNodeStats).toText(verbose, 1))
+                        new PlanPrinter(
+                                fragment.getRoot(),
+                                typeProvider,
+                                tableInfoSupplier,
+                                dynamicFilterDomainStats,
+                                valuePrinter,
+                                fragment.getStatsAndCosts(),
+                                planNodeStats).toText(verbose, 1))
                 .append("\n");
 
         return builder.toString();
@@ -540,7 +539,6 @@ public class PlanPrinter
         Map<Integer, List<DistributedPlanRepresentation>> distributedPlanRepresentations = new PlanPrinter(
                 fragment.getRoot(),
                 typeProvider,
-                Optional.of(fragment.getStageExecutionDescriptor()),
                 tableInfoSupplier,
                 dynamicFilterDomainStats,
                 valuePrinter,
@@ -552,7 +550,6 @@ public class PlanPrinter
                 distributedFragmentStats,
                 outputLayout,
                 outputPartitioning,
-                fragment.getStageExecutionDescriptor().getStageExecutionStrategy(),
                 distributedPlanRepresentations);
     }
 
@@ -625,7 +622,8 @@ public class PlanPrinter
             else {
                 ImmutableMap.Builder<String, String> descriptor = ImmutableMap.<String, String>builder()
                         .put("criteria", Joiner.on(" AND ").join(joinExpressions))
-                        .put("hash", formatHash(node.getLeftHashSymbol(), node.getRightHashSymbol()));
+                        .put("hash", formatHash(node.getLeftHashSymbol(), node.getRightHashSymbol()))
+                        .put("criteria types", "[" + node.getCriteria().stream().map(equiJoinClause -> types.get(equiJoinClause.getLeft()).toString()).collect(joining(", ")) + "]");
                 node.getDistributionType().ifPresent(distribution -> descriptor.put("distribution", distribution.name()));
                 nodeOutput = addNode(node, node.getType().getJoinLabel(), descriptor.buildOrThrow(), node.getReorderJoinStatsAndCost());
             }
@@ -852,12 +850,12 @@ public class PlanPrinter
             if (node.getOrderingScheme().isPresent()) {
                 OrderingScheme orderingScheme = node.getOrderingScheme().get();
                 descriptor.put("orderBy", format("[%s]", Stream.concat(
-                        orderingScheme.getOrderBy().stream()
-                                .limit(node.getPreSortedOrderPrefix())
-                                .map(symbol -> "<" + symbol + " " + orderingScheme.getOrdering(symbol) + ">"),
-                        orderingScheme.getOrderBy().stream()
-                                .skip(node.getPreSortedOrderPrefix())
-                                .map(symbol -> symbol + " " + orderingScheme.getOrdering(symbol)))
+                                orderingScheme.getOrderBy().stream()
+                                        .limit(node.getPreSortedOrderPrefix())
+                                        .map(symbol -> "<" + symbol + " " + orderingScheme.getOrdering(symbol) + ">"),
+                                orderingScheme.getOrderBy().stream()
+                                        .skip(node.getPreSortedOrderPrefix())
+                                        .map(symbol -> symbol + " " + orderingScheme.getOrdering(symbol)))
                         .collect(Collectors.joining(", "))));
             }
 
@@ -914,12 +912,12 @@ public class PlanPrinter
             if (node.getOrderingScheme().isPresent()) {
                 OrderingScheme orderingScheme = node.getOrderingScheme().get();
                 descriptor.put("orderBy", format("[%s]", Stream.concat(
-                        orderingScheme.getOrderBy().stream()
-                                .limit(node.getPreSortedOrderPrefix())
-                                .map(symbol -> "<" + symbol + " " + orderingScheme.getOrdering(symbol) + ">"),
-                        orderingScheme.getOrderBy().stream()
-                                .skip(node.getPreSortedOrderPrefix())
-                                .map(symbol -> symbol + " " + orderingScheme.getOrdering(symbol)))
+                                orderingScheme.getOrderBy().stream()
+                                        .limit(node.getPreSortedOrderPrefix())
+                                        .map(symbol -> "<" + symbol + " " + orderingScheme.getOrdering(symbol) + ">"),
+                                orderingScheme.getOrderBy().stream()
+                                        .skip(node.getPreSortedOrderPrefix())
+                                        .map(symbol -> symbol + " " + orderingScheme.getOrdering(symbol)))
                         .collect(Collectors.joining(", "))));
             }
 
@@ -1868,7 +1866,6 @@ public class PlanPrinter
                     childrenIds,
                     remoteSources,
                     new ArrayList<>());
-
             representation.addNode(nodeOutput);
             return nodeOutput;
         }
