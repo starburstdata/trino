@@ -42,7 +42,19 @@ public class LongDecimalWithOverflowAndLongStateSerializer
             long overflow = state.getOverflow();
             long[] decimal = state.getDecimalArray();
             int offset = state.getDecimalArrayOffset();
-            VARBINARY.writeSlice(out, Slices.wrappedLongArray(count, overflow, decimal[offset], decimal[offset + 1]));
+            long[] buffer = new long[4];
+            long decimalLowBytes = decimal[offset + 1];
+            long decimalHighBytes = decimal[offset];
+            buffer[0] = decimalLowBytes;
+            buffer[1] = decimalHighBytes;
+            buffer[2] = overflow;
+            buffer[3] = count;
+            // if decimalHighBytes == 0 and count == 1 and overflow == 0 we only write decimalLowBytes (bufferLength = 1)
+            // if decimalHighBytes != 0 and count == 1 and overflow == 0 we write both decimalLowBytes and decimalHighBytes (bufferLength = 2)
+            // if count != 1 or overflow != 0 we write all values (bufferLength = 4)
+            int decimalsCount = 1 + (decimalHighBytes == 0 ? 0 : 1);
+            int bufferLength = (count == 1 & overflow == 0) ? decimalsCount : 4;
+            VARBINARY.writeSlice(out, Slices.wrappedLongArray(buffer, 0, bufferLength));
         }
         else {
             out.appendNull();
@@ -54,20 +66,25 @@ public class LongDecimalWithOverflowAndLongStateSerializer
     {
         if (!block.isNull(index)) {
             Slice slice = VARBINARY.getSlice(block, index);
-            if (slice.length() != SERIALIZED_SIZE) {
-                throw new IllegalStateException("Unexpected serialized state size: " + slice.length());
-            }
-
-            long count = slice.getLong(0);
-            long overflow = slice.getLong(Long.BYTES);
-
-            state.setLong(count);
-            state.setOverflow(overflow);
-            state.setNotNull();
             long[] decimal = state.getDecimalArray();
             int offset = state.getDecimalArrayOffset();
-            decimal[offset] = slice.getLong(Long.BYTES * 2);
-            decimal[offset + 1] = slice.getLong(Long.BYTES * 3);
+
+            long high = 0;
+            long overflow = 0;
+            long count = 1;
+            if (slice.length() > Long.BYTES) {
+                high = slice.getLong(Long.BYTES);
+                if (slice.length() == SERIALIZED_SIZE) {
+                    overflow = slice.getLong(Long.BYTES * 2);
+                    count = slice.getLong(Long.BYTES * 3);
+                }
+            }
+
+            decimal[offset + 1] = slice.getLong(0);
+            decimal[offset] = high;
+            state.setOverflow(overflow);
+            state.setLong(count);
+            state.setNotNull();
         }
     }
 }
