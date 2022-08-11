@@ -41,13 +41,20 @@ public class LongDecimalWithOverflowStateSerializer
             long overflow = state.getOverflow();
             long[] decimal = state.getDecimalArray();
             int offset = state.getDecimalArrayOffset();
-            if (overflow == 0 && decimal[offset] == 0) {
-                // decimal <= max long. just write low decimal
-                VARBINARY.writeSlice(out, Slices.wrappedLongArray(decimal[offset + 1]));
-            }
-            else {
-                VARBINARY.writeSlice(out, Slices.wrappedLongArray(overflow, decimal[offset], decimal[offset + 1]));
-            }
+            long[] buffer = new long[3];
+            buffer[0] = decimal[offset + 1];
+            buffer[1] = decimal[offset];
+            buffer[2] = overflow;
+            int bufferLength = 1 + (decimal[offset] == 0 ? 0 : 1);
+            bufferLength = overflow == 0 ? bufferLength : 3;
+            VARBINARY.writeSlice(out, Slices.wrappedLongArray(buffer, 0, bufferLength));
+//            if (overflow == 0 && decimal[offset] == 0) {
+//                // decimal <= max long. just write low decimal
+//                VARBINARY.writeSlice(out, Slices.wrappedLongArray(decimal[offset + 1]));
+//            }
+//            else {
+//                VARBINARY.writeSlice(out, Slices.wrappedLongArray(overflow, decimal[offset], decimal[offset + 1]));
+//            }
         }
         else {
             out.appendNull();
@@ -59,28 +66,37 @@ public class LongDecimalWithOverflowStateSerializer
     {
         if (!block.isNull(index)) {
             Slice slice = VARBINARY.getSlice(block, index);
-            if (slice.length() == Long.BYTES) {
-                state.setOverflow(0);
-                state.setNotNull();
-                long[] decimal = state.getDecimalArray();
-                int offset = state.getDecimalArrayOffset();
-                decimal[offset] = 0;
-                decimal[offset + 1] = slice.getLong(0);
-            }
-            else {
-                if (slice.length() != SERIALIZED_SIZE) {
-                    throw new IllegalStateException("Unexpected serialized state size: " + slice.length());
+            state.setNotNull();
+            long[] decimal = state.getDecimalArray();
+            int offset = state.getDecimalArrayOffset();
+            decimal[offset + 1] = slice.getLong(0);
+
+            long high = 0;
+            long overflow = 0;
+            if (slice.length() > Long.BYTES) {
+                high = slice.getLong(Long.BYTES);
+                if (slice.length() == SERIALIZED_SIZE) {
+                    overflow = slice.getLong(Long.BYTES * 2);
                 }
-
-                long overflow = slice.getLong(0);
-
-                state.setOverflow(overflow);
-                state.setNotNull();
-                long[] decimal = state.getDecimalArray();
-                int offset = state.getDecimalArrayOffset();
-                decimal[offset] = slice.getLong(Long.BYTES);
-                decimal[offset + 1] = slice.getLong(Long.BYTES * 2);
             }
+
+            state.setOverflow(overflow);
+            decimal[offset] = high;
+
+//            if (slice.length() == Long.BYTES) {
+//                state.setOverflow(0);
+//                decimal[offset] = 0;
+//            }
+//            else {
+//                if (slice.length() != SERIALIZED_SIZE) {
+//                    throw new IllegalStateException("Unexpected serialized state size: " + slice.length());
+//                }
+//
+//                long overflow = slice.getLong(0);
+//                state.setOverflow(overflow);
+//                decimal[offset] = slice.getLong(Long.BYTES);
+//                decimal[offset + 1] = slice.getLong(Long.BYTES * 2);
+//            }
         }
     }
 }
