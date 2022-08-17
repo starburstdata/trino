@@ -254,4 +254,9 @@ public interface Connector
     {
         return emptySet();
     }
+
+    default ConnectorRestApiHandler getRestApiHandler()
+    {
+        throw new UnsupportedOperationException();
+    }
 }

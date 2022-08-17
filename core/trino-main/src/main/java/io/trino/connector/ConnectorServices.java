@@ -30,6 +30,7 @@ import io.trino.spi.connector.ConnectorNodePartitioningProvider;
 import io.trino.spi.connector.ConnectorPageSinkProvider;
 import io.trino.spi.connector.ConnectorPageSourceProvider;
 import io.trino.spi.connector.ConnectorRecordSetProvider;
+import io.trino.spi.connector.ConnectorRestApiHandler;
 import io.trino.spi.connector.ConnectorSplitManager;
 import io.trino.spi.connector.SystemTable;
 import io.trino.spi.connector.TableProcedureMetadata;
@@ -80,6 +81,7 @@ public class ConnectorServices
     private final Map<String, PropertyMetadata<?>> columnProperties;
     private final Map<String, PropertyMetadata<?>> analyzeProperties;
     private final Set<ConnectorCapabilities> capabilities;
+    private final Optional<ConnectorRestApiHandler> restApiHandler;
 
     private final AtomicBoolean shutdown = new AtomicBoolean();
 
@@ -199,6 +201,14 @@ public class ConnectorServices
         Set<ConnectorCapabilities> capabilities = connector.getCapabilities();
         requireNonNull(capabilities, format("Connector '%s' returned a null capabilities set", catalogHandle));
         this.capabilities = capabilities;
+
+        ConnectorRestApiHandler restApiHandler = null;
+        try {
+            restApiHandler = connector.getRestApiHandler();
+        }
+        catch (UnsupportedOperationException ignored) {
+        }
+        this.restApiHandler = Optional.ofNullable(restApiHandler);
     }
 
     public CatalogHandle getCatalogHandle()
@@ -304,6 +314,11 @@ public class ConnectorServices
     public Set<ConnectorCapabilities> getCapabilities()
     {
         return capabilities;
+    }
+
+    public Optional<ConnectorRestApiHandler> getRestApiHandler()
+    {
+        return restApiHandler;
     }
 
     public void shutdown()

@@ -33,6 +33,7 @@ import io.trino.spi.connector.ConnectorIndexProvider;
 import io.trino.spi.connector.ConnectorNodePartitioningProvider;
 import io.trino.spi.connector.ConnectorPageSinkProvider;
 import io.trino.spi.connector.ConnectorPageSourceProvider;
+import io.trino.spi.connector.ConnectorRestApiHandler;
 import io.trino.spi.connector.ConnectorSplitManager;
 
 import javax.inject.Inject;
@@ -160,6 +161,13 @@ public class CatalogServiceProviderModule
     public static CatalogServiceProvider<Optional<ConnectorAccessControl>> createAccessControlProvider(ConnectorServicesProvider connectorServicesProvider)
     {
         return new ConnectorCatalogServiceProvider<>("access control", connectorServicesProvider, ConnectorServices::getAccessControl);
+    }
+
+    @Provides
+    @Singleton
+    public static CatalogServiceProvider<Optional<ConnectorRestApiHandler>> createRestApiHandlerProvider(ConnectorServicesProvider connectorServicesProvider)
+    {
+        return new ConnectorCatalogServiceProvider<>("rest-api proxy handler", connectorServicesProvider, connector -> connector.getRestApiHandler());
     }
 
     private static class ConnectorAccessControlLazyRegister
