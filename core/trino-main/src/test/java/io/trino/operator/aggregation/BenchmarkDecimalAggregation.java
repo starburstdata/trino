@@ -13,6 +13,7 @@
  */
 package io.trino.operator.aggregation;
 
+import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
 import io.trino.jmh.Benchmarks;
 import io.trino.metadata.TestingFunctionResolution;
@@ -35,9 +36,14 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
-import org.openjdk.jmh.runner.options.WarmupMode;
+import org.openjdk.jmh.infra.BenchmarkParams;
 import org.testng.annotations.Test;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Comparator;
 import java.util.OptionalInt;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -53,12 +59,12 @@ import static org.testng.Assert.assertEquals;
 @State(Scope.Thread)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Fork(3)
-@Warmup(iterations = 10)
-@Measurement(iterations = 10)
+@Warmup(iterations = 20, time = 1)
+@Measurement(iterations = 10, time = 1)
 @BenchmarkMode(Mode.AverageTime)
 public class BenchmarkDecimalAggregation
 {
-    private static final int ELEMENT_COUNT = 1_000_000;
+    private static final int ELEMENT_COUNT = 10_000_000;
 
     @Benchmark
     @OperationsPerInvocation(ELEMENT_COUNT)
@@ -83,6 +89,18 @@ public class BenchmarkDecimalAggregation
     }
 
     @Benchmark
+    @OutputTimeUnit(TimeUnit.MICROSECONDS)
+    public Block benchmarkEvaluateIntermediateOnly(EvaluateIntermediateBenchmarkData data)
+    {
+        GroupedAggregator aggregator = data.getAggregator();
+        BlockBuilder builder = aggregator.getType().createBlockBuilder(null, data.getGroupCount());
+        for (int groupId = 0; groupId < data.getGroupCount(); groupId++) {
+            aggregator.evaluate(groupId, builder);
+        }
+        return builder.build();
+    }
+
+    @Benchmark
     public Block benchmarkEvaluateFinal(BenchmarkData data)
     {
         GroupedAggregator aggregator = data.getFinalAggregatorFactory().createGroupedAggregator();
@@ -97,6 +115,27 @@ public class BenchmarkDecimalAggregation
     }
 
     @State(Scope.Thread)
+    public static class EvaluateIntermediateBenchmarkData
+            extends BenchmarkData
+    {
+        private GroupedAggregator aggregator;
+
+        @Setup
+        public void setup()
+        {
+            super.setup();
+
+            aggregator = getPartialAggregatorFactory().createGroupedAggregator();
+            aggregator.processPage(getGroupIds(), getValues());
+        }
+
+        public GroupedAggregator getAggregator()
+        {
+            return aggregator;
+        }
+    }
+
+    @State(Scope.Thread)
     public static class BenchmarkData
     {
         @Param({"SHORT", "LONG"})
@@ -107,6 +146,12 @@ public class BenchmarkDecimalAggregation
 
         @Param({"10", "1000"})
         private int groupCount = 10;
+
+        @Param({"SHORT", "LONG"})
+        private String decimalSize = "SHORT";
+
+        @Param({"SHORT", "LONG"})
+        private String decimalSize = "SHORT";
 
         private AggregatorFactory partialAggregatorFactory;
         private AggregatorFactory finalAggregatorFactory;
@@ -216,6 +261,36 @@ public class BenchmarkDecimalAggregation
         // ensure the benchmarks are valid before running
         new BenchmarkDecimalAggregation().verify();
 
-        Benchmarks.benchmark(BenchmarkDecimalAggregation.class, WarmupMode.BULK).run();
+        String profilerOutputDir = profilerOutputDir();
+        Benchmarks.benchmark(BenchmarkDecimalAggregation.class).includeMethod("benchmarkEvaluateIntermediateOnly")
+                .withOptions(options -> options
+//                        .addProfiler(AsyncProfiler.class, String.format("dir=%s;output=text;output=flamegraph", profilerOutputDir))
+//                        .addProfiler(DTraceAsmProfiler.class, String.format("hotThreshold=0.1;tooBigThreshold=3000;saveLog=true;saveLogTo=%s", profilerOutputDir, profilerOutputDir))
+                        .param("type", "LONG")
+                        .param("groupCount", "1000", "1000000")
+                        .param("function", "avg")
+                        .forks(1)).run();
+
+        File dir = new File(profilerOutputDir);
+        if (dir.list().length == 0) {
+            Verify.verify(dir.delete(), "dir %s deleted", dir);
+        }
+    }
+
+    private static String profilerOutputDir()
+    {
+        try {
+            String jmhDir = "jmh";
+            new File(jmhDir).mkdirs();
+            String outDir = jmhDir + "/" + String.valueOf(Files.list(Paths.get(jmhDir))
+                    .map(path -> Integer.parseInt(path.getFileName().toString()) + 1)
+                    .sorted(Comparator.reverseOrder())
+                    .findFirst().orElse(0));
+            new File(outDir).mkdirs();
+            return outDir;
+        }
+        catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
