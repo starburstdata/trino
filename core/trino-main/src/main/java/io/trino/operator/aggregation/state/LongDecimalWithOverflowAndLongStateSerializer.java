@@ -45,15 +45,25 @@ public class LongDecimalWithOverflowAndLongStateSerializer
             long[] buffer = new long[4];
             long decimalLowBytes = decimal[offset + 1];
             long decimalHighBytes = decimal[offset];
+//            buffer[0] = decimalLowBytes;
+//            buffer[1] = decimalHighBytes;
+//            buffer[2] = overflow;
+//            buffer[3] = count;
+//            // if decimalHighBytes == 0 and count == 1 and overflow == 0 we only write decimalLowBytes (bufferLength = 1)
+//            // if decimalHighBytes != 0 and count == 1 and overflow == 0 we write both decimalLowBytes and decimalHighBytes (bufferLength = 2)
+//            // if count != 1 or overflow != 0 we write all values (bufferLength = 4)
+//            int decimalsCount = 1 + (decimalHighBytes == 0 ? 0 : 1);
+//            int bufferLength = (count == 1 & overflow == 0) ? decimalsCount : 4;
+
+            // append low
             buffer[0] = decimalLowBytes;
+            // append high
             buffer[1] = decimalHighBytes;
-            buffer[2] = overflow;
-            buffer[3] = count;
-            // if decimalHighBytes == 0 and count == 1 and overflow == 0 we only write decimalLowBytes (bufferLength = 1)
-            // if decimalHighBytes != 0 and count == 1 and overflow == 0 we write both decimalLowBytes and decimalHighBytes (bufferLength = 2)
-            // if count != 1 or overflow != 0 we write all values (bufferLength = 4)
-            int decimalsCount = 1 + (decimalHighBytes == 0 ? 0 : 1);
-            int bufferLength = (count == 1 & overflow == 0) ? decimalsCount : 4;
+            int overflowOffset = 1 + (decimalHighBytes == 0 ? 0 : 1);
+            // append overflow, count
+            buffer[overflowOffset] = overflow;
+            buffer[overflowOffset + 1] = count;
+            int bufferLength = overflowOffset + ((overflow == 0 & count == 1) ? 0 : 2); // will this be branchless really?
             VARBINARY.writeSlice(out, Slices.wrappedLongArray(buffer, 0, bufferLength));
         }
         else {
