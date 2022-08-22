@@ -21,11 +21,16 @@ import io.trino.spi.function.AccumulatorStateSerializer;
 import io.trino.spi.type.Int128;
 import io.trino.spi.type.Type;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.nio.ByteOrder;
+
 import static io.trino.spi.type.VarbinaryType.VARBINARY;
 
-public class LongDecimalWithOverflowAndLongStateSerializer
+public class VarHandleLongDecimalWithOverflowAndLongStateSerializer
         implements AccumulatorStateSerializer<LongDecimalWithOverflowAndLongState>
 {
+    private static final VarHandle LONG_ARRAY_HANDLE = MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.nativeOrder());
     private static final int SERIALIZED_SIZE = (Long.BYTES * 2) + Int128.SIZE;
 
     @Override
@@ -42,38 +47,37 @@ public class LongDecimalWithOverflowAndLongStateSerializer
             long overflow = state.getOverflow();
             long[] decimal = state.getDecimalArray();
             int offset = state.getDecimalArrayOffset();
-            long[] buffer = new long[4];
+            byte[] buffer = new byte[4 * Long.BYTES + 1];
             long decimalLowBytes = decimal[offset + 1];
             long decimalHighBytes = decimal[offset];
-//            int bufferLength;
-//            buffer[0] = decimalLowBytes;
-//            if (decimalHighBytes != 0) {
-//                buffer[1] = decimalHighBytes;
-//                buffer[2] = overflow;
-//                buffer[3] = count;
-//                // if decimalHighBytes == 0 and count == 1 and overflow == 0 we only write decimalLowBytes (bufferLength = 1)
-//                // if decimalHighBytes != 0 and count == 1 and overflow == 0 we write both decimalLowBytes and decimalHighBytes (bufferLength = 2)
-//                // if count != 1 or overflow != 0 we write all values (bufferLength = 4)
-//                bufferLength = (count == 1 & overflow == 0) ? 2 : 4;
-//            }
-//            else {
-//                buffer[1] = count;
-//                buffer[2] = overflow;
-//                // if decimalHighBytes == 0 and count == 1 and overflow == 0 we only write decimalLowBytes (bufferLength = 1)
-//                // if decimalHighBytes != 0 and count == 1 and overflow == 0 we write both decimalLowBytes and decimalHighBytes (bufferLength = 2)
-//                // if count != 1 or overflow != 0 we write all values (bufferLength = 4)
-//                bufferLength = (count == 1 & overflow == 0) ? 1 : 3;
-//            }
-            // append low
-            buffer[0] = decimalLowBytes;
-            // append high
-            buffer[1] = decimalHighBytes;
-            int overflowOffset = 1 + (decimalHighBytes == 0 ? 0 : 1);
-            // append overflow, count
-            buffer[overflowOffset] = overflow;
-            buffer[overflowOffset + 1] = count;
-            int bufferLength = overflowOffset + ((overflow == 0 & count == 1) ? 0 : 2); // will this be branchless really?
-            VARBINARY.writeSlice(out, Slices.wrappedLongArray(buffer, 0, bufferLength));
+            int bufferLength;
+            LONG_ARRAY_HANDLE.set(buffer, 0, decimalLowBytes);
+
+            if (decimalHighBytes != 0) {
+                LONG_ARRAY_HANDLE.set(buffer, Long.BYTES, decimalHighBytes);
+                LONG_ARRAY_HANDLE.set(buffer, Long.BYTES * 2, count);
+                LONG_ARRAY_HANDLE.set(buffer, Long.BYTES * 3, overflow);
+                // if decimalHighBytes == 0 and count == 1 and overflow == 0 we only write decimalLowBytes (bufferLength = 1)
+                // if decimalHighBytes != 0 and count == 1 and overflow == 0 we write both decimalLowBytes and decimalHighBytes (bufferLength = 2)
+                // if count != 1 or overflow != 0 we write all values (bufferLength = 4)
+                bufferLength = (count == 1 & overflow == 0) ? 2 * Long.BYTES : 4 * Long.BYTES;
+            }
+            else {
+                LONG_ARRAY_HANDLE.set(buffer, Long.BYTES, count);
+                LONG_ARRAY_HANDLE.set(buffer, Long.BYTES * 2, overflow);
+
+                // if decimalHighBytes == 0 and count == 1 and overflow == 0 we only write decimalLowBytes (bufferLength = 1)
+                // if decimalHighBytes != 0 and count == 1 and overflow == 0 we write both decimalLowBytes and decimalHighBytes (bufferLength = 2)
+                // if count != 1 or overflow != 0 we write all values (bufferLength = 4)
+                if (overflow != 0) {
+                    bufferLength = 3 * Long.BYTES;
+                }
+                else {
+                    bufferLength = (count == 1) ? Long.BYTES : 2 * Long.BYTES + 1; // bufferLength = 17 means both decimalHighBytes and overflow == 0
+                }
+            }
+
+            VARBINARY.writeSlice(out, Slices.wrappedBuffer(buffer, 0, bufferLength));
         }
         else {
             out.appendNull();

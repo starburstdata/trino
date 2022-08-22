@@ -36,7 +36,7 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
-import org.openjdk.jmh.infra.BenchmarkParams;
+import org.openjdk.jmh.profile.DTraceAsmProfiler;
 import org.testng.annotations.Test;
 
 import java.io.File;
@@ -45,6 +45,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.OptionalInt;
+import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
@@ -147,11 +148,11 @@ public class BenchmarkDecimalAggregation
         @Param({"10", "1000"})
         private int groupCount = 10;
 
-        @Param({"SHORT", "LONG"})
+        @Param({"SHORT", "LONG", "MIXED"})
         private String decimalSize = "SHORT";
 
-        @Param({"SHORT", "LONG"})
-        private String decimalSize = "SHORT";
+        @Param({"true", "false"})
+        private boolean groupIdsInOrder;
 
         private AggregatorFactory partialAggregatorFactory;
         private AggregatorFactory finalAggregatorFactory;
@@ -163,24 +164,44 @@ public class BenchmarkDecimalAggregation
         public void setup()
         {
             TestingFunctionResolution functionResolution = new TestingFunctionResolution();
-
+            Random random = new Random(343526534);
             switch (type) {
                 case "SHORT": {
                     DecimalType type = createDecimalType(14, 3);
-                    values = createValues(functionResolution, type, type::writeLong);
+                    values = createValues(functionResolution, type, (builder, value) -> {
+                        boolean writeShort = "SHORT".equals(decimalSize) || ("MIXED".equals(decimalSize) && random.nextBoolean());
+                        if (writeShort) {
+                            builder.writeLong(value);
+                        }
+                        else {
+                            // long
+                            builder.writeLong(Long.MAX_VALUE - value);
+                        }
+                    });
                     break;
                 }
                 case "LONG": {
                     DecimalType type = createDecimalType(30, 10);
-                    values = createValues(functionResolution, type, (builder, value) -> type.writeObject(builder, Int128.valueOf(value)));
+                    values = createValues(functionResolution, type, (builder, value) -> {
+                        boolean writeShort = "SHORT".equals(decimalSize) || ("MIXED".equals(decimalSize) && random.nextBoolean());
+                        if (writeShort) {
+                            type.writeObject(builder, Int128.valueOf(value));
+                        }
+                        else {
+                            // long
+                            type.writeObject(builder, Int128.valueOf(Long.MAX_VALUE - value, value));
+                        }
+                    });
                     break;
                 }
             }
 
             BlockBuilder ids = BIGINT.createBlockBuilder(null, ELEMENT_COUNT);
             for (int i = 0; i < ELEMENT_COUNT; i++) {
-                BIGINT.writeLong(ids, ThreadLocalRandom.current().nextLong(groupCount));
+                long groupId = groupIdsInOrder ? i % groupCount : ThreadLocalRandom.current().nextLong(groupCount);
+                BIGINT.writeLong(ids, groupId);
             }
+
             groupIds = new GroupByIdBlock(groupCount, ids.build());
             intermediateValues = new Page(createIntermediateValues(partialAggregatorFactory.createGroupedAggregator(), groupIds, values));
         }
@@ -267,8 +288,11 @@ public class BenchmarkDecimalAggregation
 //                        .addProfiler(AsyncProfiler.class, String.format("dir=%s;output=text;output=flamegraph", profilerOutputDir))
 //                        .addProfiler(DTraceAsmProfiler.class, String.format("hotThreshold=0.1;tooBigThreshold=3000;saveLog=true;saveLogTo=%s", profilerOutputDir, profilerOutputDir))
                         .param("type", "LONG")
-                        .param("groupCount", "1000", "1000000")
+//                        .param("groupCount", "1000", "1000000", "10000000")
+                        .param("groupCount", "1000000")
                         .param("function", "avg")
+                        .param("decimalSize", "MIXED")
+                        .param("groupIdsInOrder", "true")
                         .forks(1)).run();
 
         File dir = new File(profilerOutputDir);
