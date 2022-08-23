@@ -68,11 +68,11 @@ public class LongDecimalWithOverflowAndLongStateSerializer
             buffer[0] = decimalLowBytes;
             // append high
             buffer[1] = decimalHighBytes;
-            int overflowOffset = 1 + (decimalHighBytes == 0 ? 0 : 1);
-            // append overflow, count
-            buffer[overflowOffset] = overflow;
-            buffer[overflowOffset + 1] = count;
-            int bufferLength = overflowOffset + ((overflow == 0 & count == 1) ? 0 : 2); // will this be branchless really?
+            int countOffset = 1 + (decimalHighBytes == 0 ? 0 : 1);
+            // append count, overflow
+            buffer[countOffset] = count;
+            buffer[countOffset + 1] = overflow;
+            int bufferLength = countOffset + ((overflow == 0 & count == 1) ? 0 : 2);
             VARBINARY.writeSlice(out, Slices.wrappedLongArray(buffer, 0, bufferLength));
         }
         else {
@@ -88,18 +88,18 @@ public class LongDecimalWithOverflowAndLongStateSerializer
             long[] decimal = state.getDecimalArray();
             int offset = state.getDecimalArrayOffset();
 
-            long high = 0;
-            long overflow = 0;
-            long count = 1;
-            if (slice.length() > Long.BYTES) {
-                high = slice.getLong(Long.BYTES);
-                if (slice.length() == SERIALIZED_SIZE) {
-                    overflow = slice.getLong(Long.BYTES * 2);
-                    count = slice.getLong(Long.BYTES * 3);
-                }
-            }
+            long low = slice.getLong(0);
+            int sliceLength = slice.length();
+            int highOffset = sliceLength == 4 * Long.BYTES | sliceLength == 2 * Long.BYTES ? Long.BYTES : 0;
+            long high = slice.getLong(highOffset) & (highOffset != 0 ? -1L : 0);
 
-            decimal[offset + 1] = slice.getLong(0);
+            int countOffset = sliceLength > 2 * Long.BYTES ? highOffset + Long.BYTES : 0;
+            long count = slice.getLong(countOffset);
+            count = countOffset != 0 ? count : 1;
+            int overflowOffset = sliceLength > 2 * Long.BYTES ? countOffset + Long.BYTES : 0;
+            long overflow = slice.getLong(overflowOffset) & (overflowOffset != 0 ? -1L : 0);
+
+            decimal[offset + 1] = low;
             decimal[offset] = high;
             state.setOverflow(overflow);
             state.setLong(count);

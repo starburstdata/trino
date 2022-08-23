@@ -50,33 +50,22 @@ public class VarHandleLongDecimalWithOverflowAndLongStateSerializer
             byte[] buffer = new byte[4 * Long.BYTES + 1];
             long decimalLowBytes = decimal[offset + 1];
             long decimalHighBytes = decimal[offset];
-            int bufferLength;
+            // cases
+            // high == 0 (countOffset = 1 * Long.BYTES)
+            //    overflow != 0            -> bufferLength = 3 * Long.BYTES
+            //    overflow == 0, count > 1 -> bufferLength = 2 * Long.BYTES + 1
+            //    overflow == 0, count = 1 -> bufferLength = 1 * Long.BYTES
+            // high != 0 (countOffset = 2 * Long.BYTES)
+            //    overflow != 0            -> bufferLength = 4 * Long.BYTES
+            //    overflow == 0, count > 1 -> bufferLength = 3 * Long.BYTES + 1
+            //    overflow == 0, count = 1 -> bufferLength = 2 * Long.BYTES
             LONG_ARRAY_HANDLE.set(buffer, 0, decimalLowBytes);
-
-            if (decimalHighBytes != 0) {
-                LONG_ARRAY_HANDLE.set(buffer, Long.BYTES, decimalHighBytes);
-                LONG_ARRAY_HANDLE.set(buffer, Long.BYTES * 2, count);
-                LONG_ARRAY_HANDLE.set(buffer, Long.BYTES * 3, overflow);
-                // if decimalHighBytes == 0 and count == 1 and overflow == 0 we only write decimalLowBytes (bufferLength = 1)
-                // if decimalHighBytes != 0 and count == 1 and overflow == 0 we write both decimalLowBytes and decimalHighBytes (bufferLength = 2)
-                // if count != 1 or overflow != 0 we write all values (bufferLength = 4)
-                bufferLength = (count == 1 & overflow == 0) ? 2 * Long.BYTES : 4 * Long.BYTES;
-            }
-            else {
-                LONG_ARRAY_HANDLE.set(buffer, Long.BYTES, count);
-                LONG_ARRAY_HANDLE.set(buffer, Long.BYTES * 2, overflow);
-
-                // if decimalHighBytes == 0 and count == 1 and overflow == 0 we only write decimalLowBytes (bufferLength = 1)
-                // if decimalHighBytes != 0 and count == 1 and overflow == 0 we write both decimalLowBytes and decimalHighBytes (bufferLength = 2)
-                // if count != 1 or overflow != 0 we write all values (bufferLength = 4)
-                if (overflow != 0) {
-                    bufferLength = 3 * Long.BYTES;
-                }
-                else {
-                    bufferLength = (count == 1) ? Long.BYTES : 2 * Long.BYTES + 1; // bufferLength = 17 means both decimalHighBytes and overflow == 0
-                }
-            }
-
+            LONG_ARRAY_HANDLE.set(buffer, Long.BYTES, decimalHighBytes);
+            int countOffset = (1 + (decimalHighBytes == 0 ? 0 : 1)) * Long.BYTES;
+            LONG_ARRAY_HANDLE.set(buffer, countOffset, count);
+            LONG_ARRAY_HANDLE.set(buffer, countOffset + Long.BYTES, overflow);
+            boolean includeCount = count != 1 || overflow != 0;
+            int bufferLength = countOffset + (includeCount ? Long.BYTES : 0) + (overflow != 0 ? Long.BYTES : 0) + (overflow == 0 & decimalHighBytes == 0 & count != 1 ? 1 : 0);
             VARBINARY.writeSlice(out, Slices.wrappedBuffer(buffer, 0, bufferLength));
         }
         else {
@@ -84,6 +73,7 @@ public class VarHandleLongDecimalWithOverflowAndLongStateSerializer
         }
     }
 
+    //    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     @Override
     public void deserialize(Block block, int index, LongDecimalWithOverflowAndLongState state)
     {
@@ -92,18 +82,64 @@ public class VarHandleLongDecimalWithOverflowAndLongStateSerializer
             long[] decimal = state.getDecimalArray();
             int offset = state.getDecimalArrayOffset();
 
+            long low = slice.getLong(0);
+            int sliceLength = slice.length();
+//            int highOffset = sliceLength == 4 * Long.BYTES | sliceLength == 2 * Long.BYTES | sliceLength == 3 * Long.BYTES + 1 ? Long.BYTES : 0;
+//            long high = slice.getLong(highOffset) & (highOffset != 0 ? -1L : 0);
+//
+//            int countOffset = sliceLength == 3 * Long.BYTES | sliceLength == 2 * Long.BYTES + 1 ? Long.BYTES : 2 * Long.BYTES;
+//            countOffset = sliceLength > 2 * Long.BYTES ? countOffset : 0;
+//            long count = slice.getLong(countOffset);
+//            count = countOffset != 0 ? count : 1;
+//
+//            int overflowOffset = sliceLength == 3 * Long.BYTES ? 2 * Long.BYTES : 3 * Long.BYTES;
+//            overflowOffset = sliceLength == 3 * Long.BYTES | sliceLength == 4 * Long.BYTES ? overflowOffset : 0;
+//            long overflow = slice.getLong(overflowOffset) & (overflowOffset != 0 ? -1L : 0);
+
             long high = 0;
             long overflow = 0;
             long count = 1;
-            if (slice.length() > Long.BYTES) {
+            if (sliceLength == 4 * Long.BYTES | sliceLength == 2 * Long.BYTES | sliceLength == 3 * Long.BYTES + 1) {
+                // high != 0
                 high = slice.getLong(Long.BYTES);
-                if (slice.length() == SERIALIZED_SIZE) {
-                    overflow = slice.getLong(Long.BYTES * 2);
-                    count = slice.getLong(Long.BYTES * 3);
+                if (sliceLength == 4 * Long.BYTES) {
+                    overflow = slice.getLong(Long.BYTES * 3);
+                }
+                if (sliceLength != 2 * Long.BYTES) {
+                    count = slice.getLong(Long.BYTES * 2);
+                }
+            }
+            else {
+                // high == 0
+                if (sliceLength == 3 * Long.BYTES) {
+                    overflow = slice.getLong(Long.BYTES * 3);
+                }
+                if (sliceLength != Long.BYTES) {
+                    count = slice.getLong(Long.BYTES);
                 }
             }
 
-            decimal[offset + 1] = slice.getLong(0);
+//            if (sliceLength == 4 * Long.BYTES) {
+//                high = slice.getLong(Long.BYTES);
+//                count = slice.getLong(Long.BYTES * 2);
+//                overflow = slice.getLong(Long.BYTES * 3);
+//            }
+//            else if (sliceLength == 3 * Long.BYTES + 1) {
+//                high = slice.getLong(Long.BYTES);
+//                count = slice.getLong(Long.BYTES * 2);
+//            }
+//            else if (sliceLength == 2 * Long.BYTES) {
+//                high = slice.getLong(Long.BYTES);
+//            }
+//            else if (sliceLength == 3 * Long.BYTES) {
+//                count = slice.getLong(Long.BYTES);
+//                overflow = slice.getLong(Long.BYTES * 2);
+//            }
+//            else if (sliceLength == 2 * Long.BYTES + 1) {
+//                count = slice.getLong(Long.BYTES);
+//            }
+
+            decimal[offset + 1] = low;
             decimal[offset] = high;
             state.setOverflow(overflow);
             state.setLong(count);
