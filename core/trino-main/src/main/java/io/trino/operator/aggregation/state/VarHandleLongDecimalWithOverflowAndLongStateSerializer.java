@@ -84,40 +84,40 @@ public class VarHandleLongDecimalWithOverflowAndLongStateSerializer
 
             long low = slice.getLong(0);
             int sliceLength = slice.length();
-//            int highOffset = sliceLength == 4 * Long.BYTES | sliceLength == 2 * Long.BYTES | sliceLength == 3 * Long.BYTES + 1 ? Long.BYTES : 0;
-//            long high = slice.getLong(highOffset) & (highOffset != 0 ? -1L : 0);
-//
-//            int countOffset = sliceLength == 3 * Long.BYTES | sliceLength == 2 * Long.BYTES + 1 ? Long.BYTES : 2 * Long.BYTES;
-//            countOffset = sliceLength > 2 * Long.BYTES ? countOffset : 0;
-//            long count = slice.getLong(countOffset);
-//            count = countOffset != 0 ? count : 1;
-//
-//            int overflowOffset = sliceLength == 3 * Long.BYTES ? 2 * Long.BYTES : 3 * Long.BYTES;
-//            overflowOffset = sliceLength == 3 * Long.BYTES | sliceLength == 4 * Long.BYTES ? overflowOffset : 0;
-//            long overflow = slice.getLong(overflowOffset) & (overflowOffset != 0 ? -1L : 0);
+            int highOffset = sliceLength == 4 * Long.BYTES | sliceLength == 2 * Long.BYTES | sliceLength == 3 * Long.BYTES + 1 ? Long.BYTES : 0;
+            long high = slice.getLong(highOffset) & (highOffset != 0 ? -1L : 0);
 
-            long high = 0;
-            long overflow = 0;
-            long count = 1;
-            if (sliceLength == 4 * Long.BYTES | sliceLength == 2 * Long.BYTES | sliceLength == 3 * Long.BYTES + 1) {
-                // high != 0
-                high = slice.getLong(Long.BYTES);
-                if (sliceLength == 4 * Long.BYTES) {
-                    overflow = slice.getLong(Long.BYTES * 3);
-                }
-                if (sliceLength != 2 * Long.BYTES) {
-                    count = slice.getLong(Long.BYTES * 2);
-                }
-            }
-            else {
-                // high == 0
-                if (sliceLength == 3 * Long.BYTES) {
-                    overflow = slice.getLong(Long.BYTES * 3);
-                }
-                if (sliceLength != Long.BYTES) {
-                    count = slice.getLong(Long.BYTES);
-                }
-            }
+            int countOffset = sliceLength == 3 * Long.BYTES | sliceLength == 2 * Long.BYTES + 1 ? Long.BYTES : 2 * Long.BYTES;
+            countOffset = sliceLength > 2 * Long.BYTES ? countOffset : 0;
+            long count = slice.getLong(countOffset);
+            count = countOffset != 0 ? count : 1;
+
+            int overflowOffset = sliceLength == 3 * Long.BYTES ? 2 * Long.BYTES : 3 * Long.BYTES;
+            overflowOffset = sliceLength == 3 * Long.BYTES | sliceLength == 4 * Long.BYTES ? overflowOffset : 0;
+            long overflow = slice.getLong(overflowOffset) & (overflowOffset != 0 ? -1L : 0);
+
+//            long high = 0;
+//            long overflow = 0;
+//            long count = 1;
+//            if (sliceLength == 4 * Long.BYTES | sliceLength == 2 * Long.BYTES | sliceLength == 3 * Long.BYTES + 1) {
+//                // high != 0
+//                high = slice.getLong(Long.BYTES);
+//                if (sliceLength == 4 * Long.BYTES) {
+//                    overflow = slice.getLong(Long.BYTES * 3);
+//                }
+//                if (sliceLength != 2 * Long.BYTES) {
+//                    count = slice.getLong(Long.BYTES * 2);
+//                }
+//            }
+//            else {
+//                // high == 0
+//                if (sliceLength == 3 * Long.BYTES) {
+//                    overflow = slice.getLong(Long.BYTES * 2);
+//                }
+//                if (sliceLength != Long.BYTES) {
+//                    count = slice.getLong(Long.BYTES);
+//                }
+//            }
 
 //            if (sliceLength == 4 * Long.BYTES) {
 //                high = slice.getLong(Long.BYTES);
