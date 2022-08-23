@@ -36,6 +36,7 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.profile.AsyncProfiler;
 import org.openjdk.jmh.profile.DTraceAsmProfiler;
 import org.testng.annotations.Test;
 
@@ -99,6 +100,15 @@ public class BenchmarkDecimalAggregation
             aggregator.evaluate(groupId, builder);
         }
         return builder.build();
+    }
+
+    @Benchmark
+    @OutputTimeUnit(TimeUnit.MICROSECONDS)
+    public Object benchmarkDeserialize(BenchmarkData data)
+    {
+        GroupedAggregator aggregator = data.getFinalAggregatorFactory().createGroupedAggregator();
+        aggregator.processPage(data.getGroupIds(), data.getIntermediateValues());
+        return aggregator;
     }
 
     @Benchmark
@@ -283,21 +293,26 @@ public class BenchmarkDecimalAggregation
         new BenchmarkDecimalAggregation().verify();
 
         String profilerOutputDir = profilerOutputDir();
-        Benchmarks.benchmark(BenchmarkDecimalAggregation.class).includeMethod("benchmarkEvaluateIntermediateOnly")
-                .withOptions(options -> options
+        try {
+            Benchmarks.benchmark(BenchmarkDecimalAggregation.class)
+//                .includeMethod("benchmarkEvaluateIntermediateOnly")
+                    .includeMethod("benchmarkDeserialize")
+                    .withOptions(options -> options
 //                        .addProfiler(AsyncProfiler.class, String.format("dir=%s;output=text;output=flamegraph", profilerOutputDir))
-//                        .addProfiler(DTraceAsmProfiler.class, String.format("hotThreshold=0.1;tooBigThreshold=3000;saveLog=true;saveLogTo=%s", profilerOutputDir, profilerOutputDir))
-                        .param("type", "LONG")
+//                            .addProfiler(DTraceAsmProfiler.class, String.format("hotThreshold=0.1;tooBigThreshold=3000;saveLog=true;saveLogTo=%s", profilerOutputDir, profilerOutputDir))
+                            .param("type", "LONG")
 //                        .param("groupCount", "1000", "1000000", "10000000")
-                        .param("groupCount", "1000000")
-                        .param("function", "avg")
-                        .param("decimalSize", "MIXED")
-                        .param("groupIdsInOrder", "true")
-                        .forks(1)).run();
-
-        File dir = new File(profilerOutputDir);
-        if (dir.list().length == 0) {
-            Verify.verify(dir.delete(), "dir %s deleted", dir);
+                            .param("groupCount", "10000000")
+                            .param("function", "avg")
+//                            .param("decimalSize", "MIXED")
+                            .param("groupIdsInOrder", "true")
+                            .forks(1)).run();
+        }
+        finally {
+            File dir = new File(profilerOutputDir);
+            if (dir.list().length == 0) {
+                Verify.verify(dir.delete(), "dir %s deleted", dir);
+            }
         }
     }
 

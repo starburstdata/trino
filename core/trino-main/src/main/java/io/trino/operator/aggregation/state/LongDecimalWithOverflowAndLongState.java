@@ -15,7 +15,7 @@ package io.trino.operator.aggregation.state;
 
 import io.trino.spi.function.AccumulatorStateMetadata;
 
-@AccumulatorStateMetadata(stateFactoryClass = LongDecimalWithOverflowAndLongStateFactory.class, stateSerializerClass = VarHandleLongDecimalWithOverflowAndLongStateSerializer.class)
+@AccumulatorStateMetadata(stateFactoryClass = LongDecimalWithOverflowAndLongStateFactory.class, stateSerializerClass = LongDecimalWithOverflowAndLongStateSerializer.class)
 public interface LongDecimalWithOverflowAndLongState
         extends LongDecimalWithOverflowState
 {
