@@ -150,12 +150,14 @@ public class TestHivePlans
                                 .equiCriteria("L_STR_PART", "R_STR_COL")
                                 .left(
                                         exchange(REMOTE, REPARTITION,
-                                                project(
+                                                exchange(LOCAL, REPARTITION,
+                                                        project(
                                                         filter("\"$like\"(L_STR_PART, \"$literal$\"(from_base64('DgAAAFZBUklBQkxFX1dJRFRIAQAAAAcAAAAABwAAAAIAAAB0JQA=')))",
-                                                                tableScan("table_str_partitioned", Map.of("L_INT_COL", "int_col", "L_STR_PART", "str_part"))))))
+                                                                tableScan("table_str_partitioned", Map.of("L_INT_COL", "int_col", "L_STR_PART", "str_part")))))))
                                 .right(exchange(LOCAL,
                                         exchange(REMOTE, REPARTITION,
-                                                project(
+                                                exchange(LOCAL, REPARTITION,
+                                                        project(
                                                         filter("R_STR_COL IN ('three', CAST('two' AS varchar(5))) AND \"$like\"(R_STR_COL, \"$literal$\"(from_base64('DgAAAFZBUklBQkxFX1dJRFRIAQAAAAcAAAAABwAAAAIAAAB0JQA=')))",
                                                                 tableScan("table_unpartitioned", Map.of("R_STR_COL", "str_col", "R_INT_COL", "int_col"))))))))));
     }
@@ -174,15 +176,17 @@ public class TestHivePlans
                                 .equiCriteria("L_INT_PART", "R_INT_COL")
                                 .left(
                                         exchange(REMOTE, REPARTITION,
-                                                project(
-                                                        filter("true", // dynamic filter
-                                                                tableScan("table_int_partitioned", Map.of("L_INT_PART", "int_part", "L_STR_COL", "str_col"))))))
+                                                exchange(LOCAL, REPARTITION,
+                                                        project(
+                                                                filter("true", // dynamic filter
+                                                                        tableScan("table_int_partitioned", Map.of("L_INT_PART", "int_part", "L_STR_COL", "str_col")))))))
                                 .right(
                                         exchange(LOCAL,
                                                 exchange(REMOTE, REPARTITION,
-                                                        project(
-                                                                filter("R_INT_COL IN (2, 3, 4)",
-                                                                        tableScan("table_unpartitioned", Map.of("R_STR_COL", "str_col", "R_INT_COL", "int_col"))))))))));
+                                                        exchange(LOCAL, REPARTITION,
+                                                                project(
+                                                                        filter("R_INT_COL IN (2, 3, 4)",
+                                                                                tableScan("table_unpartitioned", Map.of("R_STR_COL", "str_col", "R_INT_COL", "int_col")))))))))));
     }
 
     @Test
@@ -200,15 +204,17 @@ public class TestHivePlans
                                 .equiCriteria("L_INT_PART", "R_INT_COL")
                                 .left(
                                         exchange(REMOTE, REPARTITION,
-                                                project(
-                                                        filter("L_STR_COL != 'three'",
-                                                                tableScan("table_int_partitioned", Map.of("L_INT_PART", "int_part", "L_STR_COL", "str_col"))))))
+                                                exchange(LOCAL, REPARTITION,
+                                                        project(
+                                                                filter("L_STR_COL != 'three'",
+                                                                        tableScan("table_int_partitioned", Map.of("L_INT_PART", "int_part", "L_STR_COL", "str_col")))))))
                                 .right(
                                         exchange(LOCAL,
                                                 exchange(REMOTE, REPARTITION,
-                                                        project(
-                                                                filter("R_INT_COL IN (2, 3, 4) AND R_INT_COL BETWEEN 2 AND 4", // TODO: R_INT_COL BETWEEN 2 AND 4 is redundant
-                                                                        tableScan("table_unpartitioned", Map.of("R_STR_COL", "str_col", "R_INT_COL", "int_col"))))))))));
+                                                        exchange(LOCAL, REPARTITION,
+                                                                project(
+                                                                        filter("R_INT_COL IN (2, 3, 4) AND R_INT_COL BETWEEN 2 AND 4", // TODO: R_INT_COL BETWEEN 2 AND 4 is redundant
+                                                                                tableScan("table_unpartitioned", Map.of("R_STR_COL", "str_col", "R_INT_COL", "int_col")))))))))));
     }
 
     @Test
@@ -226,15 +232,17 @@ public class TestHivePlans
                                 .equiCriteria("L_INT_PART", "R_INT_COL")
                                 .left(
                                         exchange(REMOTE, REPARTITION,
-                                                project(
-                                                        filter("substring(L_STR_COL, BIGINT '2') != CAST('hree' AS varchar(5))",
-                                                                tableScan("table_int_partitioned", Map.of("L_INT_PART", "int_part", "L_STR_COL", "str_col"))))))
+                                                exchange(LOCAL, REPARTITION,
+                                                        project(
+                                                                filter("substring(L_STR_COL, BIGINT '2') != CAST('hree' AS varchar(5))",
+                                                                        tableScan("table_int_partitioned", Map.of("L_INT_PART", "int_part", "L_STR_COL", "str_col")))))))
                                 .right(
                                         exchange(LOCAL,
                                                 exchange(REMOTE, REPARTITION,
-                                                        project(
-                                                                filter("R_INT_COL IN (2, 3, 4) AND R_INT_COL BETWEEN 2 AND 4", // TODO: R_INT_COL BETWEEN 2 AND 4 is redundant
-                                                                        tableScan("table_unpartitioned", Map.of("R_STR_COL", "str_col", "R_INT_COL", "int_col"))))))))));
+                                                        exchange(LOCAL, REPARTITION,
+                                                                project(
+                                                                        filter("R_INT_COL IN (2, 3, 4) AND R_INT_COL BETWEEN 2 AND 4", // TODO: R_INT_COL BETWEEN 2 AND 4 is redundant
+                                                                                tableScan("table_unpartitioned", Map.of("R_STR_COL", "str_col", "R_INT_COL", "int_col")))))))))));
     }
 
     @Test
@@ -252,15 +260,17 @@ public class TestHivePlans
                                 .equiCriteria("L_INT_PART", "R_INT_COL")
                                 .left(
                                         exchange(REMOTE, REPARTITION,
-                                                project(
-                                                        filter("L_INT_PART % 2 = 0",
-                                                                tableScan("table_int_partitioned", Map.of("L_INT_PART", "int_part", "L_STR_COL", "str_col"))))))
+                                                exchange(LOCAL, REPARTITION,
+                                                        project(
+                                                                filter("L_INT_PART % 2 = 0",
+                                                                        tableScan("table_int_partitioned", Map.of("L_INT_PART", "int_part", "L_STR_COL", "str_col")))))))
                                 .right(
                                         exchange(LOCAL,
                                                 exchange(REMOTE, REPARTITION,
-                                                        project(
-                                                                filter("R_INT_COL IN (2, 4) AND R_INT_COL % 2 = 0",
-                                                                        tableScan("table_unpartitioned", Map.of("R_STR_COL", "str_col", "R_INT_COL", "int_col"))))))))));
+                                                        exchange(LOCAL, REPARTITION,
+                                                                project(
+                                                                        filter("R_INT_COL IN (2, 4) AND R_INT_COL % 2 = 0",
+                                                                                tableScan("table_unpartitioned", Map.of("R_STR_COL", "str_col", "R_INT_COL", "int_col")))))))))));
     }
 
     @Test
@@ -275,15 +285,17 @@ public class TestHivePlans
                                 .equiCriteria("L_INT_PART", "R_INT_COL")
                                 .left(
                                         exchange(REMOTE, REPARTITION,
-                                                project(
-                                                        filter("true", //dynamic filter
-                                                                tableScan("table_int_partitioned", Map.of("L_INT_PART", "int_part", "L_STR_COL", "str_col"))))))
+                                                exchange(LOCAL, REPARTITION,
+                                                        project(
+                                                                filter("true", //dynamic filter
+                                                                        tableScan("table_int_partitioned", Map.of("L_INT_PART", "int_part", "L_STR_COL", "str_col")))))))
                                 .right(
                                         exchange(LOCAL,
                                                 exchange(REMOTE, REPARTITION,
-                                                        project(
-                                                                filter("R_INT_COL IN (1, 2, 3, 4, 5)",
-                                                                        tableScan("table_unpartitioned", Map.of("R_STR_COL", "str_col", "R_INT_COL", "int_col"))))))))));
+                                                        exchange(LOCAL, REPARTITION,
+                                                                project(
+                                                                        filter("R_INT_COL IN (1, 2, 3, 4, 5)",
+                                                                                tableScan("table_unpartitioned", Map.of("R_STR_COL", "str_col", "R_INT_COL", "int_col")))))))))));
     }
 
     @Test

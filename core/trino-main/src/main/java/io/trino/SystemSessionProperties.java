@@ -177,6 +177,7 @@ public final class SystemSessionProperties
     public static final String FORCE_SPILLING_JOIN = "force_spilling_join";
     public static final String FAULT_TOLERANT_EXECUTION_EVENT_DRIVEN_SCHEDULER_ENABLED = "fault_tolerant_execution_event_driven_scheduler_enabled";
     public static final String FAULT_TOLERANT_EXECUTION_FORCE_PREFERRED_WRITE_PARTITIONING_ENABLED = "fault_tolerant_execution_force_preferred_write_partitioning_enabled";
+    public static final String FORCE_FIXED_DISTRIBUTION_FOR_PARTITIONED_OUTPUT_OPERATOR_ENABLED = "force_fixed_distribution_for_partitioned_output_operator_enabled";
 
     private final List<PropertyMetadata<?>> sessionProperties;
 
@@ -879,6 +880,11 @@ public final class SystemSessionProperties
                         FAULT_TOLERANT_EXECUTION_FORCE_PREFERRED_WRITE_PARTITIONING_ENABLED,
                         "Force preferred write partitioning for fault tolerant execution",
                         queryManagerConfig.isFaultTolerantExecutionForcePreferredWritePartitioningEnabled(),
+                        true),
+                booleanProperty(
+                        FORCE_FIXED_DISTRIBUTION_FOR_PARTITIONED_OUTPUT_OPERATOR_ENABLED,
+                        "Force partitioned output operator to be run with fixed distribution",
+                        optimizerConfig.isForceFixedDistributionForPartitionedOutputOperatorEnabled(),
                         true));
     }
 
@@ -1570,5 +1576,10 @@ public final class SystemSessionProperties
             return false;
         }
         return session.getSystemProperty(FAULT_TOLERANT_EXECUTION_FORCE_PREFERRED_WRITE_PARTITIONING_ENABLED, Boolean.class);
+    }
+
+    public static boolean isForceFixedDistributionForPartitionedOutputOperatorEnabled(Session session)
+    {
+        return session.getSystemProperty(FORCE_FIXED_DISTRIBUTION_FOR_PARTITIONED_OUTPUT_OPERATOR_ENABLED, Boolean.class);
     }
 }
