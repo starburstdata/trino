@@ -40,8 +40,26 @@ public class Int128ArrayBlockEncoding
 
         encodeNullsAsBits(sliceOutput, block);
 
+        boolean nonZeroHigh = false;
+        for (int i = 0; i < positionCount; i++) {
+            if (block.getLong(i, 0) != 0) {
+                nonZeroHigh = true;
+                break;
+            }
+        }
+
         if (!block.mayHaveNull()) {
-            sliceOutput.writeBytes(getValuesSlice(block));
+            sliceOutput.writeBoolean(nonZeroHigh);
+            if (nonZeroHigh) {
+                sliceOutput.writeBytes(getValuesSlice(block));
+            }
+            else {
+                long[] low = new long[positionCount];
+                for (int i = 0; i < block.getPositionCount(); i++) {
+                    low[i] = block.getLong(i, 8);
+                }
+                sliceOutput.writeBytes(Slices.wrappedLongArray(low));
+            }
         }
         else {
             long[] valuesWithoutNull = new long[positionCount * 2];
@@ -68,7 +86,17 @@ public class Int128ArrayBlockEncoding
 
         long[] values = new long[positionCount * 2];
         if (valueIsNull == null) {
-            sliceInput.readBytes(Slices.wrappedLongArray(values));
+            boolean nonZeroHigh = sliceInput.readBoolean();
+            if (nonZeroHigh) {
+                sliceInput.readBytes(Slices.wrappedLongArray(values));
+            }
+            else {
+                long[] low = new long[positionCount];
+                sliceInput.readBytes(Slices.wrappedLongArray(low));
+                for (int i = 0; i < positionCount; i++) {
+                    values[i * 2 + 1] = low[i];
+                }
+            }
         }
         else {
             int nonNullPositionCount = sliceInput.readInt();
