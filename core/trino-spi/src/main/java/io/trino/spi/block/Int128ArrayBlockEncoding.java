@@ -48,8 +48,8 @@ public class Int128ArrayBlockEncoding
             }
         }
 
+        sliceOutput.writeBoolean(nonZeroHigh);
         if (!block.mayHaveNull()) {
-            sliceOutput.writeBoolean(nonZeroHigh);
             if (nonZeroHigh) {
                 sliceOutput.writeBytes(getValuesSlice(block));
             }
@@ -62,18 +62,33 @@ public class Int128ArrayBlockEncoding
             }
         }
         else {
-            long[] valuesWithoutNull = new long[positionCount * 2];
-            int nonNullPositionCount = 0;
-            for (int i = 0; i < positionCount; i++) {
-                valuesWithoutNull[nonNullPositionCount] = block.getLong(i, 0);
-                valuesWithoutNull[nonNullPositionCount + 1] = block.getLong(i, 8);
-                if (!block.isNull(i)) {
-                    nonNullPositionCount += 2;
+            if (nonZeroHigh) {
+                long[] valuesWithoutNull = new long[positionCount * 2];
+                int nonNullPositionCount = 0;
+                for (int i = 0; i < positionCount; i++) {
+                    valuesWithoutNull[nonNullPositionCount] = block.getLong(i, 0);
+                    valuesWithoutNull[nonNullPositionCount + 1] = block.getLong(i, 8);
+                    if (!block.isNull(i)) {
+                        nonNullPositionCount += 2;
+                    }
                 }
-            }
 
-            sliceOutput.writeInt(nonNullPositionCount / 2);
-            sliceOutput.writeBytes(Slices.wrappedLongArray(valuesWithoutNull, 0, nonNullPositionCount));
+                sliceOutput.writeInt(nonNullPositionCount / 2);
+
+                sliceOutput.writeBytes(Slices.wrappedLongArray(valuesWithoutNull, 0, nonNullPositionCount));
+            }
+            else {
+                long[] valuesWithoutNull = new long[positionCount];
+                int nonNullPositionCount = 0;
+                for (int i = 0; i < positionCount; i++) {
+                    valuesWithoutNull[nonNullPositionCount] = block.getLong(i, 8);
+                    nonNullPositionCount = block.isNull(i) ? nonNullPositionCount : nonNullPositionCount + 1;
+                }
+
+                sliceOutput.writeInt(nonNullPositionCount);
+
+                sliceOutput.writeBytes(Slices.wrappedLongArray(valuesWithoutNull, 0, nonNullPositionCount));
+            }
         }
     }
 
@@ -83,10 +98,10 @@ public class Int128ArrayBlockEncoding
         int positionCount = sliceInput.readInt();
 
         boolean[] valueIsNull = decodeNullBits(sliceInput, positionCount).orElse(null);
+        boolean nonZeroHigh = sliceInput.readBoolean();
 
         long[] values = new long[positionCount * 2];
         if (valueIsNull == null) {
-            boolean nonZeroHigh = sliceInput.readBoolean();
             if (nonZeroHigh) {
                 sliceInput.readBytes(Slices.wrappedLongArray(values));
             }
