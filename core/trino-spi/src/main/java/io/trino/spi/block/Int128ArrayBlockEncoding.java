@@ -55,7 +55,7 @@ public class Int128ArrayBlockEncoding
             }
             else {
                 long[] low = new long[positionCount];
-                for (int i = 0; i < block.getPositionCount(); i++) {
+                for (int i = 0; i < positionCount; i++) {
                     low[i] = block.getLong(i, 8);
                 }
                 sliceOutput.writeBytes(Slices.wrappedLongArray(low));
@@ -115,12 +115,24 @@ public class Int128ArrayBlockEncoding
         }
         else {
             int nonNullPositionCount = sliceInput.readInt();
-            sliceInput.readBytes(Slices.wrappedLongArray(values, 0, nonNullPositionCount * 2));
-            int position = 2 * (nonNullPositionCount - 1);
-            for (int i = positionCount - 1; i >= 0 && position >= 0; i--) {
-                System.arraycopy(values, position, values, 2 * i, 2);
-                if (!valueIsNull[i]) {
-                    position -= 2;
+            if (nonZeroHigh) {
+                sliceInput.readBytes(Slices.wrappedLongArray(values, 0, nonNullPositionCount * 2));
+                int position = 2 * (nonNullPositionCount - 1);
+                for (int i = positionCount - 1; i >= 0 && position >= 0; i--) {
+                    System.arraycopy(values, position, values, 2 * i, 2);
+                    if (!valueIsNull[i]) {
+                        position -= 2;
+                    }
+                }
+            }
+            else {
+                long[] low = new long[nonNullPositionCount];
+                sliceInput.readBytes(Slices.wrappedLongArray(low, 0, nonNullPositionCount));
+                int lowOffset = 0;
+                for (int i = 0; i < positionCount; i++) {
+                    if (!valueIsNull[i]) {
+                        values[i * 2 + 1] = low[lowOffset++];
+                    }
                 }
             }
         }
