@@ -44,14 +44,13 @@ import io.trino.spi.connector.RetryMode;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.Type;
-import io.trino.sql.gen.JoinCompiler;
 import io.trino.testing.TestingConnectorSession;
-import io.trino.type.BlockTypeOperators;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.PartitionSpecParser;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.SchemaParser;
 import org.apache.iceberg.types.Types;
+import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import java.io.File;
@@ -76,7 +75,6 @@ import static io.trino.testing.TestingHandles.TEST_CATALOG_HANDLE;
 import static io.trino.type.InternalTypeManager.TESTING_TYPE_MANAGER;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.apache.iceberg.types.Types.NestedField.optional;
-import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 
@@ -116,10 +114,10 @@ public class TestIcebergNodeLocalDynamicSplitPruning
             try (ConnectorPageSource nonEmptyPageSource = createTestingPageSource(transaction, icebergConfig, tempFile.file(), getDynamicFilter(getNonSelectiveTupleDomain()))) {
                 Page page = nonEmptyPageSource.getNextPage();
                 assertNotNull(page);
-                assertEquals(page.getBlock(0).getPositionCount(), 1);
-                assertEquals(page.getBlock(0).getInt(0, 0), KEY_COLUMN_VALUE);
-                assertEquals(page.getBlock(1).getPositionCount(), 1);
-                assertEquals(page.getBlock(1).getSlice(0, 0, page.getBlock(1).getSliceLength(0)).toStringUtf8(), DATA_COLUMN_VALUE);
+                Assert.assertEquals(page.getBlock(0).getPositionCount(), 1);
+                Assert.assertEquals(page.getBlock(0).getInt(0, 0), KEY_COLUMN_VALUE);
+                Assert.assertEquals(page.getBlock(1).getPositionCount(), 1);
+                Assert.assertEquals(page.getBlock(1).getSlice(0, 0, page.getBlock(1).getSliceLength(0)).toStringUtf8(), DATA_COLUMN_VALUE);
             }
         }
     }
@@ -196,7 +194,7 @@ public class TestIcebergNodeLocalDynamicSplitPruning
                 TESTING_TYPE_MANAGER,
                 new JsonCodecFactory().jsonCodec(CommitTaskData.class),
                 new IcebergFileWriterFactory(TESTING_TYPE_MANAGER, new NodeVersion("trino_test"), stats, ORC_WRITER_CONFIG),
-                new GroupByHashPageIndexerFactory(new JoinCompiler(TESTING_TYPE_MANAGER.getTypeOperators()), new BlockTypeOperators()),
+                new GroupByHashPageIndexerFactory(io.trino.operator.GroupByHashFactoryTestUtils.createGroupByHashFactory()),
                 icebergConfig);
 
         return provider.createPageSource(

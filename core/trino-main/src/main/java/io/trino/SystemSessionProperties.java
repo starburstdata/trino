@@ -855,8 +855,6 @@ public final class SystemSessionProperties
                         FORCE_SPILLING_JOIN,
                         "Force the usage of spliing join operator in favor of the non-spilling one, even if spill is not enabled",
                         featuresConfig.isForceSpillingJoin(),
-                        featuresConfig.isHideInaccesibleColumns(),
-                        value -> validateHideInaccesibleColumns(value, featuresConfig.isHideInaccesibleColumns()),
                         false),
                 dataSizeProperty(
                         TASK_MAX_PARTIAL_AGGREGATION_MEMORY,

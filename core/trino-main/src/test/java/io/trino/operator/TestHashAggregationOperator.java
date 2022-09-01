@@ -67,9 +67,9 @@ import static io.airlift.units.DataSize.Unit.MEGABYTE;
 import static io.airlift.units.DataSize.succinctBytes;
 import static io.trino.RowPagesBuilder.rowPagesBuilder;
 import static io.trino.SessionTestUtils.TEST_SESSION;
-import static io.trino.operator.GroupByHashFactoryTestUtils.createGroupByHashFactory;
 import static io.trino.block.BlockAssertions.createLongsBlock;
 import static io.trino.block.BlockAssertions.createRLEBlock;
+import static io.trino.operator.GroupByHashFactoryTestUtils.createGroupByHashFactory;
 import static io.trino.operator.GroupByHashYieldAssertion.GroupByHashYieldResult;
 import static io.trino.operator.GroupByHashYieldAssertion.createPagesWithDistinctHashKeys;
 import static io.trino.operator.GroupByHashYieldAssertion.finishOperatorWithYieldingGroupByHash;
@@ -734,7 +734,7 @@ public class TestHashAggregationOperator
                 Optional.empty(),
                 100,
                 Optional.of(DataSize.ofBytes(1)), // this setting makes operator to flush after each page
-                joinCompiler,
+                groupByHashFactory,
                 blockTypeOperators,
                 // use 5 rows threshold to trigger adaptive partial aggregation after each page flush
                 Optional.of(partialAggregationController));
@@ -785,7 +785,7 @@ public class TestHashAggregationOperator
                 Optional.empty(),
                 10,
                 Optional.of(DataSize.of(16, MEGABYTE)), // this setting makes operator to flush only after all pages
-                joinCompiler,
+                groupByHashFactory,
                 blockTypeOperators,
                 // use 5 rows threshold to trigger adaptive partial aggregation after each page flush
                 Optional.of(partialAggregationController));

@@ -64,7 +64,6 @@ import java.util.Optional;
 
 import static io.trino.SessionTestUtils.TEST_SESSION;
 import static io.trino.operator.GroupByHashFactoryTestUtils.createGroupByHashFactory;
-import static io.trino.operator.StageExecutionDescriptor.ungroupedExecution;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static io.trino.sql.planner.SystemPartitioningHandle.SINGLE_DISTRIBUTION;

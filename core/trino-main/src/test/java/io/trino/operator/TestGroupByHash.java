@@ -28,7 +28,9 @@ import io.trino.spi.block.RunLengthEncodedBlock;
 import io.trino.spi.block.VariableWidthBlock;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.Type;
+import io.trino.spi.type.TypeOperators;
 import io.trino.testing.TestingSession;
+import io.trino.type.BlockTypeOperators;
 import io.trino.type.TypeTestUtils;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -91,14 +93,15 @@ public class TestGroupByHash
                 case BIGINT:
                     return new BigintGroupByHash(0, true, expectedSize, updateMemory);
                 case MULTI_CHANNEL:
+                    TypeOperators typeOperators = new TypeOperators();
                     return new MultiChannelGroupByHash(
                             ImmutableList.of(BigintType.BIGINT),
                             new int[] {0},
                             Optional.of(1),
                             expectedSize,
                             true,
-                            JOIN_COMPILER,
-                            TYPE_OPERATOR_FACTORY,
+                            new io.trino.sql.gen.JoinCompiler(typeOperators),
+                            new BlockTypeOperators(typeOperators),
                             updateMemory);
             }
 
@@ -566,14 +569,12 @@ public class TestGroupByHash
     @Test
     public void testLowCardinalityDictionariesAddPage()
     {
-        GroupByHash groupByHash = createGroupByHash(
+        GroupByHash groupByHash = GROUP_BY_HASH_FACTORY.createGroupByHash(
                 TEST_SESSION,
                 ImmutableList.of(BIGINT, BIGINT),
                 new int[] {0, 1},
                 Optional.empty(),
                 100,
-                JOIN_COMPILER,
-                TYPE_OPERATOR_FACTORY,
                 NOOP);
         Block firstBlock = BlockAssertions.createLongDictionaryBlock(0, 1000, 10);
         Block secondBlock = BlockAssertions.createLongDictionaryBlock(0, 1000, 10);
@@ -596,24 +597,20 @@ public class TestGroupByHash
     public void testLowCardinalityDictionariesGetGroupIds()
     {
         // Compare group id results from page with dictionaries only (processed via low cardinality work) and the same page processed normally
-        GroupByHash groupByHash = createGroupByHash(
+        GroupByHash groupByHash = GROUP_BY_HASH_FACTORY.createGroupByHash(
                 TEST_SESSION,
                 ImmutableList.of(BIGINT, BIGINT, BIGINT, BIGINT, BIGINT),
                 new int[] {0, 1, 2, 3, 4},
                 Optional.empty(),
                 100,
-                JOIN_COMPILER,
-                TYPE_OPERATOR_FACTORY,
                 NOOP);
 
-        GroupByHash lowCardinalityGroupByHash = createGroupByHash(
+        GroupByHash lowCardinalityGroupByHash = GROUP_BY_HASH_FACTORY.createGroupByHash(
                 TEST_SESSION,
                 ImmutableList.of(BIGINT, BIGINT, BIGINT, BIGINT),
                 new int[] {0, 1, 2, 3},
                 Optional.empty(),
                 100,
-                JOIN_COMPILER,
-                TYPE_OPERATOR_FACTORY,
                 NOOP);
         Block sameValueBlock = BlockAssertions.createLongRepeatBlock(0, 100);
         Block block1 = BlockAssertions.createLongDictionaryBlock(0, 100, 1);
@@ -640,14 +637,12 @@ public class TestGroupByHash
     @Test
     public void testLowCardinalityDictionariesProperGroupIdOrder()
     {
-        GroupByHash groupByHash = createGroupByHash(
+        GroupByHash groupByHash = GROUP_BY_HASH_FACTORY.createGroupByHash(
                 TEST_SESSION,
                 ImmutableList.of(BIGINT, BIGINT),
                 new int[] {0, 1},
                 Optional.empty(),
                 100,
-                JOIN_COMPILER,
-                TYPE_OPERATOR_FACTORY,
                 NOOP);
 
         Block dictionary = new LongArrayBlock(2, Optional.empty(), new long[] {0, 1});
@@ -712,14 +707,12 @@ public class TestGroupByHash
 
     private void assertGroupByHashWork(Page page, List<Type> types, Class<?> clazz)
     {
-        GroupByHash groupByHash = createGroupByHash(
+        GroupByHash groupByHash = GROUP_BY_HASH_FACTORY.createGroupByHash(
                 types,
                 IntStream.range(0, types.size()).toArray(),
                 Optional.empty(),
                 100,
                 true,
-                JOIN_COMPILER,
-                TYPE_OPERATOR_FACTORY,
                 NOOP);
         Work<GroupByIdBlock> work = groupByHash.getGroupIds(page);
         // Compare by name since classes are private

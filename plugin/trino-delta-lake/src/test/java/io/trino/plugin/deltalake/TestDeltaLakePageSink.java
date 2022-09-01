@@ -28,13 +28,10 @@ import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.connector.ConnectorPageSink;
 import io.trino.spi.type.TestingTypeManager;
 import io.trino.spi.type.Type;
-import io.trino.spi.type.TypeOperators;
-import io.trino.sql.gen.JoinCompiler;
 import io.trino.tpch.LineItem;
 import io.trino.tpch.LineItemColumn;
 import io.trino.tpch.LineItemGenerator;
 import io.trino.tpch.TpchColumnType;
-import io.trino.type.BlockTypeOperators;
 import org.apache.hadoop.fs.Path;
 import org.testng.annotations.Test;
 
@@ -170,7 +167,7 @@ public class TestDeltaLakePageSink
                 Optional.empty());
 
         DeltaLakePageSinkProvider provider = new DeltaLakePageSinkProvider(
-                new GroupByHashPageIndexerFactory(new JoinCompiler(new TypeOperators()), new BlockTypeOperators()),
+                new GroupByHashPageIndexerFactory(io.trino.operator.GroupByHashFactoryTestUtils.createGroupByHashFactory()),
                 new HdfsFileSystemFactory(HDFS_ENVIRONMENT),
                 HDFS_ENVIRONMENT,
                 JsonCodec.jsonCodec(DataFileInfo.class),

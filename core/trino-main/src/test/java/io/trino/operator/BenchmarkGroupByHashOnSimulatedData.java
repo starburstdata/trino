@@ -25,10 +25,7 @@ import io.trino.spi.type.CharType;
 import io.trino.spi.type.DoubleType;
 import io.trino.spi.type.IntegerType;
 import io.trino.spi.type.Type;
-import io.trino.spi.type.TypeOperators;
 import io.trino.spi.type.VarcharType;
-import io.trino.sql.gen.JoinCompiler;
-import io.trino.type.BlockTypeOperators;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -80,23 +77,18 @@ public class BenchmarkGroupByHashOnSimulatedData
     private static final int DEFAULT_POSITIONS = 10_000_000;
     private static final int EXPECTED_GROUP_COUNT = 10_000;
     private static final int DEFAULT_PAGE_SIZE = 8192;
-    private static final TypeOperators TYPE_OPERATORS = new TypeOperators();
-    private static final BlockTypeOperators TYPE_OPERATOR_FACTORY = new BlockTypeOperators(TYPE_OPERATORS);
-
-    private final JoinCompiler joinCompiler = new JoinCompiler(TYPE_OPERATORS);
+    private static final GroupByHashFactory GROUP_BY_HASH_FACTORY = GroupByHashFactoryTestUtils.createGroupByHashFactory();
 
     @Benchmark
     @OperationsPerInvocation(DEFAULT_POSITIONS)
     public Object groupBy(BenchmarkContext data)
     {
-        GroupByHash groupByHash = GroupByHash.createGroupByHash(
+        GroupByHash groupByHash = GROUP_BY_HASH_FACTORY.createGroupByHash(
                 data.getTypes(),
                 data.getChannels(),
                 Optional.empty(),
                 EXPECTED_GROUP_COUNT,
                 false,
-                joinCompiler,
-                TYPE_OPERATOR_FACTORY,
                 NOOP);
         List<GroupByIdBlock> results = addInputPages(groupByHash, data.getPages(), data.getWorkType());
 
