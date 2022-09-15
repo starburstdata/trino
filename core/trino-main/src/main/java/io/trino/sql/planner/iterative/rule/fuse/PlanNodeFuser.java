@@ -51,6 +51,13 @@ public class PlanNodeFuser
     {
         left = context.getLookup().resolve(left);
         right = context.getLookup().resolve(right);
+        if (left instanceof ProjectNode || right instanceof ProjectNode) {
+            return fuseProject(left, right);
+        }
+        if (left instanceof FilterNode || right instanceof FilterNode) {
+            return fuseFilter(left, right);
+        }
+
         if (!left.getClass().equals(right.getClass())) {
             return Optional.empty();
         }
@@ -63,31 +70,41 @@ public class PlanNodeFuser
         if (left instanceof JoinNode) {
             return fuseJoin((JoinNode) left, (JoinNode) right);
         }
-        if (left instanceof ProjectNode) {
-            return fuseProject((ProjectNode) left, (ProjectNode) right);
-        }
-        if (left instanceof FilterNode) {
-            return fuseFilter((FilterNode) left, (FilterNode) right);
-        }
+
         return Optional.empty();
     }
 
-    private Optional<FusedPlanNode> fuseFilter(FilterNode left, FilterNode right)
+    private Optional<FusedPlanNode> fuseFilter(PlanNode left, PlanNode right)
     {
-        Optional<FusedPlanNode> maybeFusedSource = fuse(left.getSource(), right.getSource());
+        if (left instanceof FilterNode leftFilter && right instanceof FilterNode rightFilter) {
+            return fuseFilter(leftFilter.getSource(), leftFilter.getPredicate(), rightFilter.getSource(), rightFilter.getPredicate());
+        }
+        if (left instanceof FilterNode leftFilter) {
+            return fuseFilter(leftFilter.getSource(), leftFilter.getPredicate(), right, TRUE_LITERAL);
+        }
+        if (right instanceof FilterNode rightFilter) {
+            return fuseFilter(left, TRUE_LITERAL, rightFilter.getSource(), rightFilter.getPredicate());
+        }
+
+        throw new IllegalArgumentException(String.format("expected at least one FilterNode but got %s and %s", left, right));
+    }
+
+    private Optional<FusedPlanNode> fuseFilter(PlanNode leftSource, Expression leftPredicate, PlanNode rightSource, Expression rightPredicate)
+    {
+        Optional<FusedPlanNode> maybeFusedSource = fuse(leftSource, rightSource);
         if (maybeFusedSource.isEmpty()) {
             return Optional.empty();
         }
         FusedPlanNode fusedSource = maybeFusedSource.get();
 
-        Expression mappedRightPredicate = fusedSource.symbolMapping().map(right.getPredicate());
-        if (left.getPredicate().equals(mappedRightPredicate)) {
+        Expression mappedRightPredicate = fusedSource.symbolMapping().map(rightPredicate);
+        if (leftPredicate.equals(mappedRightPredicate)) {
             // simplified version
             return Optional.of(new FusedPlanNode(
                     new FilterNode(
                             context.getIdAllocator().getNextId(),
                             fusedSource.plan(),
-                            left.getPredicate()),
+                            leftPredicate),
                     fusedSource.symbolMapping(),
                     fusedSource.leftFilter(),
                     fusedSource.rightFilter()));
@@ -97,15 +114,30 @@ public class PlanNodeFuser
                 new FilterNode(
                         context.getIdAllocator().getNextId(),
                         fusedSource.plan(),
-                        or(left.getPredicate(), mappedRightPredicate)),
+                        or(leftPredicate, mappedRightPredicate)),
                 fusedSource.symbolMapping(),
-                and(fusedSource.leftFilter(), left.getPredicate()),
+                and(fusedSource.leftFilter(), leftPredicate),
                 and(fusedSource.rightFilter(), mappedRightPredicate)));
     }
 
-    private Optional<FusedPlanNode> fuseProject(ProjectNode left, ProjectNode right)
+    private Optional<FusedPlanNode> fuseProject(PlanNode left, PlanNode right)
     {
-        Optional<FusedPlanNode> maybeFusedSource = fuse(left.getSource(), right.getSource());
+        if (left instanceof ProjectNode leftProject && right instanceof ProjectNode rightProject) {
+            return fuseProject(leftProject.getSource(), leftProject.getAssignments(), rightProject.getSource(), rightProject.getAssignments());
+        }
+        if (left instanceof ProjectNode leftProject) {
+            return fuseProject(leftProject.getSource(), leftProject.getAssignments(), right, Assignments.of());
+        }
+        if (right instanceof ProjectNode rightProject) {
+            return fuseProject(left, Assignments.of(), rightProject.getSource(), rightProject.getAssignments());
+        }
+
+        throw new IllegalArgumentException(String.format("expected at least one ProjectNode but got %s and %s", left, right));
+    }
+
+    private Optional<FusedPlanNode> fuseProject(PlanNode leftSource, Assignments leftAssignments, PlanNode rightSource, Assignments rightAssignments)
+    {
+        Optional<FusedPlanNode> maybeFusedSource = fuse(leftSource, rightSource);
         if (maybeFusedSource.isEmpty()) {
             return Optional.empty();
         }
@@ -117,9 +149,9 @@ public class PlanNodeFuser
         extractUnique(fusedSource.rightFilter()).forEach(symbol -> assignments.put(symbol, symbol.toSymbolReference()));
 
         FusedSymbolMapping.Builder newMapping = FusedSymbolMapping.builder().withMapping(fusedSource.symbolMapping());
-        right.getAssignments().forEach(((symbol, expression) -> {
+        rightAssignments.forEach(((symbol, expression) -> {
             Expression mappedExpression = fusedSource.symbolMapping().map(expression);
-            left.getAssignments().entrySet().stream()
+            leftAssignments.entrySet().stream()
                     .filter(entry -> entry.getValue().equals(mappedExpression))
                     .findFirst()
                     .ifPresentOrElse(
@@ -132,7 +164,7 @@ public class PlanNodeFuser
                         context.getIdAllocator().getNextId(),
                         fusedSource.plan(),
                         Assignments.builder()
-                                .putAll(left.getAssignments())
+                                .putAll(leftAssignments)
                                 .putAll((assignments))
                                 .build()),
                 newMapping.build(),
