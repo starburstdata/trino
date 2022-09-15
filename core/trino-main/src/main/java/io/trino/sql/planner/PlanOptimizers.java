@@ -242,6 +242,7 @@ import io.trino.sql.planner.iterative.rule.UnwrapDateTruncInComparison;
 import io.trino.sql.planner.iterative.rule.UnwrapRowSubscript;
 import io.trino.sql.planner.iterative.rule.UnwrapSingleColumnRowInApply;
 import io.trino.sql.planner.iterative.rule.UseNonPartitionedJoinLookupSource;
+import io.trino.sql.planner.iterative.rule.fuse.JoinOnKeys;
 import io.trino.sql.planner.optimizations.AddExchanges;
 import io.trino.sql.planner.optimizations.AddLocalExchanges;
 import io.trino.sql.planner.optimizations.BeginTableWrite;
@@ -585,6 +586,23 @@ public class PlanOptimizers
                                 .add(new InlineProjections(plannerContext, typeAnalyzer))
                                 .addAll(new PushFilterThroughCountAggregation(plannerContext).rules()) // must run after PredicatePushDown and after TransformFilteringSemiJoinToInnerJoin
                                 .build()));
+        // before PushPredicateIntoTableScan and AddExchanges
+        builder.add(
+                new IterativeOptimizer(
+                        plannerContext,
+                        ruleStats,
+                        statsCalculator,
+                        costCalculator,
+                        ImmutableSet.of(
+                                new RemoveRedundantIdentityProjections())));
+        builder.add(
+                new IterativeOptimizer(
+                        plannerContext,
+                        ruleStats,
+                        statsCalculator,
+                        costCalculator,
+                        ImmutableSet.of(
+                                new JoinOnKeys())));
 
         // Perform redirection before CBO rules to ensure stats from destination connector are used
         // Perform redirection before agg, topN, limit, sample etc. push down into table scan as the destination connector may support a different set of push downs

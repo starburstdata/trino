@@ -15,7 +15,9 @@ package io.trino.tests;
 
 import com.google.common.collect.ImmutableMap;
 import io.trino.execution.DynamicFilterConfig;
+import io.trino.plugin.tpcds.TpcdsPlugin;
 import io.trino.testing.AbstractTestJoinQueries;
+import io.trino.testing.DistributedQueryRunner;
 import io.trino.testing.MaterializedResult;
 import io.trino.testing.QueryRunner;
 import io.trino.tests.tpch.TpchQueryRunnerBuilder;
@@ -35,7 +37,10 @@ public class TestJoinQueries
             throws Exception
     {
         verify(new DynamicFilterConfig().isEnableDynamicFiltering(), "this class assumes dynamic filtering is enabled by default");
-        return TpchQueryRunnerBuilder.builder().build();
+        DistributedQueryRunner queryRunner = TpchQueryRunnerBuilder.builder().build();
+        queryRunner.installPlugin(new TpcdsPlugin());
+        queryRunner.createCatalog("tpcds", "tpcds");
+        return queryRunner;
     }
 
     @Test
@@ -84,5 +89,56 @@ public class TestJoinQueries
             MaterializedResult expected = getQueryRunner().execute(sql);
             assertEqualsIgnoreOrder(actual, expected, "For query: \n " + sql);
         }
+    }
+
+    @Test
+    public void testFuseq88()
+    {
+        assertQuery(
+                """
+                        SELECT *
+                        FROM
+                          (
+                           SELECT count(*) "h8_30_to_9"
+                           FROM
+                             tpcds.sf1.store_sales
+                           , tpcds.sf1.household_demographics
+                           , tpcds.sf1.time_dim
+                           , tpcds.sf1.store
+                           WHERE ("ss_sold_time_sk" = "time_dim"."t_time_sk")
+                              AND ("ss_hdemo_sk" = "household_demographics"."hd_demo_sk")
+                              AND ("ss_store_sk" = "s_store_sk")
+                              AND ("time_dim"."t_hour" = 8)
+                              AND ("time_dim"."t_minute" >= 30)
+                              AND ((("household_demographics"."hd_dep_count" = 4)
+                                    AND ("household_demographics"."hd_vehicle_count" <= (4 + 2)))
+                                 OR (("household_demographics"."hd_dep_count" = 2)
+                                    AND ("household_demographics"."hd_vehicle_count" <= (2 + 2)))
+                                 OR (("household_demographics"."hd_dep_count" = 0)
+                                    AND ("household_demographics"."hd_vehicle_count" <= (0 + 2))))
+                              AND ("store"."s_store_name" = 'ese')
+                        )  s1
+                        , (
+                           SELECT count(*) "h9_to_9_30"
+                           FROM
+                             tpcds.sf1.store_sales
+                           , tpcds.sf1.household_demographics
+                           , tpcds.sf1.time_dim
+                           , tpcds.sf1.store
+                           WHERE ("ss_sold_time_sk" = "time_dim"."t_time_sk")
+                              AND ("ss_hdemo_sk" = "household_demographics"."hd_demo_sk")
+                              AND ("ss_store_sk" = "s_store_sk")
+                              AND ("time_dim"."t_hour" = 9)
+                              AND ("time_dim"."t_minute" < 30)
+                              AND ((("household_demographics"."hd_dep_count" = 4)
+                                    AND ("household_demographics"."hd_vehicle_count" <= (4 + 2)))
+                                 OR (("household_demographics"."hd_dep_count" = 2)
+                                    AND ("household_demographics"."hd_vehicle_count" <= (2 + 2)))
+                                 OR (("household_demographics"."hd_dep_count" = 0)
+                                    AND ("household_demographics"."hd_vehicle_count" <= (0 + 2))))
+                              AND ("store"."s_store_name" = 'ese')
+                        )  s2
+                        """,
+                "VALUES (2334, 4726)");
     }
 }

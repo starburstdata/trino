@@ -174,6 +174,8 @@ public final class SystemSessionProperties
     public static final String USE_EXACT_PARTITIONING = "use_exact_partitioning";
     public static final String FORCE_SPILLING_JOIN = "force_spilling_join";
 
+    public static final String FUSE_SUB_PLAN = "fuse_sub_plan";
+
     private final List<PropertyMetadata<?>> sessionProperties;
 
     public SystemSessionProperties()
@@ -853,6 +855,11 @@ public final class SystemSessionProperties
                         FORCE_SPILLING_JOIN,
                         "Force the usage of spliing join operator in favor of the non-spilling one, even if spill is not enabled",
                         featuresConfig.isForceSpillingJoin(),
+                        false),
+                booleanProperty(
+                        FUSE_SUB_PLAN,
+                        "Enables optimizer rules that fuse similar sub-plans",
+                        optimizerConfig.isFuseSubPlan(),
                         false));
     }
 
@@ -1525,5 +1532,10 @@ public final class SystemSessionProperties
     public static boolean isForceSpillingOperator(Session session)
     {
         return session.getSystemProperty(FORCE_SPILLING_JOIN, Boolean.class);
+    }
+
+    public static boolean isFuseSubPlanEnabled(Session session)
+    {
+        return session.getSystemProperty(FUSE_SUB_PLAN, Boolean.class);
     }
 }
