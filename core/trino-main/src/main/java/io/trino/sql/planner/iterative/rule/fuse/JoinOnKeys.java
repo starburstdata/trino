@@ -45,6 +45,7 @@ public class JoinOnKeys
         }
 
         if (left instanceof JoinNode leftJoinNOde && leftJoinNOde.isCrossJoin()) {
+            // in case of left leaning, n-ary join try to fold the left side first
             Result leftResult = apply(leftJoinNOde, null, context);
             if (leftResult.isEmpty()) {
                 return Result.empty();

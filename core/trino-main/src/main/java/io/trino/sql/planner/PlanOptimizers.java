@@ -418,6 +418,19 @@ public class PlanOptimizers
                                 .addAll(new CanonicalizeExpressions(plannerContext, typeAnalyzer).rules())
                                 .add(new OptimizeRowPattern())
                                 .build()),
+                // Run JoinOnKeys and required RemoveRedundantIdentityProjections before columnPruningOptimizer, PushPredicateIntoTableScan, AddExchanges
+                new IterativeOptimizer(
+                        plannerContext,
+                        ruleStats,
+                        statsCalculator,
+                        costCalculator,
+                        ImmutableSet.of(new RemoveRedundantIdentityProjections())),
+                new IterativeOptimizer(
+                        plannerContext,
+                        ruleStats,
+                        statsCalculator,
+                        costCalculator,
+                        ImmutableSet.of(new JoinOnKeys())),
                 new IterativeOptimizer(
                         plannerContext,
                         ruleStats,
@@ -586,23 +599,23 @@ public class PlanOptimizers
                                 .add(new InlineProjections(plannerContext, typeAnalyzer))
                                 .addAll(new PushFilterThroughCountAggregation(plannerContext).rules()) // must run after PredicatePushDown and after TransformFilteringSemiJoinToInnerJoin
                                 .build()));
-        // before PushPredicateIntoTableScan and AddExchanges
-        builder.add(
-                new IterativeOptimizer(
-                        plannerContext,
-                        ruleStats,
-                        statsCalculator,
-                        costCalculator,
-                        ImmutableSet.of(
-                                new RemoveRedundantIdentityProjections())));
-        builder.add(
-                new IterativeOptimizer(
-                        plannerContext,
-                        ruleStats,
-                        statsCalculator,
-                        costCalculator,
-                        ImmutableSet.of(
-                                new JoinOnKeys())));
+//        // before PushPredicateIntoTableScan and AddExchanges
+//        builder.add(
+//                new IterativeOptimizer(
+//                        plannerContext,
+//                        ruleStats,
+//                        statsCalculator,
+//                        costCalculator,
+//                        ImmutableSet.of(
+//                                new RemoveRedundantIdentityProjections())));
+//        builder.add(
+//                new IterativeOptimizer(
+//                        plannerContext,
+//                        ruleStats,
+//                        statsCalculator,
+//                        costCalculator,
+//                        ImmutableSet.of(
+//                                new JoinOnKeys())));
 
         // Perform redirection before CBO rules to ensure stats from destination connector are used
         // Perform redirection before agg, topN, limit, sample etc. push down into table scan as the destination connector may support a different set of push downs
