@@ -54,7 +54,15 @@ public class DictionaryBlock
 
     public static Block create(int positionCount, Block dictionary, int[] ids)
     {
-        return createInternal(positionCount, dictionary, ids, randomDictionaryId());
+        return createInternal(positionCount, dictionary, ids, false, randomDictionaryId());
+    }
+
+    /**
+     * This should not only be used when creating a projection of another dictionary block.
+     */
+    public static Block createProjectedDictionaryBlock(int positionCount, Block dictionary, int[] ids, boolean dictionaryIsCompacted, DictionaryId dictionarySourceId)
+    {
+        return createInternal(positionCount, dictionary, ids, dictionaryIsCompacted, dictionarySourceId);
     }
 
     /**
@@ -62,10 +70,10 @@ public class DictionaryBlock
      */
     public static Block createProjectedDictionaryBlock(int positionCount, Block dictionary, int[] ids, DictionaryId dictionarySourceId)
     {
-        return createInternal(positionCount, dictionary, ids, dictionarySourceId);
+        return createInternal(positionCount, dictionary, ids, false, dictionarySourceId);
     }
 
-    private static Block createInternal(int positionCount, Block dictionary, int[] ids, DictionaryId dictionarySourceId)
+    private static Block createInternal(int positionCount, Block dictionary, int[] ids, boolean dictionaryIsCompacted, DictionaryId dictionarySourceId)
     {
         if (positionCount == 0) {
             return dictionary.copyRegion(0, 0);
@@ -85,11 +93,15 @@ public class DictionaryBlock
             for (int position = 0; position < positionCount; position++) {
                 newIds[position] = dictionaryBlock.getId(ids[position]);
             }
+
+            // we can't be sure without checking for uniqueness
+            dictionaryIsCompacted = false;
+
             dictionary = dictionaryBlock.getDictionary();
             dictionarySourceId = randomDictionaryId();
             ids = newIds;
         }
-        return new DictionaryBlock(0, positionCount, dictionary, ids, false, false, dictionarySourceId);
+        return new DictionaryBlock(0, positionCount, dictionary, ids, dictionaryIsCompacted, false, dictionarySourceId);
     }
 
     DictionaryBlock(int idsOffset, int positionCount, Block dictionary, int[] ids)
