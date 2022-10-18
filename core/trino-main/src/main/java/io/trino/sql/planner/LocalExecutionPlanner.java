@@ -73,6 +73,7 @@ import io.trino.operator.OperatorFactories.JoinOperatorType;
 import io.trino.operator.OperatorFactory;
 import io.trino.operator.OrderByOperator.OrderByOperatorFactory;
 import io.trino.operator.OutputFactory;
+import io.trino.operator.PageBufferOperator;
 import io.trino.operator.PagesIndex;
 import io.trino.operator.PagesSpatialIndexFactory;
 import io.trino.operator.PartitionFunction;
@@ -297,6 +298,7 @@ import static io.trino.SystemSessionProperties.getAdaptivePartialAggregationUniq
 import static io.trino.SystemSessionProperties.getAggregationOperatorUnspillMemoryLimit;
 import static io.trino.SystemSessionProperties.getFilterAndProjectMinOutputPageRowCount;
 import static io.trino.SystemSessionProperties.getFilterAndProjectMinOutputPageSize;
+import static io.trino.SystemSessionProperties.getPageBufferMaxSize;
 import static io.trino.SystemSessionProperties.getTaskConcurrency;
 import static io.trino.SystemSessionProperties.getTaskScaleWritersMaxWriterCount;
 import static io.trino.SystemSessionProperties.getTaskWriterCount;
@@ -939,7 +941,23 @@ public class LocalExecutionPlanner
                     node.getRetryPolicy(),
                     exchangeManagerRegistry);
 
-            return new PhysicalOperation(operatorFactory, makeLayout(node), context);
+            Map<Symbol, Integer> layout = makeLayout(node);
+            PhysicalOperation remoteSource = new PhysicalOperation(operatorFactory, layout, context);
+            int pageBufferMaxSize = getPageBufferMaxSize(session);
+            if (pageBufferMaxSize == 0) {
+                return remoteSource;
+            }
+
+            OperatorFactory pageBuffer = new PageBufferOperator.PageBufferOperatorFactory(
+                    context.getNextOperatorId(),
+                    node.getId(),
+                    pageBufferMaxSize);
+
+            return new PhysicalOperation(
+                    pageBuffer,
+                    layout,
+                    context,
+                    remoteSource);
         }
 
         @Override

@@ -101,6 +101,7 @@ public class FeaturesConfig
 
     private boolean hideInaccessibleColumns;
     private boolean forceSpillingJoin;
+    private int pageBufferMaxSize = 1024;
 
     public enum DataIntegrityVerification
     {
@@ -153,18 +154,18 @@ public class FeaturesConfig
         return writerMinSize;
     }
 
+    @Min(2)
+    public int getRe2JDfaStatesLimit()
+    {
+        return re2JDfaStatesLimit;
+    }
+
     @Config("writer-min-size")
     @ConfigDescription("Target minimum size of writer output when scaling writers")
     public FeaturesConfig setWriterMinSize(DataSize writerMinSize)
     {
         this.writerMinSize = writerMinSize;
         return this;
-    }
-
-    @Min(2)
-    public int getRe2JDfaStatesLimit()
-    {
-        return re2JDfaStatesLimit;
     }
 
     @Config("re2j.dfa-states-limit")
@@ -478,5 +479,18 @@ public class FeaturesConfig
     {
         this.forceSpillingJoin = forceSpillingJoin;
         return this;
+    }
+
+    @Config("page-buffer-max-sizer")
+    @ConfigDescription("Page buffer operator max number fo pages buffered")
+    public FeaturesConfig setPageBufferMaxSize(int pageBufferMaxSize)
+    {
+        this.pageBufferMaxSize = pageBufferMaxSize;
+        return this;
+    }
+
+    public Integer getPageBufferMaxSize()
+    {
+        return pageBufferMaxSize;
     }
 }

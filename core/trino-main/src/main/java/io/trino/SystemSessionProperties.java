@@ -173,6 +173,7 @@ public final class SystemSessionProperties
     public static final String JOIN_PARTITIONED_BUILD_MIN_ROW_COUNT = "join_partitioned_build_min_row_count";
     public static final String USE_EXACT_PARTITIONING = "use_exact_partitioning";
     public static final String FORCE_SPILLING_JOIN = "force_spilling_join";
+    public static final String PAGE_BUFFER_MAX_SIZE = "page_buffer_max_size";
 
     private final List<PropertyMetadata<?>> sessionProperties;
 
@@ -853,6 +854,11 @@ public final class SystemSessionProperties
                         FORCE_SPILLING_JOIN,
                         "Force the usage of spliing join operator in favor of the non-spilling one, even if spill is not enabled",
                         featuresConfig.isForceSpillingJoin(),
+                        false),
+                integerProperty(
+                        PAGE_BUFFER_MAX_SIZE,
+                        "Maximum number of pages to keep in the page buffer operator",
+                        featuresConfig.getPageBufferMaxSize(),
                         false));
     }
 
@@ -1525,5 +1531,10 @@ public final class SystemSessionProperties
     public static boolean isForceSpillingOperator(Session session)
     {
         return session.getSystemProperty(FORCE_SPILLING_JOIN, Boolean.class);
+    }
+
+    public static int getPageBufferMaxSize(Session session)
+    {
+        return session.getSystemProperty(PAGE_BUFFER_MAX_SIZE, Integer.class);
     }
 }
