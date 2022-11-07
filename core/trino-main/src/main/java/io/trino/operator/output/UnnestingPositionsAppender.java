@@ -17,8 +17,14 @@ import io.trino.spi.block.Block;
 import io.trino.spi.block.DictionaryBlock;
 import io.trino.spi.block.RunLengthEncodedBlock;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntArrays;
 import org.openjdk.jol.info.ClassLayout;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static io.trino.operator.output.PositionsAppenderUtil.calculateBlockResetSize;
+import static io.trino.operator.output.PositionsAppenderUtil.calculateNewArraySize;
+import static java.lang.Math.max;
 import static java.lang.Math.toIntExact;
 import static java.util.Objects.requireNonNull;
 
@@ -31,10 +37,12 @@ public class UnnestingPositionsAppender
     private static final int INSTANCE_SIZE = toIntExact(ClassLayout.parseClass(UnnestingPositionsAppender.class).instanceSize());
 
     private final PositionsAppender delegate;
+    private DictionaryBlockBuilder dictionaryBlockBuilder;
 
     public UnnestingPositionsAppender(PositionsAppender delegate)
     {
         this.delegate = requireNonNull(delegate, "delegate is null");
+        this.dictionaryBlockBuilder = new DictionaryBlockBuilder();
     }
 
     @Override
@@ -44,12 +52,14 @@ public class UnnestingPositionsAppender
             return;
         }
         if (source instanceof RunLengthEncodedBlock) {
+            dictionaryBlockBuilder.flushDictionary(delegate);
             delegate.appendRle(((RunLengthEncodedBlock) source).getValue(), positions.size());
         }
         else if (source instanceof DictionaryBlock) {
             appendDictionary(positions, (DictionaryBlock) source);
         }
         else {
+            dictionaryBlockBuilder.flushDictionary(delegate);
             delegate.append(positions, source);
         }
     }
@@ -66,13 +76,21 @@ public class UnnestingPositionsAppender
     @Override
     public Block build()
     {
-        return delegate.build();
+        Block result;
+        if (dictionaryBlockBuilder.isEmpty()) {
+            result = delegate.build();
+        }
+        else {
+            result = dictionaryBlockBuilder.build();
+        }
+        dictionaryBlockBuilder = dictionaryBlockBuilder.newBuilderLike();
+        return result;
     }
 
     @Override
     public long getRetainedSizeInBytes()
     {
-        return INSTANCE_SIZE + delegate.getRetainedSizeInBytes();
+        return INSTANCE_SIZE + delegate.getRetainedSizeInBytes() + dictionaryBlockBuilder.getRetainedSizeInBytes();
     }
 
     @Override
@@ -83,7 +101,15 @@ public class UnnestingPositionsAppender
 
     private void appendDictionary(IntArrayList positions, DictionaryBlock source)
     {
-        delegate.append(mapPositions(positions, source), source.getDictionary());
+        Block dictionary = source.getDictionary();
+        IntArrayList mappedPositions = mapPositions(positions, source);
+        if (dictionaryBlockBuilder.canAppend(dictionary)) {
+            dictionaryBlockBuilder.append(mappedPositions, dictionary);
+        }
+        else {
+            dictionaryBlockBuilder.flushDictionary(delegate);
+            delegate.append(mappedPositions, dictionary);
+        }
     }
 
     private IntArrayList mapPositions(IntArrayList positions, DictionaryBlock block)
@@ -93,5 +119,98 @@ public class UnnestingPositionsAppender
             positionArray[i] = block.getId(positions.getInt(i));
         }
         return IntArrayList.wrap(positionArray);
+    }
+
+    private static class DictionaryBlockBuilder
+    {
+        private static final int INSTANCE_SIZE = toIntExact(ClassLayout.parseClass(DictionaryBlockBuilder.class).instanceSize());
+        private final int initialEntryCount;
+        private Block dictionary;
+        private int[] dictionaryIds;
+        private int positionCount;
+        private boolean closed;
+
+        public DictionaryBlockBuilder()
+        {
+            this(1024);
+        }
+
+        public DictionaryBlockBuilder(int initialEntryCount)
+        {
+            this.initialEntryCount = initialEntryCount;
+            this.dictionaryIds = new int[0];
+        }
+
+        public boolean isEmpty()
+        {
+            return positionCount == 0;
+        }
+
+        public Block build()
+        {
+            return DictionaryBlock.create(positionCount, dictionary, dictionaryIds);
+        }
+
+        public long getRetainedSizeInBytes()
+        {
+            return INSTANCE_SIZE
+                    + (long) dictionaryIds.length * Integer.BYTES
+                    + (dictionary != null ? dictionary.getRetainedSizeInBytes() : 0);
+        }
+
+        public boolean canAppend(Block dictionary)
+        {
+            return !closed && (dictionary == this.dictionary || this.dictionary == null);
+        }
+
+        public void append(IntArrayList mappedPositions, Block dictionary)
+        {
+            checkArgument(canAppend(dictionary));
+            this.dictionary = dictionary;
+            ensureCapacity(positionCount + mappedPositions.size());
+            int startOffset = positionCount;
+            int positionsCount = mappedPositions.size();
+            for (int i = 0; i < positionsCount; i++) {
+                dictionaryIds[startOffset + i] = mappedPositions.getInt(i);
+            }
+//            System.arraycopy(mappedPositions.elements(), 0, dictionaryIds, positionCount, mappedPositions.size());
+            positionCount += mappedPositions.size();
+        }
+
+        private void ensureCapacity(int capacity)
+        {
+            if (dictionaryIds.length >= capacity) {
+                return;
+            }
+
+            int newSize;
+            if (dictionaryIds.length > 0) {
+                newSize = calculateNewArraySize(dictionaryIds.length);
+            }
+            else {
+                newSize = initialEntryCount;
+            }
+            newSize = Math.max(newSize, capacity);
+
+            dictionaryIds = IntArrays.ensureCapacity(dictionaryIds, newSize, positionCount);
+        }
+
+        public void flushDictionary(PositionsAppender delegate)
+        {
+            if (positionCount > 0) {
+                checkNotNull(dictionary, "dictionary is null but we have pending dictionaryIds (%s)", positionCount);
+                delegate.append(IntArrayList.wrap(dictionaryIds, positionCount), dictionary);
+            }
+
+            closed = true;
+            dictionaryIds = new int[0];
+            positionCount = 0;
+            dictionary = null;
+        }
+
+        public DictionaryBlockBuilder newBuilderLike()
+        {
+            return new DictionaryBlockBuilder(max(calculateBlockResetSize(positionCount), initialEntryCount));
+        }
     }
 }

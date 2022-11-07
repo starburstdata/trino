@@ -197,6 +197,55 @@ public class TestPositionsAppender
     }
 
     @Test(dataProvider = "types")
+    public void testMultipleTheSameDictionariesProduceDictionary(TestType type)
+    {
+        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type.getType(), 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES);
+
+        testMultipleTheSameDictionariesProduceDictionary(type, positionsAppender);
+        // test if appender can accept different dictionary after a build
+        testMultipleTheSameDictionariesProduceDictionary(type, positionsAppender);
+    }
+
+    private void testMultipleTheSameDictionariesProduceDictionary(TestType type, PositionsAppender positionsAppender)
+    {
+        Block dictionary = createRandomBlockForType(type, 4, 0);
+        positionsAppender.append(allPositions(3), createRandomDictionaryBlock(dictionary, 3));
+        positionsAppender.append(allPositions(2), createRandomDictionaryBlock(dictionary, 2));
+
+        Block actual = positionsAppender.build();
+        assertEquals(actual.getPositionCount(), 5);
+        assertInstanceOf(actual, DictionaryBlock.class);
+        assertEquals(((DictionaryBlock) actual).getDictionary(), dictionary);
+    }
+
+    @Test(dataProvider = "types")
+    public void testDictionarySwitchToFlat(TestType type)
+    {
+        List<BlockView> inputs = ImmutableList.of(
+                input(dictionaryBlock(type, 3, 4, 0), 0, 1),
+                input(notNullBlock(type, 2), 0, 1));
+        testAppend(type, inputs);
+    }
+
+    @Test(dataProvider = "types")
+    public void testFlatAppendDictionary(TestType type)
+    {
+        List<BlockView> inputs = ImmutableList.of(
+                input(notNullBlock(type, 2), 0, 1),
+                input(dictionaryBlock(type, 3, 4, 0), 0, 1));
+        testAppend(type, inputs);
+    }
+
+    @Test(dataProvider = "types")
+    public void testDictionaryAppendDifferentDictionary(TestType type)
+    {
+        List<BlockView> dictionaryInputs = ImmutableList.of(
+                input(dictionaryBlock(type, 3, 4, 0), 0, 1),
+                input(dictionaryBlock(type, 2, 4, 0), 0, 1));
+        testAppend(type, dictionaryInputs);
+    }
+
+    @Test(dataProvider = "types")
     public void testConsecutiveBuilds(TestType type)
     {
         PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type.getType(), 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES);
@@ -226,6 +275,11 @@ public class TestPositionsAppender
         Block nullRleBlock = nullRleBlock(type, 10);
         positionsAppender.append(allPositions(10), nullRleBlock);
         assertBlockEquals(type.getType(), positionsAppender.build(), nullRleBlock);
+
+        // append dictionary
+        Block dictionaryBlock = dictionaryBlock(type, 10, 5, 0);
+        positionsAppender.append(allPositions(10), dictionaryBlock);
+        assertBlockEquals(type.getType(), positionsAppender.build(), dictionaryBlock);
 
         // just build to confirm appender was reset
         assertEquals(positionsAppender.build().getPositionCount(), 0);
