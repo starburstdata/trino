@@ -15,6 +15,7 @@ package io.trino.operator;
 
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.errorprone.annotations.FormatMethod;
@@ -348,7 +349,8 @@ public class WorkProcessorPipelineSourceOperator
                                 context.inputPositions.get(),
                                 new Duration(context.operatorTiming.getCpuNanos(), NANOSECONDS).convertTo(SECONDS).getValue(),
                                 new Duration(context.operatorTiming.getWallNanos(), NANOSECONDS).convertTo(SECONDS).getValue(),
-                                new Duration(context.blockedWallNanos.get(), NANOSECONDS).convertTo(SECONDS).getValue()),
+                                new Duration(context.blockedWallNanos.get(), NANOSECONDS).convertTo(SECONDS).getValue(),
+                                ImmutableMap.of()),
                         getConnectorMetrics(context.connectorMetrics.get(), context.readTimeNanos.get()),
 
                         DataSize.ofBytes(0),
