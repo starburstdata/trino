@@ -39,7 +39,9 @@ import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -52,6 +54,7 @@ import static io.airlift.units.DataSize.succinctBytes;
 import static io.trino.operator.BlockedReason.WAITING_FOR_MEMORY;
 import static io.trino.operator.OperatorContext.getConnectorMetrics;
 import static io.trino.operator.OperatorContext.getOperatorMetrics;
+import static io.trino.operator.OperatorContext.recordBlockType;
 import static io.trino.operator.PageUtils.recordMaterializedBytes;
 import static io.trino.operator.WorkProcessor.ProcessState.Type.BLOCKED;
 import static io.trino.operator.WorkProcessor.ProcessState.Type.FINISHED;
@@ -269,6 +272,7 @@ public class WorkProcessorPipelineSourceOperator
     {
         WorkProcessorOperatorContext operatorContext = workProcessorOperatorContexts.get(operatorIndex);
         operatorContext.outputPositions.getAndAdd(page.getPositionCount());
+        recordBlockType(page, operatorContext.outputBlockTypeCounters);
 
         WorkProcessorOperatorContext downstreamOperatorContext;
         if (!isLastOperator(operatorIndex)) {
@@ -350,7 +354,8 @@ public class WorkProcessorPipelineSourceOperator
                                 new Duration(context.operatorTiming.getCpuNanos(), NANOSECONDS).convertTo(SECONDS).getValue(),
                                 new Duration(context.operatorTiming.getWallNanos(), NANOSECONDS).convertTo(SECONDS).getValue(),
                                 new Duration(context.blockedWallNanos.get(), NANOSECONDS).convertTo(SECONDS).getValue(),
-                                ImmutableMap.of()),
+                                ImmutableMap.of(),
+                                context.outputBlockTypeCounters),
                         getConnectorMetrics(context.connectorMetrics.get(), context.readTimeNanos.get()),
 
                         DataSize.ofBytes(0),
@@ -701,6 +706,7 @@ public class WorkProcessorPipelineSourceOperator
         final AtomicLong peakUserMemoryReservation = new AtomicLong();
         final AtomicLong peakRevocableMemoryReservation = new AtomicLong();
         final AtomicLong peakTotalMemoryReservation = new AtomicLong();
+        final Map<String, Long> outputBlockTypeCounters = new ConcurrentHashMap<>();
 
         @Nullable
         volatile WorkProcessorOperator operator;

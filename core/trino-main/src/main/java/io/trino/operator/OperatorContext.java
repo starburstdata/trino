@@ -123,6 +123,7 @@ public class OperatorContext
 
     private final MemoryTrackingContext operatorMemoryContext;
     private final Map<String, Long> inputBlockTypeCounters = new ConcurrentHashMap<>();
+    private final Map<String, Long> outputBlockTypeCounters = new ConcurrentHashMap<>();
 
     public OperatorContext(
             int operatorId,
@@ -178,15 +179,15 @@ public class OperatorContext
         if (page != null) {
             inputDataSize.update(page.getSizeInBytes());
             inputPositions.update(page.getPositionCount());
-            recordBlockType(page);
+            recordBlockType(page, inputBlockTypeCounters);
         }
     }
 
-    private void recordBlockType(Page page)
+    public static void recordBlockType(Page page, Map<String, Long> blockTypeCounters)
     {
         if (page.getPositionCount() > 0) {
             for (int i = 0; i < page.getChannelCount(); i++) {
-                inputBlockTypeCounters.compute(page.getBlock(i).getClass().getSimpleName(), (ignored, count) -> count == null ? 1 : count + 1);
+                blockTypeCounters.compute(page.getBlock(i).getClass().getSimpleName(), (ignored, count) -> count == null ? 1 : count + 1);
             }
         }
     }
@@ -228,6 +229,7 @@ public class OperatorContext
         if (page != null) {
             outputDataSize.update(page.getSizeInBytes());
             outputPositions.update(page.getPositionCount());
+            recordBlockType(page, outputBlockTypeCounters);
         }
     }
 
@@ -526,14 +528,17 @@ public class OperatorContext
                 .orElseGet(() -> ImmutableList.of(getOperatorStats()));
     }
 
-    public static Metrics getOperatorMetrics(Metrics operatorMetrics, long inputPositions, double cpuTimeSeconds, double wallTimeSeconds, double blockedWallSeconds, Map<String, Long> blockTypeCounters)
+    public static Metrics getOperatorMetrics(Metrics operatorMetrics, long inputPositions, double cpuTimeSeconds, double wallTimeSeconds, double blockedWallSeconds,
+            Map<String, Long> inputBlockTypeCounters,
+            Map<String, Long> outputBlockTypeCounters)
     {
         return operatorMetrics.mergeWith(new Metrics(ImmutableMap.<String, Metric<?>>builder()
                 .put("Input rows distribution", TDigestHistogram.fromValue(inputPositions))
                 .put("CPU time distribution (s)", TDigestHistogram.fromValue(cpuTimeSeconds))
                 .put("Scheduled time distribution (s)", TDigestHistogram.fromValue(wallTimeSeconds))
                 .put("Blocked time distribution (s)", TDigestHistogram.fromValue(blockedWallSeconds))
-                .put("Input block types", MetricMap.counters(blockTypeCounters))
+                .put("Input block types", MetricMap.counters(inputBlockTypeCounters))
+                .put("Output block types", MetricMap.counters(outputBlockTypeCounters))
                 .build()));
     }
 
@@ -594,7 +599,8 @@ public class OperatorContext
                         new Duration(addInputTiming.getCpuNanos() + getOutputTiming.getCpuNanos() + finishTiming.getCpuNanos(), NANOSECONDS).convertTo(SECONDS).getValue(),
                         new Duration(addInputTiming.getWallNanos() + getOutputTiming.getWallNanos() + finishTiming.getWallNanos(), NANOSECONDS).convertTo(SECONDS).getValue(),
                         new Duration(blockedWallNanos.get(), NANOSECONDS).convertTo(SECONDS).getValue(),
-                        inputBlockTypeCounters),
+                        inputBlockTypeCounters,
+                        outputBlockTypeCounters),
                 getConnectorMetrics(connectorMetrics.get(), physicalInputReadTimeNanos.get()),
 
                 DataSize.ofBytes(physicalWrittenDataSize.get()),
