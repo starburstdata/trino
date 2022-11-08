@@ -29,9 +29,11 @@ import io.trino.memory.context.LocalMemoryContext;
 import io.trino.memory.context.MemoryTrackingContext;
 import io.trino.operator.OperationTimer.OperationTiming;
 import io.trino.plugin.base.metrics.DurationTiming;
+import io.trino.plugin.base.metrics.MetricMap;
 import io.trino.plugin.base.metrics.TDigestHistogram;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
+import io.trino.spi.metrics.Metric;
 import io.trino.spi.metrics.Metrics;
 import io.trino.sql.planner.plan.PlanNodeId;
 
@@ -40,7 +42,9 @@ import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -118,6 +122,7 @@ public class OperatorContext
     private Runnable memoryRevocationRequestListener;
 
     private final MemoryTrackingContext operatorMemoryContext;
+    private final Map<String, Long> inputBlockTypeCounters = new ConcurrentHashMap<>();
 
     public OperatorContext(
             int operatorId,
@@ -173,6 +178,16 @@ public class OperatorContext
         if (page != null) {
             inputDataSize.update(page.getSizeInBytes());
             inputPositions.update(page.getPositionCount());
+            recordBlockType(page);
+        }
+    }
+
+    private void recordBlockType(Page page)
+    {
+        if (page.getPositionCount() > 0) {
+            for (int i = 0; i < page.getChannelCount(); i++) {
+                inputBlockTypeCounters.compute(page.getBlock(i).getClass().getSimpleName(), (ignored, count) -> count == null ? 1 : count + 1);
+            }
         }
     }
 
@@ -511,13 +526,15 @@ public class OperatorContext
                 .orElseGet(() -> ImmutableList.of(getOperatorStats()));
     }
 
-    public static Metrics getOperatorMetrics(Metrics operatorMetrics, long inputPositions, double cpuTimeSeconds, double wallTimeSeconds, double blockedWallSeconds)
+    public static Metrics getOperatorMetrics(Metrics operatorMetrics, long inputPositions, double cpuTimeSeconds, double wallTimeSeconds, double blockedWallSeconds, Map<String, Long> blockTypeCounters)
     {
-        return operatorMetrics.mergeWith(new Metrics(ImmutableMap.of(
-                "Input rows distribution", TDigestHistogram.fromValue(inputPositions),
-                "CPU time distribution (s)", TDigestHistogram.fromValue(cpuTimeSeconds),
-                "Scheduled time distribution (s)", TDigestHistogram.fromValue(wallTimeSeconds),
-                "Blocked time distribution (s)", TDigestHistogram.fromValue(blockedWallSeconds))));
+        return operatorMetrics.mergeWith(new Metrics(ImmutableMap.<String, Metric<?>>builder()
+                .put("Input rows distribution", TDigestHistogram.fromValue(inputPositions))
+                .put("CPU time distribution (s)", TDigestHistogram.fromValue(cpuTimeSeconds))
+                .put("Scheduled time distribution (s)", TDigestHistogram.fromValue(wallTimeSeconds))
+                .put("Blocked time distribution (s)", TDigestHistogram.fromValue(blockedWallSeconds))
+                .put("Input block types", MetricMap.counters(blockTypeCounters))
+                .build()));
     }
 
     public static Metrics getConnectorMetrics(Metrics connectorMetrics, long physicalInputReadTimeNanos)
@@ -576,7 +593,8 @@ public class OperatorContext
                         inputPositionsCount,
                         new Duration(addInputTiming.getCpuNanos() + getOutputTiming.getCpuNanos() + finishTiming.getCpuNanos(), NANOSECONDS).convertTo(SECONDS).getValue(),
                         new Duration(addInputTiming.getWallNanos() + getOutputTiming.getWallNanos() + finishTiming.getWallNanos(), NANOSECONDS).convertTo(SECONDS).getValue(),
-                        new Duration(blockedWallNanos.get(), NANOSECONDS).convertTo(SECONDS).getValue()),
+                        new Duration(blockedWallNanos.get(), NANOSECONDS).convertTo(SECONDS).getValue(),
+                        inputBlockTypeCounters),
                 getConnectorMetrics(connectorMetrics.get(), physicalInputReadTimeNanos.get()),
 
                 DataSize.ofBytes(physicalWrittenDataSize.get()),
