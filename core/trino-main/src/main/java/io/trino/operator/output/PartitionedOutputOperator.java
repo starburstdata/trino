@@ -55,6 +55,7 @@ public class PartitionedOutputOperator
         private final OptionalInt nullChannel;
         private final DataSize maxMemory;
         private final PositionsAppenderFactory positionsAppenderFactory;
+        private final boolean pushDictionaryThroughExchangeEnabled;
 
         public PartitionedOutputFactory(
                 PartitionFunction partitionFunction,
@@ -64,7 +65,8 @@ public class PartitionedOutputOperator
                 OptionalInt nullChannel,
                 OutputBuffer outputBuffer,
                 DataSize maxMemory,
-                PositionsAppenderFactory positionsAppenderFactory)
+                PositionsAppenderFactory positionsAppenderFactory,
+                boolean pushDictionaryThroughExchangeEnabled)
         {
             this.partitionFunction = requireNonNull(partitionFunction, "partitionFunction is null");
             this.partitionChannels = requireNonNull(partitionChannels, "partitionChannels is null");
@@ -74,6 +76,7 @@ public class PartitionedOutputOperator
             this.outputBuffer = requireNonNull(outputBuffer, "outputBuffer is null");
             this.maxMemory = requireNonNull(maxMemory, "maxMemory is null");
             this.positionsAppenderFactory = requireNonNull(positionsAppenderFactory, "positionsAppenderFactory is null");
+            this.pushDictionaryThroughExchangeEnabled = pushDictionaryThroughExchangeEnabled;
         }
 
         @Override
@@ -97,7 +100,8 @@ public class PartitionedOutputOperator
                     outputBuffer,
                     serdeFactory,
                     maxMemory,
-                    positionsAppenderFactory);
+                    positionsAppenderFactory,
+                    pushDictionaryThroughExchangeEnabled);
         }
     }
 
@@ -117,6 +121,7 @@ public class PartitionedOutputOperator
         private final PagesSerdeFactory serdeFactory;
         private final DataSize maxMemory;
         private final PositionsAppenderFactory positionsAppenderFactory;
+        private final boolean pushDictionaryThroughExchangeEnabled;
 
         public PartitionedOutputOperatorFactory(
                 int operatorId,
@@ -131,7 +136,8 @@ public class PartitionedOutputOperator
                 OutputBuffer outputBuffer,
                 PagesSerdeFactory serdeFactory,
                 DataSize maxMemory,
-                PositionsAppenderFactory positionsAppenderFactory)
+                PositionsAppenderFactory positionsAppenderFactory,
+                boolean pushDictionaryThroughExchangeEnabled)
         {
             this.operatorId = operatorId;
             this.planNodeId = requireNonNull(planNodeId, "planNodeId is null");
@@ -146,6 +152,7 @@ public class PartitionedOutputOperator
             this.serdeFactory = requireNonNull(serdeFactory, "serdeFactory is null");
             this.maxMemory = requireNonNull(maxMemory, "maxMemory is null");
             this.positionsAppenderFactory = requireNonNull(positionsAppenderFactory, "positionsAppenderFactory is null");
+            this.pushDictionaryThroughExchangeEnabled = pushDictionaryThroughExchangeEnabled;
         }
 
         @Override
@@ -164,7 +171,8 @@ public class PartitionedOutputOperator
                     outputBuffer,
                     serdeFactory,
                     maxMemory,
-                    positionsAppenderFactory);
+                    positionsAppenderFactory,
+                    pushDictionaryThroughExchangeEnabled);
         }
 
         @Override
@@ -188,7 +196,8 @@ public class PartitionedOutputOperator
                     outputBuffer,
                     serdeFactory,
                     maxMemory,
-                    positionsAppenderFactory);
+                    positionsAppenderFactory,
+                    pushDictionaryThroughExchangeEnabled);
         }
     }
 
@@ -212,7 +221,8 @@ public class PartitionedOutputOperator
             OutputBuffer outputBuffer,
             PagesSerdeFactory serdeFactory,
             DataSize maxMemory,
-            PositionsAppenderFactory positionsAppenderFactory)
+            PositionsAppenderFactory positionsAppenderFactory,
+            boolean pushDictionaryThroughExchangeEnabled)
     {
         this.operatorContext = requireNonNull(operatorContext, "operatorContext is null");
         this.pagePreprocessor = requireNonNull(pagePreprocessor, "pagePreprocessor is null");
@@ -227,7 +237,8 @@ public class PartitionedOutputOperator
                 sourceTypes,
                 maxMemory,
                 operatorContext,
-                positionsAppenderFactory);
+                positionsAppenderFactory,
+                pushDictionaryThroughExchangeEnabled);
 
         operatorContext.setInfoSupplier(this.partitionFunction.getOperatorInfoSupplier());
         this.memoryContext = operatorContext.newLocalUserMemoryContext(PartitionedOutputOperator.class.getSimpleName());

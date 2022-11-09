@@ -101,6 +101,7 @@ public class FeaturesConfig
 
     private boolean hideInaccessibleColumns;
     private boolean forceSpillingJoin;
+    private boolean pushDictionaryThroughExchangeEnabled = true;
 
     public enum DataIntegrityVerification
     {
@@ -477,6 +478,19 @@ public class FeaturesConfig
     public FeaturesConfig setForceSpillingJoin(boolean forceSpillingJoin)
     {
         this.forceSpillingJoin = forceSpillingJoin;
+        return this;
+    }
+
+    public boolean isPushDictionaryThroughExchangeEnabled()
+    {
+        return pushDictionaryThroughExchangeEnabled;
+    }
+
+    @Config("push-dictionary-through-remote-exchange-enabled")
+    @ConfigDescription("Enable pushing dictionary blocks through remote partitioned exchange")
+    public FeaturesConfig setPushDictionaryThroughExchangeEnabled(boolean pushDictionaryThroughExchangeEnabled)
+    {
+        this.pushDictionaryThroughExchangeEnabled = pushDictionaryThroughExchangeEnabled;
         return this;
     }
 }

@@ -50,11 +50,12 @@ public class RowPositionsAppender
             PositionsAppenderFactory positionsAppenderFactory,
             RowType type,
             int expectedPositions,
-            long maxPageSizeInBytes)
+            long maxPageSizeInBytes,
+            boolean pushDictionaryThroughExchangeEnabled)
     {
         PositionsAppender[] fields = new PositionsAppender[type.getFields().size()];
         for (int i = 0; i < fields.length; i++) {
-            fields[i] = positionsAppenderFactory.create(type.getFields().get(i).getType(), expectedPositions, maxPageSizeInBytes);
+            fields[i] = positionsAppenderFactory.create(type.getFields().get(i).getType(), expectedPositions, maxPageSizeInBytes, pushDictionaryThroughExchangeEnabled);
         }
         return new RowPositionsAppender(fields, expectedPositions);
     }

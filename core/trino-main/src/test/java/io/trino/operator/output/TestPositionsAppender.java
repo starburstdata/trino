@@ -185,7 +185,7 @@ public class TestPositionsAppender
     @Test(dataProvider = "types")
     public void testMultipleRleWithTheSameValueProduceRle(TestType type)
     {
-        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type.getType(), 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES);
+        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type.getType(), 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES, true);
 
         Block value = notNullBlock(type, 1);
         positionsAppender.append(allPositions(3), rleBlock(value, 3));
@@ -199,7 +199,7 @@ public class TestPositionsAppender
     @Test(dataProvider = "types")
     public void testMultipleTheSameDictionariesProduceDictionary(TestType type)
     {
-        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type.getType(), 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES);
+        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type.getType(), 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES, true);
 
         testMultipleTheSameDictionariesProduceDictionary(type, positionsAppender);
         // test if appender can accept different dictionary after a build
@@ -248,7 +248,7 @@ public class TestPositionsAppender
     @Test(dataProvider = "types")
     public void testConsecutiveBuilds(TestType type)
     {
-        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type.getType(), 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES);
+        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type.getType(), 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES, true);
 
         // empty block
         positionsAppender.append(positions(), emptyBlock(type));
@@ -291,7 +291,7 @@ public class TestPositionsAppender
     @Test(priority = Integer.MIN_VALUE)
     public void testSliceRle()
     {
-        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(VARCHAR, 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES);
+        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(VARCHAR, 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES, true);
 
         // first append some not empty value to avoid RleAwarePositionsAppender for the empty value
         positionsAppender.appendRle(singleValueBlock("some value"), 1);
@@ -312,7 +312,7 @@ public class TestPositionsAppender
                 rleBlock(TestType.VARCHAR, 2)
         });
 
-        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type, 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES);
+        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type, 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES, true);
 
         positionsAppender.append(allPositions(2), rowBLock);
         Block actual = positionsAppender.build();
@@ -417,7 +417,7 @@ public class TestPositionsAppender
 
     private void testNullRle(Type type, Block source)
     {
-        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type, 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES);
+        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type, 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES, true);
         // extract null positions
         IntArrayList positions = new IntArrayList(source.getPositionCount());
         for (int i = 0; i < source.getPositionCount(); i++) {
@@ -436,7 +436,7 @@ public class TestPositionsAppender
 
     private void testAppend(TestType type, List<BlockView> inputs)
     {
-        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type.getType(), 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES);
+        PositionsAppender positionsAppender = POSITIONS_APPENDER_FACTORY.create(type.getType(), 10, DEFAULT_MAX_PAGE_SIZE_IN_BYTES, true);
         long initialRetainedSize = positionsAppender.getRetainedSizeInBytes();
 
         inputs.forEach(input -> positionsAppender.append(input.getPositions(), input.getBlock()));

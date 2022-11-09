@@ -32,19 +32,20 @@ public class PositionsAppenderFactory
         this.blockTypeOperators = requireNonNull(blockTypeOperators, "blockTypeOperators is null");
     }
 
-    public PositionsAppender create(Type type, int expectedPositions, long maxPageSizeInBytes)
+    public PositionsAppender create(Type type, int expectedPositions, long maxPageSizeInBytes, boolean pushDictionaryThroughExchangeEnabled)
     {
         if (!type.isComparable()) {
-            return new UnnestingPositionsAppender(createPrimitiveAppender(type, expectedPositions, maxPageSizeInBytes));
+            return new UnnestingPositionsAppender(createPrimitiveAppender(type, expectedPositions, maxPageSizeInBytes, pushDictionaryThroughExchangeEnabled), pushDictionaryThroughExchangeEnabled);
         }
 
         return new UnnestingPositionsAppender(
                 new RleAwarePositionsAppender(
                         blockTypeOperators.getEqualOperator(type),
-                        createPrimitiveAppender(type, expectedPositions, maxPageSizeInBytes)));
+                        createPrimitiveAppender(type, expectedPositions, maxPageSizeInBytes, pushDictionaryThroughExchangeEnabled)),
+                pushDictionaryThroughExchangeEnabled);
     }
 
-    private PositionsAppender createPrimitiveAppender(Type type, int expectedPositions, long maxPageSizeInBytes)
+    private PositionsAppender createPrimitiveAppender(Type type, int expectedPositions, long maxPageSizeInBytes, boolean pushDictionaryThroughExchangeEnabled)
     {
         if (type instanceof FixedWidthType) {
             switch (((FixedWidthType) type).getFixedSize()) {
@@ -68,7 +69,7 @@ public class PositionsAppenderFactory
             return new SlicePositionsAppender(expectedPositions, maxPageSizeInBytes);
         }
         else if (type instanceof RowType) {
-            return RowPositionsAppender.createRowAppender(this, (RowType) type, expectedPositions, maxPageSizeInBytes);
+            return RowPositionsAppender.createRowAppender(this, (RowType) type, expectedPositions, maxPageSizeInBytes, pushDictionaryThroughExchangeEnabled);
         }
 
         return new TypedPositionsAppender(type, expectedPositions);

@@ -592,7 +592,8 @@ public class TestPagePartitioner
                     nullChannel,
                     outputBuffer,
                     PARTITION_MAX_MEMORY,
-                    POSITIONS_APPENDER_FACTORY);
+                    POSITIONS_APPENDER_FACTORY,
+                    true);
 
             return (PartitionedOutputOperator) operatorFactory
                     .createOutputOperator(0, new PlanNodeId("plan-node-0"), types, Function.identity(), PAGES_SERDE_FACTORY)
@@ -616,7 +617,8 @@ public class TestPagePartitioner
                     types,
                     PARTITION_MAX_MEMORY,
                     operatorContext,
-                    POSITIONS_APPENDER_FACTORY);
+                    POSITIONS_APPENDER_FACTORY,
+                    true);
         }
 
         private DriverContext buildDriverContext()

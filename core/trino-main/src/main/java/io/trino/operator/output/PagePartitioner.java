@@ -85,7 +85,8 @@ public class PagePartitioner
             List<Type> sourceTypes,
             DataSize maxMemory,
             OperatorContext operatorContext,
-            PositionsAppenderFactory positionsAppenderFactory)
+            PositionsAppenderFactory positionsAppenderFactory,
+            boolean pushDictionaryThroughExchangeEnabled)
     {
         this.partitionFunction = requireNonNull(partitionFunction, "partitionFunction is null");
         this.partitionChannels = Ints.toArray(requireNonNull(partitionChannels, "partitionChannels is null"));
@@ -120,7 +121,7 @@ public class PagePartitioner
 
         this.positionsAppenders = new PositionsAppenderPageBuilder[partitionCount];
         for (int i = 0; i < partitionCount; i++) {
-            positionsAppenders[i] = PositionsAppenderPageBuilder.withMaxPageSize(pageSize, sourceTypes, positionsAppenderFactory);
+            positionsAppenders[i] = PositionsAppenderPageBuilder.withMaxPageSize(pageSize, sourceTypes, positionsAppenderFactory, pushDictionaryThroughExchangeEnabled);
         }
         this.pageBuilders = new PageBuilder[partitionCount];
         for (int i = 0; i < partitionCount; i++) {

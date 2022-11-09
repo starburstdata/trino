@@ -308,6 +308,7 @@ import static io.trino.SystemSessionProperties.isEnableLargeDynamicFilters;
 import static io.trino.SystemSessionProperties.isExchangeCompressionEnabled;
 import static io.trino.SystemSessionProperties.isForceSpillingOperator;
 import static io.trino.SystemSessionProperties.isLateMaterializationEnabled;
+import static io.trino.SystemSessionProperties.isPushDictionaryThroughExchangeEnabled;
 import static io.trino.SystemSessionProperties.isSpillEnabled;
 import static io.trino.collect.cache.CacheUtils.uncheckedCacheGet;
 import static io.trino.collect.cache.SafeCaches.buildNonEvictableCache;
@@ -582,7 +583,8 @@ public class LocalExecutionPlanner
                         nullChannel,
                         outputBuffer,
                         maxPagePartitioningBufferSize,
-                        positionsAppenderFactory));
+                        positionsAppenderFactory,
+                        isPushDictionaryThroughExchangeEnabled(taskContext.getSession())));
     }
 
     public LocalExecutionPlan plan(

@@ -30,16 +30,17 @@ public class PositionsAppenderPageBuilder
     private final int maxPageSizeInBytes;
     private int declaredPositions;
 
-    public static PositionsAppenderPageBuilder withMaxPageSize(int maxPageBytes, List<Type> sourceTypes, PositionsAppenderFactory positionsAppenderFactory)
+    public static PositionsAppenderPageBuilder withMaxPageSize(int maxPageBytes, List<Type> sourceTypes, PositionsAppenderFactory positionsAppenderFactory, boolean pushDictionaryThroughExchangeEnabled1)
     {
-        return new PositionsAppenderPageBuilder(DEFAULT_INITIAL_EXPECTED_ENTRIES, maxPageBytes, sourceTypes, positionsAppenderFactory);
+        return new PositionsAppenderPageBuilder(DEFAULT_INITIAL_EXPECTED_ENTRIES, maxPageBytes, sourceTypes, positionsAppenderFactory, pushDictionaryThroughExchangeEnabled1);
     }
 
     private PositionsAppenderPageBuilder(
             int initialExpectedEntries,
             int maxPageSizeInBytes,
             List<? extends Type> types,
-            PositionsAppenderFactory positionsAppenderFactory)
+            PositionsAppenderFactory positionsAppenderFactory,
+            boolean pushDictionaryThroughExchangeEnabled)
     {
         requireNonNull(types, "types is null");
         requireNonNull(positionsAppenderFactory, "positionsAppenderFactory is null");
@@ -47,7 +48,7 @@ public class PositionsAppenderPageBuilder
         this.maxPageSizeInBytes = maxPageSizeInBytes;
         channelAppenders = new PositionsAppender[types.size()];
         for (int i = 0; i < channelAppenders.length; i++) {
-            channelAppenders[i] = positionsAppenderFactory.create(types.get(i), initialExpectedEntries, maxPageSizeInBytes);
+            channelAppenders[i] = positionsAppenderFactory.create(types.get(i), initialExpectedEntries, maxPageSizeInBytes, pushDictionaryThroughExchangeEnabled);
         }
     }
 

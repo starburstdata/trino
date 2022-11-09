@@ -37,10 +37,12 @@ public class UnnestingPositionsAppender
 
     private final PositionsAppender delegate;
     private DictionaryBlockBuilder dictionaryBlockBuilder;
+    private boolean pushDictionaryThroughExchangeEnabled;
 
-    public UnnestingPositionsAppender(PositionsAppender delegate)
+    public UnnestingPositionsAppender(PositionsAppender delegate, boolean pushDictionaryThroughExchangeEnabled)
     {
         this.delegate = requireNonNull(delegate, "delegate is null");
+        this.pushDictionaryThroughExchangeEnabled = pushDictionaryThroughExchangeEnabled;
         this.dictionaryBlockBuilder = new DictionaryBlockBuilder(0);
     }
 
@@ -102,7 +104,7 @@ public class UnnestingPositionsAppender
     {
         Block dictionary = source.getDictionary();
         IntArrayList mappedPositions = mapPositions(positions, source);
-        if (dictionaryBlockBuilder.canAppend(dictionary)) {
+        if (pushDictionaryThroughExchangeEnabled && dictionaryBlockBuilder.canAppend(dictionary)) {
             dictionaryBlockBuilder.append(mappedPositions, dictionary);
         }
         else {

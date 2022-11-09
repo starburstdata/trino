@@ -175,6 +175,7 @@ public final class SystemSessionProperties
     public static final String USE_EXACT_PARTITIONING = "use_exact_partitioning";
     public static final String FORCE_SPILLING_JOIN = "force_spilling_join";
     public static final String FAULT_TOLERANT_EXECUTION_EVENT_DRIVEN_SCHEDULER_ENABLED = "fault_tolerant_execution_event_driven_scheduler_enabled";
+    public static final String PUSH_DICTIONARY_THROUGH_REMOTE_EXCHANGE_ENABLED = "push_dictionary_through_remote_exchange_enabled";
 
     private final List<PropertyMetadata<?>> sessionProperties;
 
@@ -865,6 +866,11 @@ public final class SystemSessionProperties
                         FAULT_TOLERANT_EXECUTION_EVENT_DRIVEN_SCHEDULER_ENABLED,
                         "Enable event driven scheduler for fault tolerant execution",
                         queryManagerConfig.isFaultTolerantExecutionEventDrivenSchedulerEnabled(),
+                        true),
+                booleanProperty(
+                        PUSH_DICTIONARY_THROUGH_REMOTE_EXCHANGE_ENABLED,
+                        "Enable pushing dictionary blocks through remote partitioned exchange",
+                        featuresConfig.isPushDictionaryThroughExchangeEnabled(),
                         true));
     }
 
@@ -1547,5 +1553,10 @@ public final class SystemSessionProperties
     public static boolean isFaultTolerantExecutionEventDriverSchedulerEnabled(Session session)
     {
         return session.getSystemProperty(FAULT_TOLERANT_EXECUTION_EVENT_DRIVEN_SCHEDULER_ENABLED, Boolean.class);
+    }
+
+    public static boolean isPushDictionaryThroughExchangeEnabled(Session session)
+    {
+        return session.getSystemProperty(PUSH_DICTIONARY_THROUGH_REMOTE_EXCHANGE_ENABLED, Boolean.class);
     }
 }
