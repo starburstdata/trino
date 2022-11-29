@@ -16,6 +16,7 @@ package io.trino.parquet;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ListMultimap;
+import com.google.common.primitives.Ints;
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
 import io.airlift.units.DataSize;
@@ -209,9 +210,20 @@ public abstract class AbstractParquetDataSource
             return ImmutableListMultimap.of();
         }
 
+        long maxBufferSizeBytes = options.getMaxBufferSize().toBytes();
         ImmutableListMultimap.Builder<K, ChunkReader> slices = ImmutableListMultimap.builder();
         for (Map.Entry<K, DiskRange> entry : diskRanges.entries()) {
-            slices.put(entry.getKey(), new ReferenceCountedReader(entry.getValue()));
+            long offset = entry.getValue().getOffset();
+            if (maxBufferSizeBytes > 0) {
+                while (offset + maxBufferSizeBytes < entry.getValue().getLength()) {
+                    slices.put(entry.getKey(), new ReferenceCountedReader(new DiskRange(offset, Ints.checkedCast(maxBufferSizeBytes))));
+                    offset += maxBufferSizeBytes;
+                }
+            }
+            long lengthLeft = entry.getValue().getLength() - (offset - entry.getValue().getOffset());
+            if (lengthLeft > 0) {
+                slices.put(entry.getKey(), new ReferenceCountedReader(new DiskRange(offset, Ints.checkedCast(lengthLeft))));
+            }
         }
         return slices.build();
     }

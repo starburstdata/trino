@@ -327,7 +327,6 @@ public class FlatColumnReader<BufferType>
         else {
             dictionary = null;
         }
-        checkArgument(pageReader.getTotalValueCount() > 0, "page is empty");
         this.rowRanges = createRowRangesIterator(rowRanges);
     }
 

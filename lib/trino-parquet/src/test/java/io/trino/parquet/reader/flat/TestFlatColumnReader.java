@@ -557,7 +557,7 @@ public class TestFlatColumnReader
                 encoding,
                 encoding,
                 PLAIN));
-        return new PageReader(UNCOMPRESSED, pages, null, 1, false);
+        return new PageReader(UNCOMPRESSED, pages.iterator(), null, false);
     }
 
     private static PageReader getNullOnlyPageReaderMock()
@@ -575,7 +575,7 @@ public class TestFlatColumnReader
                 RLE,
                 RLE,
                 PLAIN));
-        return new PageReader(UNCOMPRESSED, pages, null, 1, false);
+        return new PageReader(UNCOMPRESSED, pages.iterator(), null, false);
     }
 
     private static PageReader getPageReaderMock(LinkedList<DataPage> dataPages, @Nullable DictionaryPage dictionaryPage)
@@ -587,11 +587,8 @@ public class TestFlatColumnReader
     {
         return new PageReader(
                 UNCOMPRESSED,
-                dataPages,
+                dataPages.iterator(),
                 dictionaryPage,
-                dataPages.stream()
-                        .mapToInt(DataPage::getValueCount)
-                        .sum(),
                 hasNoNulls);
     }
 

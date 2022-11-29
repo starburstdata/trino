@@ -16,6 +16,7 @@ package io.trino.parquet.reader;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterators;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
@@ -51,6 +52,7 @@ import it.unimi.dsi.fastutil.booleans.BooleanList;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
 import org.apache.parquet.column.ColumnDescriptor;
+import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.filter2.compat.FilterCompat;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
@@ -67,6 +69,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -437,7 +440,7 @@ public class ParquetReader
             if (rowRanges != null) {
                 offsetIndex = getFilteredOffsetIndex(rowRanges, currentRowGroup, currentBlockMetadata.getRowCount(), metadata.getPath());
             }
-            List<Slice> slices = allocateBlock(fieldId);
+            Iterator<Slice> slices = allocateBlock(fieldId);
             columnReader.setPageReader(createPageReader(slices, metadata, columnDescriptor, offsetIndex), Optional.ofNullable(rowRanges));
         }
         ColumnChunk columnChunk = columnReader.readPrimitive();
@@ -464,27 +467,32 @@ public class ParquetReader
         return new Metrics(metrics.buildOrThrow());
     }
 
-    private PageReader createPageReader(List<Slice> slices, ColumnChunkMetaData metadata, ColumnDescriptor columnDescriptor, OffsetIndex offsetIndex)
+    private PageReader createPageReader(Iterator<Slice> slices, ColumnChunkMetaData metadata, ColumnDescriptor columnDescriptor, OffsetIndex offsetIndex)
             throws IOException
     {
-        ColumnChunkDescriptor descriptor = new ColumnChunkDescriptor(columnDescriptor, metadata);
-        ParquetColumnChunk columnChunk = new ParquetColumnChunk(fileCreatedBy, descriptor, slices, offsetIndex);
-        return columnChunk.readAllPages();
+        // Parquet schema may specify a column definition as OPTIONAL even though there are no nulls in the actual data.
+        // Row-group column statistics can be used to identify such cases and switch to faster non-nullable read
+        // paths in FlatColumnReader.
+        Statistics<?> columnStatistics = metadata.getStatistics();
+        boolean hasNoNulls = columnStatistics != null && columnStatistics.getNumNulls() == 0;
+        ParquetColumnChunkIterator compressedPages = new ParquetColumnChunkIterator(
+                fileCreatedBy,
+                new ColumnChunkDescriptor(columnDescriptor, metadata),
+                ChunkedInputStream.from(slices),
+                offsetIndex);
+        return new PageReader(metadata.getCodec(), compressedPages, compressedPages.getDictionaryPage(), hasNoNulls);
     }
 
-    private List<Slice> allocateBlock(int fieldId)
-            throws IOException
+    private Iterator<Slice> allocateBlock(int fieldId)
     {
         Collection<ChunkReader> readers = chunkReaders.get(new ChunkKey(fieldId, currentRowGroup));
-        List<Slice> slices = Lists.newArrayListWithExpectedSize(readers.size());
-        for (ChunkReader reader : readers) {
-            Slice slice = reader.read();
+        return Iterators.transform(readers.iterator(), reader -> {
+            Slice slice = reader.readUnchecked();
             // todo this just an estimate and doesn't reflect actual retained memory
             currentRowGroupMemoryContext.newLocalMemoryContext(ParquetReader.class.getSimpleName())
                     .setBytes(slice.length());
-            slices.add(slice);
-        }
-        return slices;
+            return slice;
+        });
     }
 
     private ColumnChunkMetaData getColumnChunkMetaData(BlockMetaData blockMetaData, ColumnDescriptor columnDescriptor)

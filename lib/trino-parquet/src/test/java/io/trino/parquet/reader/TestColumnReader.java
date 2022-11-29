@@ -357,9 +357,8 @@ public class TestColumnReader
         }
         return new PageReader(
                 UNCOMPRESSED,
-                inputPages,
+                inputPages.iterator(),
                 dictionaryPage,
-                pagesRowCount(testingPages),
                 false);
     }
 

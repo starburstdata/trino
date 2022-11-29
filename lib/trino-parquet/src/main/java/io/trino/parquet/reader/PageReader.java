@@ -13,6 +13,8 @@
  */
 package io.trino.parquet.reader;
 
+import com.google.common.collect.Iterators;
+import com.google.common.collect.PeekingIterator;
 import io.trino.parquet.DataPage;
 import io.trino.parquet.DataPageV1;
 import io.trino.parquet.DataPageV2;
@@ -20,38 +22,26 @@ import io.trino.parquet.DictionaryPage;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import java.io.IOException;
-import java.util.LinkedList;
+import java.util.Iterator;
 
 import static io.trino.parquet.ParquetCompressionUtils.decompress;
 
 public final class PageReader
 {
     private final CompressionCodecName codec;
-    private final long valueCount;
     private final boolean hasNoNulls;
-    private final LinkedList<DataPage> compressedPages;
+    private final PeekingIterator<DataPage> compressedPages;
     private final DictionaryPage compressedDictionaryPage;
 
-    /**
-     * @param compressedPages This parameter will be mutated destructively as {@link DataPage} entries are removed as part of {@link #readPage()}. The caller
-     * should not retain a reference to this list after passing it in as a constructor argument.
-     */
     public PageReader(CompressionCodecName codec,
-                      LinkedList<DataPage> compressedPages,
-                      DictionaryPage compressedDictionaryPage,
-                      long valueCount,
-                      boolean hasNoNulls)
+            Iterator<DataPage> compressedPages,
+            DictionaryPage compressedDictionaryPage,
+            boolean hasNoNulls)
     {
         this.codec = codec;
-        this.compressedPages = compressedPages;
+        this.compressedPages = Iterators.peekingIterator(compressedPages);
         this.compressedDictionaryPage = compressedDictionaryPage;
-        this.valueCount = valueCount;
         this.hasNoNulls = hasNoNulls;
-    }
-
-    public long getTotalValueCount()
-    {
-        return valueCount;
     }
 
     public boolean hasNoNulls()
@@ -61,10 +51,10 @@ public final class PageReader
 
     public DataPage readPage()
     {
-        if (compressedPages.isEmpty()) {
+        if (!compressedPages.hasNext()) {
             return null;
         }
-        DataPage compressedPage = compressedPages.removeFirst();
+        DataPage compressedPage = compressedPages.next();
         try {
             if (compressedPage instanceof DataPageV1) {
                 DataPageV1 dataPageV1 = (DataPageV1) compressedPage;
@@ -120,16 +110,16 @@ public final class PageReader
 
     public DataPage getNextPage()
     {
-        return compressedPages.getFirst();
+        return compressedPages.peek();
     }
 
     public boolean hasNext()
     {
-        return !compressedPages.isEmpty();
+        return compressedPages.hasNext();
     }
 
     public void skipNextPage()
     {
-        compressedPages.removeFirst();
+        compressedPages.next();
     }
 }

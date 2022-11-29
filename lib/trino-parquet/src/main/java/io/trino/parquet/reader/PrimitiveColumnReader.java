@@ -60,7 +60,6 @@ public abstract class PrimitiveColumnReader
     private int nextBatchSize;
     private LevelReader repetitionReader;
     private LevelReader definitionReader;
-    private long totalValueCount;
     private PageReader pageReader;
     private Dictionary dictionary;
     private int currentValueCount;
@@ -117,8 +116,6 @@ public abstract class PrimitiveColumnReader
         else {
             dictionary = null;
         }
-        checkArgument(pageReader.getTotalValueCount() > 0, "page is empty");
-        totalValueCount = pageReader.getTotalValueCount();
         if (rowRanges.isPresent()) {
             indexIterator = rowRanges.get().getParquetRowRanges().iterator();
             // If rowRanges is empty for a row-group, then no page needs to be read, and we should not reach here
@@ -255,7 +252,6 @@ public abstract class PrimitiveColumnReader
 
     private void seek()
     {
-        checkArgument(currentValueCount <= totalValueCount, "Already read all values in column chunk");
         if (readOffset == 0) {
             return;
         }

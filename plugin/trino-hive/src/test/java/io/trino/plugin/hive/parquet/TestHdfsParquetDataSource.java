@@ -54,12 +54,12 @@ public class TestHdfsParquetDataSource
                 new FileFormatDataSourceStats());
 
         ListMultimap<String, ChunkReader> chunkReaders = dataSource.planRead(ImmutableListMultimap.<String, DiskRange>builder()
-                .putAll("test", new DiskRange(0, 300), new DiskRange(400, 100), new DiskRange(700, 200))
+                .putAll("test", new DiskRange(0, 200), new DiskRange(400, 100), new DiskRange(700, 200))
                 .build());
         assertThat(chunkReaders.get("test"))
                 .map(ChunkReader::read)
                 .isEqualTo(ImmutableList.of(
-                        testingInput.slice(0, 300),
+                        testingInput.slice(0, 200),
                         testingInput.slice(400, 100),
                         testingInput.slice(700, 200)));
     }
