@@ -107,7 +107,7 @@ public class FeaturesConfig
     private boolean hideInaccessibleColumns;
     private boolean forceSpillingJoin;
 
-    private boolean queryFusionEnabled;
+    private boolean queryFusionEnabled = true;
     private boolean queryFusionForJoingbEnabled = true;
     private boolean queryFusionForGbjoingbEnabled = true;
     private boolean queryFusionForPushunionbelowjoinEnabled = true;
