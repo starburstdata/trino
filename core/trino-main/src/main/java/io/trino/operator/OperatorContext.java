@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.airlift.stats.CounterStat;
+import io.airlift.stats.TDigest;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import io.trino.Session;
@@ -87,6 +88,7 @@ public class OperatorContext
     private final OperationTiming addInputTiming = new OperationTiming();
     private final CounterStat inputDataSize = new CounterStat();
     private final CounterStat inputPositions = new CounterStat();
+    private final TDigest inputPageSize = new TDigest();
 
     private final OperationTiming getOutputTiming = new OperationTiming();
     private final CounterStat outputDataSize = new CounterStat();
@@ -180,6 +182,7 @@ public class OperatorContext
             inputDataSize.update(page.getSizeInBytes());
             inputPositions.update(page.getPositionCount());
             recordBlockType(page, inputBlockTypeCounters);
+            inputPageSize.add(page.getPositionCount());
         }
     }
 
@@ -528,12 +531,19 @@ public class OperatorContext
                 .orElseGet(() -> ImmutableList.of(getOperatorStats()));
     }
 
-    public static Metrics getOperatorMetrics(Metrics operatorMetrics, long inputPositions, double cpuTimeSeconds, double wallTimeSeconds, double blockedWallSeconds,
+    public static Metrics getOperatorMetrics(
+            Metrics operatorMetrics,
+            long inputPositions,
+            double cpuTimeSeconds,
+            double wallTimeSeconds,
+            double blockedWallSeconds,
             Map<String, Long> inputBlockTypeCounters,
-            Map<String, Long> outputBlockTypeCounters)
+            Map<String, Long> outputBlockTypeCounters,
+            TDigest inputPageSize)
     {
         return operatorMetrics.mergeWith(new Metrics(ImmutableMap.<String, Metric<?>>builder()
                 .put("Input rows distribution", TDigestHistogram.fromValue(inputPositions))
+                .put("Input page size distribution", new TDigestHistogram(inputPageSize))
                 .put("CPU time distribution (s)", TDigestHistogram.fromValue(cpuTimeSeconds))
                 .put("Scheduled time distribution (s)", TDigestHistogram.fromValue(wallTimeSeconds))
                 .put("Blocked time distribution (s)", TDigestHistogram.fromValue(blockedWallSeconds))
@@ -600,7 +610,8 @@ public class OperatorContext
                         new Duration(addInputTiming.getWallNanos() + getOutputTiming.getWallNanos() + finishTiming.getWallNanos(), NANOSECONDS).convertTo(SECONDS).getValue(),
                         new Duration(blockedWallNanos.get(), NANOSECONDS).convertTo(SECONDS).getValue(),
                         inputBlockTypeCounters,
-                        outputBlockTypeCounters),
+                        outputBlockTypeCounters,
+                        inputPageSize),
                 getConnectorMetrics(connectorMetrics.get(), physicalInputReadTimeNanos.get()),
 
                 DataSize.ofBytes(physicalWrittenDataSize.get()),

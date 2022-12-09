@@ -20,6 +20,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.errorprone.annotations.FormatMethod;
 import io.airlift.log.Logger;
+import io.airlift.stats.TDigest;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import io.trino.memory.context.AggregatedMemoryContext;
@@ -278,6 +279,8 @@ public class WorkProcessorPipelineSourceOperator
         if (!isLastOperator(operatorIndex)) {
             downstreamOperatorContext = workProcessorOperatorContexts.get(operatorIndex + 1);
             downstreamOperatorContext.inputPositions.getAndAdd(page.getPositionCount());
+            downstreamOperatorContext.inputPageSize.add(page.getPositionCount());
+            recordBlockType(page, downstreamOperatorContext.inputBlockTypeCounters);
         }
         else {
             downstreamOperatorContext = null;
@@ -354,8 +357,9 @@ public class WorkProcessorPipelineSourceOperator
                                 new Duration(context.operatorTiming.getCpuNanos(), NANOSECONDS).convertTo(SECONDS).getValue(),
                                 new Duration(context.operatorTiming.getWallNanos(), NANOSECONDS).convertTo(SECONDS).getValue(),
                                 new Duration(context.blockedWallNanos.get(), NANOSECONDS).convertTo(SECONDS).getValue(),
-                                ImmutableMap.of(),
-                                context.outputBlockTypeCounters),
+                                context.inputBlockTypeCounters,
+                                context.outputBlockTypeCounters,
+                                context.inputPageSize),
                         getConnectorMetrics(context.connectorMetrics.get(), context.readTimeNanos.get()),
 
                         DataSize.ofBytes(0),
@@ -693,6 +697,7 @@ public class WorkProcessorPipelineSourceOperator
 
         final AtomicLong inputDataSize = new AtomicLong();
         final AtomicLong inputPositions = new AtomicLong();
+        final TDigest inputPageSize = new TDigest();
 
         final AtomicLong readTimeNanos = new AtomicLong();
 
@@ -706,6 +711,7 @@ public class WorkProcessorPipelineSourceOperator
         final AtomicLong peakUserMemoryReservation = new AtomicLong();
         final AtomicLong peakRevocableMemoryReservation = new AtomicLong();
         final AtomicLong peakTotalMemoryReservation = new AtomicLong();
+        final Map<String, Long> inputBlockTypeCounters = new ConcurrentHashMap<>();
         final Map<String, Long> outputBlockTypeCounters = new ConcurrentHashMap<>();
 
         @Nullable
