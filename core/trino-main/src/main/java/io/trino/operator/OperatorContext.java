@@ -543,7 +543,7 @@ public class OperatorContext
     {
         return operatorMetrics.mergeWith(new Metrics(ImmutableMap.<String, Metric<?>>builder()
                 .put("Input rows distribution", TDigestHistogram.fromValue(inputPositions))
-                .put("Input page size distribution", new TDigestHistogram(inputPageSize))
+                .put("Input page size distribution", new TDigestHistogram(TDigest.copyOf(inputPageSize)))
                 .put("CPU time distribution (s)", TDigestHistogram.fromValue(cpuTimeSeconds))
                 .put("Scheduled time distribution (s)", TDigestHistogram.fromValue(wallTimeSeconds))
                 .put("Blocked time distribution (s)", TDigestHistogram.fromValue(blockedWallSeconds))
