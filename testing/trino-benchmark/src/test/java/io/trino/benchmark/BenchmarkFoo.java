@@ -47,7 +47,7 @@ public class BenchmarkFoo
     public int first;
     public int second;
     public final MethodHandle mhh;
-    public MethodHandle metaSum;
+    public MethodHandle metaSum1;
     public MethodHandle metaSum2;
     public MethodHandle metaSum3;
     public MethodHandle metaSum4;
@@ -85,7 +85,7 @@ public class BenchmarkFoo
     public int metaMethodHandle()
             throws Throwable
     {
-        int val = (int) metaSum.invokeExact(first, 4 * 2500);
+        int val = (int) metaSum1.invokeExact(first, 4 * 2500);
         //val += (int) metaSum2.invokeExact(first, 2500);
         //val += (int) metaSum3.invokeExact(first, 2500);
         //val += (int) metaSum4.invokeExact(first, 2500);
@@ -123,14 +123,15 @@ public class BenchmarkFoo
         MethodHandles.Lookup lookup = MethodHandles.lookup();
         try {
             mhh = lookup.findStatic(IntSum.class, "sum", MethodType.methodType(int.class, int.class, int.class));
+            MethodHandle mhh1 = lookup.findStatic(IntSum.class, "sum", MethodType.methodType(int.class, int.class, int.class));
             MethodHandle mhh2 = lookup.findStatic(IntSum.class, "sum2", MethodType.methodType(int.class, int.class, int.class));
             MethodHandle mhh3 = lookup.findStatic(IntSum.class, "sum3", MethodType.methodType(int.class, int.class, int.class));
             MethodHandle mhh4 = lookup.findStatic(IntSum.class, "sum4", MethodType.methodType(int.class, int.class, int.class));
-            metaSum = lookup.findStatic(IntSum.class, "metaSum", MethodType.methodType(int.class, MethodHandle.class, int.class, int.class));
+            MethodHandle metaSum = lookup.findStatic(IntSum.class, "metaSum", MethodType.methodType(int.class, MethodHandle.class, int.class, int.class));
             metaSum4 = metaSum.bindTo(mhh4);
             metaSum3 = metaSum.bindTo(mhh3);
             metaSum2 = metaSum.bindTo(mhh2);
-            metaSum = metaSum.bindTo(mhh);
+            metaSum1 = metaSum.bindTo(mhh1);
         }
         catch (NoSuchMethodException | IllegalAccessException e) {
             throw new RuntimeException(e);
