@@ -20,6 +20,7 @@ import io.airlift.configuration.DefunctConfig;
 import javax.validation.constraints.NotNull;
 
 import static io.trino.plugin.hive.metastore.file.FileHiveMetastoreConfig.VersionCompatibility.NOT_SUPPORTED;
+import static io.trino.plugin.hive.metastore.file.FileHiveMetastoreConfig.VersionCompatibility.UNSAFE_ASSUME_COMPATIBILITY;
 
 @DefunctConfig("hive.metastore.assume-canonical-partition-keys")
 public class FileHiveMetastoreConfig
@@ -33,7 +34,7 @@ public class FileHiveMetastoreConfig
     }
 
     private String catalogDirectory;
-    private VersionCompatibility versionCompatibility = NOT_SUPPORTED;
+    private VersionCompatibility versionCompatibility = UNSAFE_ASSUME_COMPATIBILITY;
     private String metastoreUser = "presto";
 
     @NotNull

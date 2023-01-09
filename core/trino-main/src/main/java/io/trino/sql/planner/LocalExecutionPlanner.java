@@ -4347,7 +4347,7 @@ public class LocalExecutionPlanner
         }
     }
 
-    private static class FunctionKey
+    public static class FunctionKey
     {
         private final FunctionId functionId;
         private final BoundSignature boundSignature;

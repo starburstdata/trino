@@ -154,7 +154,7 @@ public abstract class AbstractLongType
     }
 
     @ScalarOperator(LESS_THAN)
-    private static boolean lessThanOperator(long left, long right)
+    public static boolean lessThanOperator(long left, long right)
     {
         return left < right;
     }

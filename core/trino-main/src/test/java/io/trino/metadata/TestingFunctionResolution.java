@@ -13,9 +13,14 @@
  */
 package io.trino.metadata;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import io.trino.Session;
+import io.trino.collect.cache.NonEvictableCache;
+import io.trino.operator.aggregation.AccumulatorFactory;
 import io.trino.operator.aggregation.TestingAggregationFunction;
 import io.trino.security.AllowAllAccessControl;
+import io.trino.spi.function.AggregationImplementation;
 import io.trino.spi.function.InvocationConvention;
 import io.trino.spi.function.OperatorType;
 import io.trino.spi.function.ScalarFunctionImplementation;
@@ -25,11 +30,13 @@ import io.trino.sql.PlannerContext;
 import io.trino.sql.analyzer.TypeSignatureProvider;
 import io.trino.sql.gen.ExpressionCompiler;
 import io.trino.sql.gen.PageFunctionCompiler;
+import io.trino.sql.planner.LocalExecutionPlanner;
 import io.trino.sql.tree.Expression;
 import io.trino.sql.tree.FunctionCall;
 import io.trino.sql.tree.QualifiedName;
 import io.trino.testing.LocalQueryRunner;
 import io.trino.transaction.TransactionManager;
+import org.testcontainers.shaded.com.google.common.collect.ImmutableList;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,16 +45,23 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static io.trino.SessionTestUtils.TEST_SESSION;
+import static io.trino.collect.cache.CacheUtils.uncheckedCacheGet;
+import static io.trino.collect.cache.SafeCaches.buildNonEvictableCache;
+import static io.trino.operator.aggregation.AccumulatorCompiler.generateAccumulatorFactory;
 import static io.trino.sql.planner.TestingPlannerContext.plannerContextBuilder;
 import static io.trino.transaction.InMemoryTransactionManager.createTestTransactionManager;
 import static io.trino.transaction.TransactionBuilder.transaction;
 import static java.util.Objects.requireNonNull;
+import static java.util.concurrent.TimeUnit.HOURS;
 
 public class TestingFunctionResolution
 {
     private final TransactionManager transactionManager;
     private final Metadata metadata;
     private final PlannerContext plannerContext;
+    private final NonEvictableCache<LocalExecutionPlanner.FunctionKey, AccumulatorFactory> accumulatorFactoryCache = buildNonEvictableCache(CacheBuilder.newBuilder()
+            .maximumSize(1000)
+            .expireAfterWrite(1, HOURS));
 
     public TestingFunctionResolution()
     {
@@ -145,6 +159,27 @@ public class TestingFunctionResolution
                     resolvedFunction.getSignature(),
                     resolvedFunction.getFunctionNullability(),
                     plannerContext.getFunctionManager().getAggregationImplementation(resolvedFunction));
+        });
+    }
+
+    public TestingAggregationFunction getAggregateFunction(QualifiedName name, Type parameterType)
+    {
+        return inTransaction(session -> {
+            ResolvedFunction resolvedFunction = metadata.resolveFunction(session, name, TypeSignatureProvider.fromTypes(parameterType));
+            AggregationImplementation aggregationImplementation = plannerContext.getFunctionManager().getAggregationImplementation(resolvedFunction);
+            AccumulatorFactory accumulatorFactory = uncheckedCacheGet(
+                    accumulatorFactoryCache,
+                    new LocalExecutionPlanner.FunctionKey(resolvedFunction.getFunctionId(), resolvedFunction.getSignature()),
+                    () -> generateAccumulatorFactory(
+                            resolvedFunction.getSignature(),
+                            aggregationImplementation,
+                            resolvedFunction.getFunctionNullability()));
+
+            return new TestingAggregationFunction(
+                    ImmutableList.of(parameterType),
+                    ImmutableList.of(parameterType),
+                    parameterType,
+                    accumulatorFactory);
         });
     }
 

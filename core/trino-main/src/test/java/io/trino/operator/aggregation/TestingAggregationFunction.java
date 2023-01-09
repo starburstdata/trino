@@ -21,6 +21,7 @@ import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
 import io.trino.sql.gen.JoinCompiler;
+import io.trino.sql.planner.LocalExecutionPlanner;
 import io.trino.sql.planner.plan.AggregationNode.Step;
 import io.trino.type.BlockTypeOperators;
 
@@ -30,6 +31,7 @@ import java.util.OptionalInt;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static io.trino.SessionTestUtils.TEST_SESSION;
+import static io.trino.collect.cache.CacheUtils.uncheckedCacheGet;
 import static io.trino.operator.aggregation.AccumulatorCompiler.generateAccumulatorFactory;
 import static java.util.Objects.requireNonNull;
 
@@ -68,6 +70,7 @@ public class TestingAggregationFunction
         this.intermediateType = (intermediateTypes.size() == 1) ? getOnlyElement(intermediateTypes) : RowType.anonymous(intermediateTypes);
         this.finalType = requireNonNull(finalType, "finalType is null");
         this.factory = requireNonNull(factory, "factory is null");
+
         distinctFactory = new DistinctAccumulatorFactory(
                 factory,
                 parameterTypes,

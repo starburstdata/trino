@@ -84,4 +84,9 @@ public final class BigintType
     {
         return Optional.of(LongStream.rangeClosed((long) range.getMin(), (long) range.getMax()).boxed());
     }
+
+    public boolean lessThan(long value, Block block_0, int position)
+    {
+        return value < block_0.getLong(position, 0);
+    }
 }
