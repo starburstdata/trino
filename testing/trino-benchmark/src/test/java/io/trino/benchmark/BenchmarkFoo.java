@@ -28,6 +28,7 @@ import org.openjdk.jmh.runner.RunnerException;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.Method;
 import java.util.concurrent.TimeUnit;
 
 import static io.trino.jmh.Benchmarks.benchmark;
@@ -46,6 +47,7 @@ public class BenchmarkFoo
 {
     public int first;
     public int second;
+    public final Method method;
     public final MethodHandle mhh;
     public MethodHandle metaSum1;
     public MethodHandle metaSum2;
@@ -80,6 +82,19 @@ public class BenchmarkFoo
     }*/
 
     @Benchmark
+    @OutputTimeUnit(TimeUnit.NANOSECONDS)
+    @BenchmarkMode(Mode.AverageTime)
+    public int reflection()
+            throws Throwable
+    {
+        int result = 0;
+        for (int i = 0; i < 10_000; ++i) {
+            result += (int) method.invoke(null, first, result);
+        }
+        return result;
+    }
+
+    //@Benchmark
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     @BenchmarkMode(Mode.AverageTime)
     public int metaMethodHandle()
@@ -122,6 +137,7 @@ public class BenchmarkFoo
     {
         MethodHandles.Lookup lookup = MethodHandles.lookup();
         try {
+            method = IntSum.class.getMethod("sum", int.class, int.class);
             mhh = lookup.findStatic(IntSum.class, "sum", MethodType.methodType(int.class, int.class, int.class));
             MethodHandle mhh1 = lookup.findStatic(IntSum.class, "sum", MethodType.methodType(int.class, int.class, int.class));
             MethodHandle mhh2 = lookup.findStatic(IntSum.class, "sum2", MethodType.methodType(int.class, int.class, int.class));
