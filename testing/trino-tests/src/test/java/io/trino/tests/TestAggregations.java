@@ -14,10 +14,13 @@
 package io.trino.tests;
 
 import io.trino.Session;
+import io.trino.connector.MockConnectorTableHandle;
 import io.trino.plugin.memory.MemoryPlugin;
+import io.trino.spi.connector.SchemaTableName;
 import io.trino.sql.planner.Plan;
 import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.PlanNode;
+import io.trino.sql.planner.plan.TableScanNode;
 import io.trino.testing.AbstractTestAggregations;
 import io.trino.testing.DistributedQueryRunner;
 import io.trino.testing.QueryRunner;
@@ -26,9 +29,11 @@ import org.testng.annotations.Test;
 
 import java.util.function.Predicate;
 
+import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.sql.planner.optimizations.PlanNodeSearcher.searchFrom;
 import static io.trino.testing.TestingSession.testSessionBuilder;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.testng.Assert.assertEquals;
 
 public class TestAggregations
         extends AbstractTestAggregations
@@ -61,6 +66,55 @@ public class TestAggregations
                 "('b', 1, 14)");
 
         return queryRunner;
+    }
+
+    @Test
+    public void testUnionAllToGroupingSets()
+    {
+        // the plan should look like for the query with sinlge group by with multiple grouping sets
+        //  SELECT linenumber, suppkey, SUM(CAST(quantity AS BIGINT))
+        //  FROM lineitem
+        //  WHERE quantity < 0
+        //  GROUP BY GROUPING SETS ((), (linenumber), (linenumber, suppkey))
+        assertQuery(
+                """
+                        SELECT NULL, NULL, SUM(CAST(quantity AS BIGINT))
+                            FROM lineitem
+                            WHERE quantity < 0
+                        UNION ALL
+                            SELECT linenumber, NULL, SUM(CAST(quantity AS BIGINT))
+                            FROM lineitem
+                            WHERE quantity < 0
+                            GROUP BY linenumber
+                        UNION ALL
+                            SELECT linenumber, suppkey, SUM(CAST(quantity AS BIGINT))
+                            FROM lineitem
+                            WHERE quantity < 0
+                            GROUP BY linenumber, suppkey""",
+                """
+                        SELECT NULL, NULL, SUM(CAST(quantity AS BIGINT))
+                            FROM lineitem
+                            WHERE quantity < 0
+                        UNION ALL
+                            SELECT linenumber, NULL, SUM(CAST(quantity AS BIGINT))
+                            FROM lineitem
+                            WHERE quantity < 0
+                            GROUP BY linenumber
+                        UNION ALL
+                            SELECT linenumber, suppkey, SUM(CAST(quantity AS BIGINT))
+                            FROM lineitem
+                            WHERE quantity < 0
+                            GROUP BY linenumber, suppkey""",
+                this::verifySingleLineitemScan);
+    }
+
+    private void verifySingleLineitemScan(Plan plan)
+    {
+        TableScanNode tableScan = searchFrom(plan.getRoot())
+                .where(TableScanNode.class::isInstance)
+                .findOnlyElement();
+        SchemaTableName actual = ((MockConnectorTableHandle) tableScan.getTable().getConnectorHandle()).getTableName();
+        assertEquals(actual, schemaTableName("tpch", "lineitem"));
     }
 
     @Test
