@@ -90,6 +90,7 @@ public class OptimizerConfig
     private long joinPartitionedBuildMinRowCount = 1_000_000L;
 
     private boolean forceFixedDistributionForPartitionedOutputOperatorEnabled = true;
+    private boolean fixedArbitraryOptimizationEnabled = true;
 
     public enum JoinReorderingStrategy
     {
@@ -768,6 +769,18 @@ public class OptimizerConfig
     public OptimizerConfig setForceFixedDistributionForPartitionedOutputOperatorEnabled(boolean forceFixedDistributionForPartitionedOutputOperatorEnabled)
     {
         this.forceFixedDistributionForPartitionedOutputOperatorEnabled = forceFixedDistributionForPartitionedOutputOperatorEnabled;
+        return this;
+    }
+
+    public boolean isFixedArbitraryOptimizationEnabled()
+    {
+        return fixedArbitraryOptimizationEnabled;
+    }
+
+    @Config("optimizer.experimental.fixed-arbitrary-distribution-enabled")
+    public OptimizerConfig setFixedArbitraryOptimizationEnabled(boolean fixedArbitraryOptimizationEnabled)
+    {
+        this.fixedArbitraryOptimizationEnabled = fixedArbitraryOptimizationEnabled;
         return this;
     }
 }

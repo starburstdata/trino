@@ -66,6 +66,11 @@ public class LocalExchangeSource
         return new LocalExchangeBufferInfo(bufferedBytes.get(), bufferedPages.get());
     }
 
+    public int bufferedPages()
+    {
+        return bufferedPages.get();
+    }
+
     void addPage(Page page)
     {
         assertNotHoldsLock();

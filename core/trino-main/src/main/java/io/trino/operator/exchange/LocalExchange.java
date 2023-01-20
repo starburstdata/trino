@@ -19,6 +19,7 @@ import com.google.common.primitives.Ints;
 import io.airlift.slice.XxHash64;
 import io.airlift.units.DataSize;
 import io.trino.Session;
+import io.trino.SystemSessionProperties;
 import io.trino.operator.BucketPartitionFunction;
 import io.trino.operator.HashGenerator;
 import io.trino.operator.InterpretedHashGenerator;
@@ -109,7 +110,12 @@ public class LocalExchange
             sources = IntStream.range(0, bufferCount)
                     .mapToObj(i -> new LocalExchangeSource(memoryManager, source -> checkAllSourcesFinished()))
                     .collect(toImmutableList());
-            exchangerSupplier = () -> new RandomExchanger(asPageConsumers(sources), memoryManager);
+            if (SystemSessionProperties.isForceFixedDistributionForPartitionedOutputOperatorEnabled(session)) {
+                exchangerSupplier = () -> new FirstAvailableExchanger(sources, memoryManager);
+            }
+            else {
+                exchangerSupplier = () -> new RandomExchanger(asPageConsumers(sources), memoryManager);
+            }
         }
         else if (partitioning.equals(FIXED_PASSTHROUGH_DISTRIBUTION)) {
             List<LocalExchangeMemoryManager> memoryManagers = IntStream.range(0, bufferCount)

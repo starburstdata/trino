@@ -159,7 +159,7 @@ public class TestHivePlans
                                                 exchange(LOCAL, REPARTITION,
                                                         project(
                                                         filter("R_STR_COL IN ('three', CAST('two' AS varchar(5))) AND \"$like\"(R_STR_COL, \"$literal$\"(from_base64('DgAAAFZBUklBQkxFX1dJRFRIAQAAAAcAAAAABwAAAAIAAAB0JQA=')))",
-                                                                tableScan("table_unpartitioned", Map.of("R_STR_COL", "str_col", "R_INT_COL", "int_col"))))))))));
+                                                                tableScan("table_unpartitioned", Map.of("R_STR_COL", "str_col", "R_INT_COL", "int_col")))))))))));
     }
 
     @Test
