@@ -27,7 +27,6 @@ class FirstAvailableExchanger
 {
     private final List<LocalExchangeSource> buffers;
     private final LocalExchangeMemoryManager memoryManager;
-    private int firstBufferToTry;
 
     public FirstAvailableExchanger(List<LocalExchangeSource> buffers, LocalExchangeMemoryManager memoryManager)
     {
@@ -39,17 +38,13 @@ class FirstAvailableExchanger
     public void accept(Page page)
     {
         memoryManager.updateMemoryUsage(page.getRetainedSizeInBytes());
-        int bufferIndex = firstBufferToTry;
-        do {
-            LocalExchangeSource localExchangeSource = buffers.get(bufferIndex);
+        for (int i = 0; i < buffers.size(); i++) {
+            LocalExchangeSource localExchangeSource = buffers.get(i);
             if (localExchangeSource.bufferedPages() == 0) {
                 localExchangeSource.addPage(page);
-                firstBufferToTry = bufferIndex;
                 return;
             }
-            bufferIndex = (bufferIndex + 1) % buffers.size();
         }
-        while (bufferIndex != firstBufferToTry);
         // all buffer not empty, pick one randomly
         int randomIndex = ThreadLocalRandom.current().nextInt(buffers.size());
         buffers.get(randomIndex).addPage(page);
