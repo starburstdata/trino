@@ -18,14 +18,13 @@ import com.google.common.util.concurrent.SettableFuture;
 import io.trino.operator.WorkProcessor;
 import io.trino.operator.WorkProcessor.ProcessState;
 import io.trino.spi.Page;
+import org.jctools.queues.MpscArrayQueue;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
-import java.util.ArrayDeque;
 import java.util.Queue;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -42,14 +41,14 @@ public class LocalExchangeSource
     private final Consumer<LocalExchangeSource> onFinish;
 
     @GuardedBy("this")
-    private final Queue<Page> buffer = new ArrayDeque<>();
+    private final Queue<Page> buffer = new MpscArrayQueue<>(1000);
 
     private final AtomicLong bufferedBytes = new AtomicLong();
-    private final AtomicInteger bufferedPages = new AtomicInteger();
+//    private final AtomicInteger bufferedPages = new AtomicInteger();
 
     @Nullable
     @GuardedBy("this")
-    private SettableFuture<Void> notEmptyFuture; // null indicates no callback has been registered
+    private volatile SettableFuture<Void> notEmptyFuture; // null indicates no callback has been registered
 
     private volatile boolean finishing;
 
@@ -63,12 +62,12 @@ public class LocalExchangeSource
     {
         // This must be lock free to assure task info creation is fast
         // Note: the stats my be internally inconsistent
-        return new LocalExchangeBufferInfo(bufferedBytes.get(), bufferedPages.get());
+        return new LocalExchangeBufferInfo(bufferedBytes.get(), buffer.size());
     }
 
     public int bufferedPages()
     {
-        return bufferedPages.get();
+        return buffer.size();
     }
 
     void addPage(Page page)
@@ -78,23 +77,23 @@ public class LocalExchangeSource
         boolean added = false;
         SettableFuture<Void> notEmptyFuture = null;
         long retainedSizeInBytes = page.getRetainedSizeInBytes();
-        synchronized (this) {
-            // ignore pages after finish
-            if (!finishing) {
-                // buffered bytes must be updated before adding to the buffer to assure
-                // the count does not go negative
-                bufferedBytes.addAndGet(retainedSizeInBytes);
-                bufferedPages.incrementAndGet();
-                buffer.add(page);
-                added = true;
-            }
-
-            // we just added a page (or we are finishing) so we are not empty
-            if (this.notEmptyFuture != null) {
-                notEmptyFuture = this.notEmptyFuture;
-                this.notEmptyFuture = null;
-            }
+//        synchronized (this) {
+        // ignore pages after finish
+        if (!finishing) {
+            // buffered bytes must be updated before adding to the buffer to assure
+            // the count does not go negative
+            bufferedBytes.addAndGet(retainedSizeInBytes);
+//            bufferedPages.incrementAndGet();
+            buffer.add(page);
+            added = true;
         }
+
+        // we just added a page (or we are finishing) so we are not empty
+        if (this.notEmptyFuture != null) {
+            notEmptyFuture = this.notEmptyFuture;
+            this.notEmptyFuture = null;
+        }
+//        }
 
         if (!added) {
             memoryManager.updateMemoryUsage(-retainedSizeInBytes);
@@ -135,9 +134,9 @@ public class LocalExchangeSource
         // and buffered bytes is not expected to be consistent with the buffer (only
         // best effort).
         Page page;
-        synchronized (this) {
-            page = buffer.poll();
-        }
+//        synchronized (this) {
+        page = buffer.poll();
+//        }
         if (page == null) {
             return null;
         }
@@ -146,7 +145,7 @@ public class LocalExchangeSource
         long retainedSizeInBytes = page.getRetainedSizeInBytes();
         memoryManager.updateMemoryUsage(-retainedSizeInBytes);
         bufferedBytes.addAndGet(-retainedSizeInBytes);
-        bufferedPages.decrementAndGet();
+//        bufferedPages.decrementAndGet();
 
         checkFinished();
 
@@ -157,21 +156,21 @@ public class LocalExchangeSource
     {
         assertNotHoldsLock();
         // Fast path, definitely not blocked
-        if (finishing || bufferedPages.get() > 0) {
+        if (finishing || buffer.size() > 0) {
             return NOT_BLOCKED;
         }
 
-        synchronized (this) {
-            // re-check after synchronizing
-            if (finishing || bufferedPages.get() > 0) {
-                return NOT_BLOCKED;
-            }
-            // if we need to block readers, and the current future is complete, create a new one
-            if (notEmptyFuture == null) {
-                notEmptyFuture = SettableFuture.create();
-            }
-            return notEmptyFuture;
+//        synchronized (this) {
+        // re-check after synchronizing
+//            if (finishing || bufferedPages.get() > 0) {
+//                return NOT_BLOCKED;
+//            }
+        // if we need to block readers, and the current future is complete, create a new one
+        if (notEmptyFuture == null) {
+            notEmptyFuture = SettableFuture.create();
         }
+        return notEmptyFuture;
+//        }
     }
 
     public boolean isFinished()
@@ -182,7 +181,7 @@ public class LocalExchangeSource
         }
         synchronized (this) {
             // Synchronize to ensure effects of an in-flight close() or finish() are observed
-            return finishing && bufferedPages.get() == 0;
+            return finishing && buffer.isEmpty();
         }
     }
 
@@ -217,20 +216,20 @@ public class LocalExchangeSource
         int remainingPagesCount = 0;
         long remainingPagesRetainedSizeInBytes = 0;
         SettableFuture<Void> notEmptyFuture;
-        synchronized (this) {
-            finishing = true;
+//        synchronized (this) {
+        finishing = true;
 
-            for (Page page : buffer) {
-                remainingPagesCount++;
-                remainingPagesRetainedSizeInBytes += page.getRetainedSizeInBytes();
-            }
-            buffer.clear();
-            bufferedBytes.addAndGet(-remainingPagesRetainedSizeInBytes);
-            bufferedPages.addAndGet(-remainingPagesCount);
-
-            notEmptyFuture = this.notEmptyFuture;
-            this.notEmptyFuture = null;
+        for (Page page : buffer) {
+            remainingPagesCount++;
+            remainingPagesRetainedSizeInBytes += page.getRetainedSizeInBytes();
         }
+        buffer.clear();
+        bufferedBytes.addAndGet(-remainingPagesRetainedSizeInBytes);
+//        bufferedPages.addAndGet(-remainingPagesCount);
+
+        notEmptyFuture = this.notEmptyFuture;
+        this.notEmptyFuture = null;
+//        }
 
         // free all the remaining pages
         memoryManager.updateMemoryUsage(-remainingPagesRetainedSizeInBytes);
