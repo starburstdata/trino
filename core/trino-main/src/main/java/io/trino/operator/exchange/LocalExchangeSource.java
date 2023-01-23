@@ -20,12 +20,11 @@ import io.trino.operator.WorkProcessor.ProcessState;
 import io.trino.spi.Page;
 import org.jctools.queues.MpscArrayQueue;
 
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static com.google.common.base.Preconditions.checkState;
@@ -40,15 +39,12 @@ public class LocalExchangeSource
     private final LocalExchangeMemoryManager memoryManager;
     private final Consumer<LocalExchangeSource> onFinish;
 
-    @GuardedBy("this")
     private final Queue<Page> buffer = new MpscArrayQueue<>(1000);
 
     private final AtomicLong bufferedBytes = new AtomicLong();
 //    private final AtomicInteger bufferedPages = new AtomicInteger();
 
-    @Nullable
-    @GuardedBy("this")
-    private volatile SettableFuture<Void> notEmptyFuture; // null indicates no callback has been registered
+    private final AtomicReference<SettableFuture<Void>> notEmptyFuture = new AtomicReference<>(); // null indicates no callback has been registered
 
     private volatile boolean finishing;
 
@@ -75,7 +71,7 @@ public class LocalExchangeSource
         assertNotHoldsLock();
 
         boolean added = false;
-        SettableFuture<Void> notEmptyFuture = null;
+
         long retainedSizeInBytes = page.getRetainedSizeInBytes();
 //        synchronized (this) {
         // ignore pages after finish
@@ -89,10 +85,7 @@ public class LocalExchangeSource
         }
 
         // we just added a page (or we are finishing) so we are not empty
-        if (this.notEmptyFuture != null) {
-            notEmptyFuture = this.notEmptyFuture;
-            this.notEmptyFuture = null;
-        }
+        SettableFuture<Void> notEmptyFuture = this.notEmptyFuture.getAndSet(null);
 //        }
 
         if (!added) {
@@ -166,10 +159,11 @@ public class LocalExchangeSource
 //                return NOT_BLOCKED;
 //            }
         // if we need to block readers, and the current future is complete, create a new one
-        if (notEmptyFuture == null) {
-            notEmptyFuture = SettableFuture.create();
-        }
-        return notEmptyFuture;
+//        if (notEmptyFuture == null) {
+//            notEmptyFuture = SettableFuture.create();
+//        }
+
+        return notEmptyFuture.updateAndGet(current -> current == null ? SettableFuture.create() : null);
 //        }
     }
 
@@ -197,8 +191,7 @@ public class LocalExchangeSource
             finishing = true;
 
             // Unblock any waiters
-            notEmptyFuture = this.notEmptyFuture;
-            this.notEmptyFuture = null;
+            notEmptyFuture = this.notEmptyFuture.getAndSet(null);
         }
 
         // notify readers outside of lock since this may result in a callback
@@ -227,8 +220,7 @@ public class LocalExchangeSource
         bufferedBytes.addAndGet(-remainingPagesRetainedSizeInBytes);
 //        bufferedPages.addAndGet(-remainingPagesCount);
 
-        notEmptyFuture = this.notEmptyFuture;
-        this.notEmptyFuture = null;
+        notEmptyFuture = this.notEmptyFuture.getAndSet(null);
 //        }
 
         // free all the remaining pages
