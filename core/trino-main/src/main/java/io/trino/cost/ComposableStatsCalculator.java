@@ -14,6 +14,7 @@
 package io.trino.cost;
 
 import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
 import io.trino.Session;
 import io.trino.matching.Pattern;
@@ -28,19 +29,24 @@ import java.lang.reflect.Modifier;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.Multimaps.toMultimap;
+import static java.util.Objects.requireNonNull;
 
 public class ComposableStatsCalculator
         implements StatsCalculator
 {
     private final ListMultimap<Class<?>, Rule<?>> rulesByRootType;
+    private final CachedStatsRule cachedStatsRule;
 
     @Inject
-    public ComposableStatsCalculator(List<Rule<?>> rules)
+    public ComposableStatsCalculator(List<Rule<?>> rules, CachedStatsRule cachedStatsRule)
     {
         this.rulesByRootType = rules.stream()
                 .peek(rule -> {
@@ -52,6 +58,7 @@ public class ComposableStatsCalculator
                         rule -> ((TypeOfPattern<?>) rule.getPattern()).expectedClass(),
                         rule -> rule,
                         ArrayListMultimap::create));
+        this.cachedStatsRule = requireNonNull(cachedStatsRule, "cachedStatsRule is null");
     }
 
     private Stream<Rule<?>> getCandidates(PlanNode node)
@@ -67,15 +74,21 @@ public class ComposableStatsCalculator
     @Override
     public PlanNodeStatsEstimate calculateStats(PlanNode node, StatsProvider sourceStats, Lookup lookup, Session session, TypeProvider types, TableStatsProvider tableStatsProvider)
     {
+        Optional<Long> outputRowCount = cachedStatsRule.getOutputRowCount(node);
         Iterator<Rule<?>> ruleIterator = getCandidates(node).iterator();
         while (ruleIterator.hasNext()) {
             Rule<?> rule = ruleIterator.next();
             Optional<PlanNodeStatsEstimate> calculatedStats = calculateStats(rule, node, sourceStats, lookup, session, types, tableStatsProvider);
             if (calculatedStats.isPresent()) {
-                return calculatedStats.get();
+                return outputRowCount.map(rowCount -> new PlanNodeStatsEstimate(rowCount, calculatedStats.get().getSymbolStatistics())).orElseGet(calculatedStats::get);
             }
         }
-        return PlanNodeStatsEstimate.unknown();
+
+        return outputRowCount
+                .map(rowCount -> new PlanNodeStatsEstimate(
+                        outputRowCount.get(),
+                        node.getOutputSymbols().stream().collect(toImmutableMap(Function.identity(), s -> SymbolStatsEstimate.unknown()))))
+                .orElse(PlanNodeStatsEstimate.unknown());
     }
 
     private static <T extends PlanNode> Optional<PlanNodeStatsEstimate> calculateStats(Rule<T> rule, PlanNode node, StatsProvider sourceStats, Lookup lookup, Session session, TypeProvider types, TableStatsProvider tableStatsProvider)
