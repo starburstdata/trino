@@ -47,6 +47,7 @@ import io.trino.connector.system.SchemaPropertiesSystemTable;
 import io.trino.connector.system.TableCommentSystemTable;
 import io.trino.connector.system.TablePropertiesSystemTable;
 import io.trino.connector.system.TransactionsSystemTable;
+import io.trino.cost.CachedStatsRule;
 import io.trino.cost.ComposableStatsCalculator;
 import io.trino.cost.CostCalculator;
 import io.trino.cost.CostCalculatorUsingExchanges;
@@ -562,7 +563,7 @@ public class LocalQueryRunner
         StatsNormalizer normalizer = new StatsNormalizer();
         ScalarStatsCalculator scalarStatsCalculator = new ScalarStatsCalculator(plannerContext, typeAnalyzer);
         FilterStatsCalculator filterStatsCalculator = new FilterStatsCalculator(plannerContext, scalarStatsCalculator, normalizer);
-        return new ComposableStatsCalculator(new StatsRulesProvider(plannerContext, scalarStatsCalculator, filterStatsCalculator, normalizer).get(), cachedStatsRule);
+        return new ComposableStatsCalculator(new StatsRulesProvider(plannerContext, scalarStatsCalculator, filterStatsCalculator, normalizer).get(), new CachedStatsRule());
     }
 
     @Override
@@ -801,9 +802,9 @@ public class LocalQueryRunner
     {
         return inTransaction(transactionSession ->
                 getMetadata().getTableHandle(
-                        transactionSession,
-                        new QualifiedObjectName(catalogName, schemaName, tableName))
-                .orElseThrow());
+                                transactionSession,
+                                new QualifiedObjectName(catalogName, schemaName, tableName))
+                        .orElseThrow());
     }
 
     @Override

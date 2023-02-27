@@ -37,6 +37,7 @@ public class StatsCalculatorModule
         binder.bind(StatsNormalizer.class).in(Scopes.SINGLETON);
         binder.bind(ScalarStatsCalculator.class).in(Scopes.SINGLETON);
         binder.bind(FilterStatsCalculator.class).in(Scopes.SINGLETON);
+        binder.bind(CachedStatsRule.class).in(Scopes.SINGLETON);
         newOptionalBinder(binder, new TypeLiteral<List<ComposableStatsCalculator.Rule<?>>>() {})
                 .setDefault().toProvider(StatsRulesProvider.class).in(Scopes.SINGLETON);
         binder.bind(StatsCalculator.class).to(ComposableStatsCalculator.class).in(Scopes.SINGLETON);

@@ -14,7 +14,6 @@
 package io.trino.cost;
 
 import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
 import io.trino.Session;
 import io.trino.matching.Pattern;
@@ -29,7 +28,6 @@ import java.lang.reflect.Modifier;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.function.Function;
 import java.util.stream.Stream;
 

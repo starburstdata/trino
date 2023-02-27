@@ -414,6 +414,12 @@ public class HiveTableHandle
         return new SchemaTableName(schemaName, tableName);
     }
 
+    @Override
+    public Object getTableId()
+    {
+        return getSchemaTableName();
+    }
+
     @JsonIgnore
     public boolean isAcidMerge()
     {

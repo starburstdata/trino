@@ -19,4 +19,8 @@ package io.trino.spi.connector;
  */
 public interface ConnectorTableHandle
 {
+    default Object getTableId()
+    {
+        throw new UnsupportedOperationException();
+    }
 }
