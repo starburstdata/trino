@@ -15,7 +15,10 @@ package io.trino.sql.planner.iterative.rule;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.trino.sql.planner.assertions.PlanMatchPattern;
 import io.trino.sql.planner.iterative.rule.test.BaseRuleTest;
+import io.trino.sql.planner.iterative.rule.test.PlanBuilder;
+import io.trino.sql.planner.plan.Assignments;
 import io.trino.sql.planner.plan.JoinNode.EquiJoinClause;
 import org.testng.annotations.Test;
 
@@ -26,6 +29,7 @@ import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.sql.planner.assertions.PlanMatchPattern.aggregation;
 import static io.trino.sql.planner.assertions.PlanMatchPattern.functionCall;
 import static io.trino.sql.planner.assertions.PlanMatchPattern.join;
+import static io.trino.sql.planner.assertions.PlanMatchPattern.project;
 import static io.trino.sql.planner.assertions.PlanMatchPattern.singleGroupingSet;
 import static io.trino.sql.planner.assertions.PlanMatchPattern.values;
 import static io.trino.sql.planner.iterative.rule.test.PlanBuilder.expression;
@@ -39,7 +43,7 @@ public class TestPushPartialAggregationThroughJoin
     @Test
     public void testPushesPartialAggregationThroughJoin()
     {
-        tester().assertThat(new PushPartialAggregationThroughJoin())
+        tester().assertThat(new PushPartialAggregationThroughJoin(tester().getPlannerContext(), tester().getTypeAnalyzer()).pushPartialAggregationThroughJoinWithoutProjection())
                 .setSystemProperty(PUSH_PARTIAL_AGGREGATION_THROUGH_JOIN, "true")
                 .on(p -> p.aggregation(ab -> ab
                         .source(
@@ -73,5 +77,53 @@ public class TestPushPartialAggregationThroughJoin
                                                 values("LEFT_EQUI", "LEFT_NON_EQUI", "LEFT_GROUP_BY", "LEFT_AGGR", "LEFT_HASH")))
                                 .right(
                                         values("RIGHT_EQUI", "RIGHT_NON_EQUI", "RIGHT_GROUP_BY", "RIGHT_HASH")))));
+    }
+
+    @Test
+    public void testPushesPartialAggregationThroughJoinWithProjection()
+    {
+        tester().assertThat(new PushPartialAggregationThroughJoin(tester().getPlannerContext(), tester().getTypeAnalyzer()).pushPartialAggregationThroughJoinWithProjection())
+                .setSystemProperty(PUSH_PARTIAL_AGGREGATION_THROUGH_JOIN, "true")
+                .on(p -> p.aggregation(ab -> ab
+                        .source(
+                                p.project(
+                                        Assignments.builder()
+                                                .put(p.symbol("LEFT_AGGR_PRJ"), PlanBuilder.expression("LEFT_AGGR + LEFT_AGGR"))
+                                                .putIdentity(p.symbol("LEFT_GROUP_BY"))
+                                                .putIdentity(p.symbol("RIGHT_GROUP_BY"))
+                                                .build(),
+                                        p.join(
+                                                INNER,
+                                                p.values(p.symbol("LEFT_EQUI"), p.symbol("LEFT_NON_EQUI"), p.symbol("LEFT_GROUP_BY"), p.symbol("LEFT_AGGR"), p.symbol("LEFT_HASH")),
+                                                p.values(p.symbol("RIGHT_EQUI"), p.symbol("RIGHT_NON_EQUI"), p.symbol("RIGHT_GROUP_BY"), p.symbol("RIGHT_HASH")),
+                                                ImmutableList.of(new EquiJoinClause(p.symbol("LEFT_EQUI"), p.symbol("RIGHT_EQUI"))),
+                                                ImmutableList.of(p.symbol("LEFT_GROUP_BY"), p.symbol("LEFT_AGGR")),
+                                                ImmutableList.of(p.symbol("RIGHT_GROUP_BY")),
+                                                Optional.of(expression("LEFT_NON_EQUI <= RIGHT_NON_EQUI")),
+                                                Optional.of(p.symbol("LEFT_HASH")),
+                                                Optional.of(p.symbol("RIGHT_HASH")))))
+                        .addAggregation(p.symbol("AVG", DOUBLE), expression("AVG(LEFT_AGGR_PRJ)"), ImmutableList.of(DOUBLE))
+                        .singleGroupingSet(p.symbol("LEFT_GROUP_BY"), p.symbol("RIGHT_GROUP_BY"))
+                        .step(PARTIAL)))
+                .matches(aggregation(
+                        singleGroupingSet("LEFT_GROUP_BY", "RIGHT_GROUP_BY"),
+                        ImmutableMap.of(Optional.of("AVG"), functionCall("avg", ImmutableList.of("LEFT_AGGR_PART"))),
+                        Optional.empty(),
+                        INTERMEDIATE,
+                        join(INNER, builder -> builder
+                                .equiCriteria("LEFT_EQUI", "RIGHT_EQUI")
+                                .filter("LEFT_NON_EQUI <= RIGHT_NON_EQUI")
+                                .left(
+                                        aggregation(
+                                                singleGroupingSet("LEFT_EQUI", "LEFT_NON_EQUI", "LEFT_GROUP_BY", "LEFT_HASH"),
+                                                ImmutableMap.of(Optional.of("LEFT_AGGR_PART"), functionCall("avg", ImmutableList.of("LEFT_AGGR_PRJ"))),
+                                                Optional.empty(),
+                                                PARTIAL,
+                                                project(
+                                                        ImmutableMap.of("LEFT_AGGR_PRJ", PlanMatchPattern.expression("LEFT_AGGR + LEFT_AGGR")),
+                                                        values("LEFT_EQUI", "LEFT_NON_EQUI", "LEFT_GROUP_BY", "LEFT_AGGR", "LEFT_HASH"))))
+                                .right(
+                                        project(
+                                                values("RIGHT_EQUI", "RIGHT_NON_EQUI", "RIGHT_GROUP_BY", "RIGHT_HASH"))))));
     }
 }
