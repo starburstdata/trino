@@ -72,7 +72,7 @@ public class ComposableStatsCalculator
     @Override
     public PlanNodeStatsEstimate calculateStats(PlanNode node, StatsProvider sourceStats, Lookup lookup, Session session, TypeProvider types, TableStatsProvider tableStatsProvider)
     {
-        Optional<Long> outputRowCount = cachedStatsRule.getOutputRowCount(node);
+        Optional<Long> outputRowCount = cachedStatsRule.getOutputRowCount(node, lookup);
         Iterator<Rule<?>> ruleIterator = getCandidates(node).iterator();
         while (ruleIterator.hasNext()) {
             Rule<?> rule = ruleIterator.next();

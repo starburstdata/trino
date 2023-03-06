@@ -2,18 +2,29 @@ package io.trino.cost;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import io.airlift.log.Logger;
+import io.trino.execution.QueryInfo;
+import io.trino.sql.planner.Symbol;
+import io.trino.sql.planner.iterative.Lookup;
+import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.ExchangeNode;
 import io.trino.sql.planner.plan.FilterNode;
+import io.trino.sql.planner.plan.JoinNode;
 import io.trino.sql.planner.plan.PlanNode;
+import io.trino.sql.planner.plan.ProjectNode;
 import io.trino.sql.planner.plan.TableScanNode;
+import io.trino.sql.planner.plan.UnionNode;
 import io.trino.sql.planner.planprinter.PlanNodeStats;
 import io.trino.sql.tree.Expression;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public class CachedStatsRule
 {
+    private static final Logger log = Logger.get(CachedStatsRule.class);
     private final Cache<PlanNodeWrapper, Long> cache;
 
     public CachedStatsRule()
@@ -22,30 +33,54 @@ public class CachedStatsRule
     }
 
     // Returns estimated output row count.
-    public Optional<Long> getOutputRowCount(PlanNode node)
+    public Optional<Long> getOutputRowCount(PlanNode node, Lookup lookup)
     {
-        return PlanNodeWrapper.wrap(node).map(cache::getIfPresent);
+        return PlanNodeWrapper.wrap(node, lookup).map(cache::getIfPresent);
     }
 
-    public void addStats(PlanNode planNode, PlanNodeStats stats)
+    public void queryFinished(QueryInfo finalQueryInfo)
     {
-        PlanNodeWrapper.wrap(planNode).ifPresent(key -> {
+        log.info("caching stats for " + finalQueryInfo);
+        // TODO lysy join plan fragments roots to one root plan
+    }
+
+    private void addStats(PlanNode planNode, PlanNodeStats stats)
+    {
+        PlanNodeWrapper.wrap(planNode, Lookup.noLookup()).ifPresent(key -> {
             cache.put(key, stats.getPlanNodeOutputPositions());
         });
     }
 
     private interface PlanNodeWrapper
     {
-        static Optional<PlanNodeWrapper> wrap(PlanNode node)
+        static Optional<PlanNodeWrapper> wrap(PlanNode node, Lookup lookup)
         {
-            List<PlanNodeWrapper> sources = new ArrayList<>();
+            node = lookup.resolve(node);
+            List<PlanNodeWrapper> sources = new ArrayList<>(node.getSources().size());
             for (PlanNode source : node.getSources()) {
-                Optional<PlanNodeWrapper> wrappedSource = wrap(source);
+                Optional<PlanNodeWrapper> wrappedSource = wrap(source, lookup);
                 if (wrappedSource.isEmpty()) {
                     // unsupported source
                     return Optional.empty();
                 }
                 sources.add(wrappedSource.get());
+            }
+            if (node instanceof JoinNode joinNode) {
+                return Join.wrap(joinNode, sources.get(0), sources.get(1));
+            }
+            if (node instanceof AggregationNode aggregationNode) {
+                return Aggregation.wrap(aggregationNode, sources.get(0));
+            }
+            if (node instanceof ProjectNode) {
+                // ignore project
+                return Optional.of(sources.get(0));
+            }
+            if (node instanceof ExchangeNode || node instanceof UnionNode) {
+                if (node.getSources().size() == 1) {
+                    // ignore normal exchange
+                    return Optional.of(sources.get(0));
+                }
+                return Union.wrap(sources);
             }
             if (node instanceof FilterNode filterNode) {
                 return Filter.wrap(filterNode, sources.get(0));
@@ -54,6 +89,33 @@ public class CachedStatsRule
                 return TableScan.wrap(tableScan);
             }
             return Optional.empty();
+        }
+
+        record Union(List<PlanNodeWrapper> sources)
+                implements PlanNodeWrapper
+        {
+            public static Optional<PlanNodeWrapper> wrap(List<PlanNodeWrapper> sources)
+            {
+                return Optional.of(new Union(sources));
+            }
+        }
+
+        record Join(JoinNode.Type type, List<JoinNode.EquiJoinClause> criteria, Optional<Expression> filter, PlanNodeWrapper left, PlanNodeWrapper righ)
+                implements PlanNodeWrapper
+        {
+            public static Optional<PlanNodeWrapper> wrap(JoinNode node, PlanNodeWrapper left, PlanNodeWrapper right)
+            {
+                return Optional.of(new Join(node.getType(), node.getCriteria(), node.getFilter(), left, right));
+            }
+        }
+
+        record Aggregation(List<Symbol> groupingKeys, Set<Integer> globalGroupingSets, PlanNodeWrapper source)
+                implements PlanNodeWrapper
+        {
+            public static Optional<PlanNodeWrapper> wrap(AggregationNode node, PlanNodeWrapper source)
+            {
+                return Optional.of(new Aggregation(node.getGroupingKeys(), node.getGlobalGroupingSets(), source));
+            }
         }
 
         record Filter(Expression predicate, PlanNodeWrapper source)
@@ -81,5 +143,5 @@ public class CachedStatsRule
 
     // TODO lysy: stats cache:
     // - addStats from finished queries
-    // planNodeWrapper for basic nodes
+    // planNodeWrapper for basic nodes X
 }

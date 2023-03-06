@@ -23,6 +23,7 @@ import io.airlift.units.Duration;
 import io.trino.ExceededCpuLimitException;
 import io.trino.ExceededScanLimitException;
 import io.trino.Session;
+import io.trino.cost.CachedStatsRule;
 import io.trino.execution.QueryExecution.QueryOutputInfo;
 import io.trino.execution.StateMachine.StateChangeListener;
 import io.trino.memory.ClusterMemoryManager;
@@ -78,14 +79,16 @@ public class SqlQueryManager
 
     private final ScheduledExecutorService queryManagementExecutor;
     private final ThreadPoolExecutorMBean queryManagementExecutorMBean;
+    private final CachedStatsRule cachedStatsRule;
 
     @Inject
-    public SqlQueryManager(ClusterMemoryManager memoryManager, QueryManagerConfig queryManagerConfig)
+    public SqlQueryManager(ClusterMemoryManager memoryManager, QueryManagerConfig queryManagerConfig, CachedStatsRule cachedStatsRule)
     {
         this.memoryManager = requireNonNull(memoryManager, "memoryManager is null");
 
         this.maxQueryCpuTime = queryManagerConfig.getQueryMaxCpuTime();
         this.maxQueryScanPhysicalBytes = queryManagerConfig.getQueryMaxScanPhysicalBytes();
+        this.cachedStatsRule = requireNonNull(cachedStatsRule, "cachedStatsRule is null");
 
         this.queryExecutor = newCachedThreadPool(threadsNamed("query-scheduler-%s"));
         this.queryExecutorMBean = new ThreadPoolExecutorMBean((ThreadPoolExecutor) queryExecutor);
@@ -252,6 +255,8 @@ public class SqlQueryManager
             // execution MUST be added to the expiration queue or there will be a leak
             queryTracker.expireQuery(queryExecution.getQueryId());
         });
+
+        queryExecution.addFinalQueryInfoListener(cachedStatsRule::queryFinished);
 
         try (SetThreadName ignored = new SetThreadName("Query-%s", queryExecution.getQueryId())) {
             queryExecution.start();
