@@ -36,6 +36,7 @@ public class DeltaLakeMetastoreModule
         bindMetastoreModule("thrift", new DeltaLakeThriftMetastoreModule());
         bindMetastoreModule("file", new DeltaLakeFileMetastoreModule());
         bindMetastoreModule("glue", new DeltaLakeGlueMetastoreModule());
+        bindMetastoreModule("spark", new DeltaLakeGlueMetastoreModule());
 
         install(new DecoratedHiveMetastoreModule());
     }

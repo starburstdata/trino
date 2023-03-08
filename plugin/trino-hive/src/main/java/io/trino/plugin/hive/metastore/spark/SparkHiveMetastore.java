@@ -14,6 +14,7 @@
 
 package io.trino.plugin.hive.metastore.spark;
 
+import io.airlift.log.Logger;
 import io.trino.plugin.hive.HiveColumnStatisticType;
 import io.trino.plugin.hive.HiveType;
 import io.trino.plugin.hive.PartitionStatistics;
@@ -57,21 +58,24 @@ import java.util.stream.Collectors;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_METASTORE_ERROR;
-import static io.trino.plugin.hive.HiveType.HIVE_DATE;
-import static io.trino.plugin.hive.HiveType.HIVE_INT;
-import static io.trino.plugin.hive.HiveType.HIVE_STRING;
 import static io.trino.plugin.hive.metastore.StorageFormat.create;
 import static io.trino.plugin.hive.util.HiveUtil.makePartName;
-import static io.trino.spi.StandardErrorCode.INVALID_ARGUMENTS;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
-import static java.util.Locale.ENGLISH;
 
 public class SparkHiveMetastore
         implements HiveMetastore
 {
+    private static final Logger log = Logger.get(SparkHiveMetastore.class);
+    SparkHiveMetastoreConfig config;
     Connection connection;
 
     public SparkHiveMetastore(SparkHiveMetastoreConfig config)
+    {
+        this.config = config;
+        this.connection = establishConnection();
+    }
+
+    private Connection establishConnection()
     {
         try {
             Driver driver = getDriver(config.getIsDatabricks());
@@ -80,7 +84,7 @@ public class SparkHiveMetastore
             if (config.getPassword().isPresent()) {
                 properties.setProperty("password", config.getPassword().get());
             }
-            connection = driver.connect(config.getHiveJdbcUrl(), properties);
+            return driver.connect(config.getHiveJdbcUrl(), properties);
         }
         catch (SQLException e) {
             throw new RuntimeException(e);
@@ -92,6 +96,7 @@ public class SparkHiveMetastore
         /*if (isDatabricks) {
             return new com.databricks.client.jdbc.Driver();
         }*/
+        //TODO: investigate if needed, fix deps for Databricks driver
         return new HiveDriver();
     }
 
@@ -99,12 +104,24 @@ public class SparkHiveMetastore
     {
         try {
             Statement statement = connection.createStatement();
+            log.debug("Submitting sql: " + sql);
             ResultSet resultSet = statement.executeQuery(sql);
             return resultSet;
         }
         catch (SQLException e) {
+            connection = establishConnection();
+
             throw new RuntimeException(e);
         }
+    }
+
+    private ResultSet executeSqlCatchable(String sql)
+            throws SQLException
+    {
+        Statement statement = connection.createStatement();
+        log.debug("Submitting sql: " + sql);
+        ResultSet resultSet = statement.executeQuery(sql);
+        return resultSet;
     }
 
     private <K, V> Map<K, V> resultSetToMap(ResultSet resultSet, int keyIndex, int valueIndex, K keyType, V valueType)
@@ -182,28 +199,13 @@ public class SparkHiveMetastore
                 Optional.of(databaseProperties.get(ownerProperty)),
                 Optional.of(PrincipalType.USER),
                 Optional.of(databaseProperties.get(commentProperty)),
-                new HashMap<String, String>()));
+                Collections.emptyMap())); //TODO: investigate Database parameters
     }
 
     @Override
     public List<String> getAllDatabases()
     {
         return resultSetToList(executeSql("SHOW SCHEMAS"), 1);
-    }
-
-    private HiveType nameToHiveType(String typeName)
-    {
-        if (typeName.toLowerCase(ENGLISH).equals("int")) {
-            return HIVE_INT;
-        }
-        else if (typeName.toLowerCase(ENGLISH).equals("string")) {
-            return HIVE_STRING;
-        }
-        else if (typeName.toLowerCase(ENGLISH).equals("date")) {
-            return HIVE_DATE;
-        }
-        return null;
-        //TODO: fill in the rest of these
     }
 
     class DescribeExtendedResult
@@ -290,11 +292,13 @@ public class SparkHiveMetastore
         String partitionRowDelimiter = "# Partition Information";
         String tableInfoDelimiter = "# Detailed Table Information";
         String partitionInfoDelimiter = "# Detailed Partition Information";
+        String storageInfoDelimiter = "# Storage Information";
         enum RowBlockState
         {
             DATACOLUMNS,
             PARTCOLUMNS,
-            TABLEINFO
+            TABLEINFO,
+            STORAGEINFO
         }
 
         DescribeExtendedResult describeExtendedResult = new DescribeExtendedResult();
@@ -313,25 +317,33 @@ public class SparkHiveMetastore
                     rowBlock = RowBlockState.TABLEINFO;
                     continue;
                 }
+                if (describeExtended.getString(1).equals(storageInfoDelimiter)) {
+                    rowBlock = RowBlockState.STORAGEINFO;
+                    continue;
+                }
                 if (describeExtended.getString(1).startsWith("#") || describeExtended.getString(1).isBlank()) {
                     continue;
                 }
+
                 switch (rowBlock) {
                     case DATACOLUMNS:
                         dataColumns.add(new Column(
                                 describeExtended.getString(1),
-                                nameToHiveType(describeExtended.getString(2)),
+                                HiveType.valueOf(describeExtended.getString(2)),
                                 Optional.ofNullable(describeExtended.getString(3))));
                         break;
                     case PARTCOLUMNS:
                         partitionColumns.add(new Column(
                                 describeExtended.getString(1),
-                                nameToHiveType(describeExtended.getString(2)),
+                                HiveType.valueOf(describeExtended.getString(2)),
                                 Optional.ofNullable(describeExtended.getString(3))));
                         break;
                     case TABLEINFO:
-                    default:
                         resultMap.put(describeExtended.getString(1), describeExtended.getString(2));
+                        break;
+                    case STORAGEINFO:
+                    default:
+                        continue;
                 }
             }
 
@@ -370,7 +382,8 @@ public class SparkHiveMetastore
                 databaseName,
                 tableName,
                 Optional.of(resultMap.get(DescribeExtendedResult.ownerProperty)),
-                resultMap.get(DescribeExtendedResult.typeProperty),
+                resultMap.get(DescribeExtendedResult.typeProperty).equals("MANAGED") ?
+                        "MANAGED_TABLE" : "EXTERNAL",
                 storage,
                 dataColumns,
                 partitionColumns,
@@ -417,7 +430,7 @@ public class SparkHiveMetastore
     @Override
     public List<String> getAllTables(String databaseName)
     {
-        return resultSetToList(executeSql("show tables from default"), 2);
+        return resultSetToList(executeSql(String.format("show tables from %s", databaseName)), 2);
     }
 
     @Override
@@ -446,7 +459,12 @@ public class SparkHiveMetastore
     @Override
     public void createDatabase(Database database)
     {
-        executeSql(String.format("CREATE SCHEMA %s LOCATION %s", database.getDatabaseName(), database.getLocation()));
+        if (database.getLocation().isPresent()) {
+            executeSql(String.format("CREATE SCHEMA %s LOCATION %s", database.getDatabaseName(), database.getLocation().get()));
+        }
+        else {
+            executeSql(String.format("CREATE SCHEMA %s", database.getDatabaseName()));
+        }
     }
 
     @Override
@@ -472,11 +490,43 @@ public class SparkHiveMetastore
     @Override
     public void createTable(Table table, PrincipalPrivileges principalPrivileges)
     {
+        executeSql(String.format("CREATE TABLE %s.%s USING %s (%s) %s %s",
+                table.getSchemaTableName().getSchemaName(),
+                table.getSchemaTableName().getTableName(),
+                table.getTableType(), //TODO: should we restrict this to a subset of available formats?
+                buildSchema(table.getDataColumns(), table.getPartitionColumns()),
+                buildPartitionedBy(table.getPartitionColumns()),
+                buildLocation(table)));
+        //TODO: add handling for other table properties
+    }
+
+    String buildSchema(List<Column> dataColumns, List<Column> partitionColumns)
+    {
+        return String.join(",", dataColumns.stream().map(column -> column.getName() + " " + column.getType()).collect(Collectors.toList()))
+                + (partitionColumns.size() > 0 ? "," : "")
+                + String.join(",", partitionColumns.stream().map(column -> column.getName() + " " + column.getType()).collect(Collectors.toList()));
+    }
+
+    String buildPartitionedBy(List<Column> partitionColumns)
+    {
+        if (partitionColumns.size() == 0) {
+            return "";
+        }
+        return "PARTITIONED BY (" + String.join(",", partitionColumns.stream().map(Column::getName).collect(Collectors.toList())) + ",";
+    }
+
+    String buildLocation(Table table)
+    {
+        if (table.getParameters().containsKey("location")) {
+            return "LOCATION " + table.getParameters().get("location");
+        }
+        return "";
     }
 
     @Override
     public void dropTable(String databaseName, String tableName, boolean deleteData)
     {
+        executeSql(String.format("DROP TABLE %s.%s", databaseName, tableName));
     }
 
     @Override
@@ -487,6 +537,8 @@ public class SparkHiveMetastore
     @Override
     public void renameTable(String databaseName, String tableName, String newDatabaseName, String newTableName)
     {
+        executeSql(String.format("ALTER TABLE RENAME %s.%s TO %S.%s", databaseName, tableName, newDatabaseName, newTableName));
+        //TODO: check this syntax is valid for spark
     }
 
     @Override
@@ -519,11 +571,11 @@ public class SparkHiveMetastore
     {
     }
 
-    @Override
-    public Optional<Partition> getPartition(Table table, List<String> partitionValues)
+    private String buildPartitionSpec(Table table, List<String> partitionValues)
     {
-        if (table.getPartitionColumns().size() != partitionValues.size()) {
-            throw new TrinoException(INVALID_ARGUMENTS, "partition values must match partition columns");
+        if (partitionValues.size() != table.getPartitionColumns().size()) {
+            throw new TrinoException(HIVE_METASTORE_ERROR,
+                    String.format("Partition values size %s does not mathc part cols size %s", partitionValues.size(), table.getPartitionColumns().size()));
         }
 
         StringBuilder partitionSpec = new StringBuilder();
@@ -533,13 +585,29 @@ public class SparkHiveMetastore
             }
             partitionSpec.append(String.format("%s='%s'", table.getPartitionColumns().get(i).getName(), partitionValues.get(i)));
         }
-        DescribeExtendedResult describeExtendedResult = parseDscribeExtended(executeSql(String.format("describe extended %s partition (%s)", table.getTableName(), partitionSpec.toString())));
-        return Optional.of(new Partition(table.getDatabaseName(),
-                table.getTableName(),
-                partitionValues,
-                describeExtendedResult.getStorage().get(),
-                describeExtendedResult.getDataColumns(),
-                describeExtendedResult.getParameters()));
+        return partitionSpec.toString();
+    }
+
+    @Override
+    public Optional<Partition> getPartition(Table table, List<String> partitionValues)
+    {
+        String partitionSpec = buildPartitionSpec(table, partitionValues);
+        try {
+            DescribeExtendedResult describeExtendedResult = parseDscribeExtended(executeSqlCatchable(String.format("describe extended %s.%s partition (%s)",
+                    table.getDatabaseName(), table.getTableName(), partitionSpec)));
+            return Optional.of(new Partition(table.getDatabaseName(),
+                    table.getTableName(),
+                    partitionValues,
+                    describeExtendedResult.getStorage().get(),
+                    describeExtendedResult.getDataColumns(),
+                    describeExtendedResult.getParameters()));
+        }
+        catch (SQLException e) {
+            if (e.getMessage().contains("Partition not found")) {
+                return Optional.empty();
+            }
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -552,10 +620,11 @@ public class SparkHiveMetastore
     @Override
     public Map<String, Optional<Partition>> getPartitionsByNames(Table table, List<String> partitionNames)
     {
+        String partitionDelimiter = "/";
         Map<String, Optional<Partition>> partitions = new HashMap<>();
         for (String partitionName : partitionNames) {
             partitions.put(partitionName, getPartition(table,
-                    Arrays.stream(partitionName.split(",")).map(kv -> kv.split("=")[1]).collect(Collectors.toList())));
+                    Arrays.stream(partitionName.split(partitionDelimiter)).map(kv -> kv.split("=")[1]).collect(Collectors.toList())));
         }
         return partitions;
        //TODO: look at perf impact. May need a spark metadata REST server after all if there is no batch retrieval
@@ -564,6 +633,21 @@ public class SparkHiveMetastore
     @Override
     public void addPartitions(String databaseName, String tableName, List<PartitionWithStatistics> partitions)
     {
+        for (PartitionWithStatistics partition : partitions) {
+            addPartition(databaseName, tableName, partition.getPartition());
+        }
+    }
+    //TODO: change to bulk using list of partition specs:
+    // ALTER TABLE table_identifier ADD [IF NOT EXISTS]
+    //    ( partition_spec [ partition_spec ... ]
+    private void addPartition(String databaseName, String tableName, Partition partition)
+    {
+        Optional<Table> table = getTable(databaseName, tableName); // caching is important..
+        if (table.isEmpty()) {
+            throw new TrinoException(HIVE_METASTORE_ERROR, String.format("Table does not exist %s.%s", databaseName, tableName));
+        }
+        String partitionSpec = buildPartitionSpec(table.get(), partition.getValues());
+        executeSql(String.format("ALTER TABLE %s.%s ADD IF NOT EXISTS PARTITION (%s)", databaseName, tableName, partitionSpec));
     }
 
     @Override

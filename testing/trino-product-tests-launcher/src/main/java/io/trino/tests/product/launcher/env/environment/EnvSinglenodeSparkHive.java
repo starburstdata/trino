@@ -28,6 +28,7 @@ import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy;
 import javax.inject.Inject;
 
 import static io.trino.tests.product.launcher.docker.ContainerUtil.forSelectedPorts;
+import static io.trino.tests.product.launcher.env.EnvironmentContainers.COORDINATOR;
 import static io.trino.tests.product.launcher.env.EnvironmentContainers.HADOOP;
 import static io.trino.tests.product.launcher.env.EnvironmentContainers.TESTS;
 import static io.trino.tests.product.launcher.env.common.Hadoop.CONTAINER_HADOOP_INIT_D;
@@ -71,11 +72,13 @@ public class EnvSinglenodeSparkHive
                     forHostPath(dockerFiles.getDockerFilesHostPath("conf/tempto/tempto-configuration-for-hive3.yaml")),
                     CONTAINER_TEMPTO_PROFILE_CONFIG);
         });
-
-        builder.addConnector("hive", forHostPath(dockerFiles.getDockerFilesHostPath("conf/environment/singlenode-spark-hive/hive.properties")));
-
         builder.addContainer(createSpark())
                 .containerDependsOn("spark", HADOOP);
+        builder.containerDependsOn(COORDINATOR, "spark");
+        //the spark jdbc connection checks the jdbc url on startup, and will fail if the endpoint is unavailable
+
+        builder.addConnector("hive", forHostPath(dockerFiles.getDockerFilesHostPath("conf/environment/singlenode-spark-hive/hive.properties")));
+        builder.addConnector("hive_spark", forHostPath(dockerFiles.getDockerFilesHostPath("conf/environment/singlenode-spark/hive-spark.properties")));
     }
 
     @SuppressWarnings("resource")

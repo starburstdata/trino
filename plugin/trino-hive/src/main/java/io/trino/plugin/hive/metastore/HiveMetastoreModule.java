@@ -23,6 +23,7 @@ import io.trino.plugin.hive.AllowHiveTableRename;
 import io.trino.plugin.hive.HideDeltaLakeTables;
 import io.trino.plugin.hive.metastore.file.FileMetastoreModule;
 import io.trino.plugin.hive.metastore.glue.GlueMetastoreModule;
+import io.trino.plugin.hive.metastore.spark.SparkMetastoreModule;
 import io.trino.plugin.hive.metastore.thrift.ThriftMetastoreModule;
 
 import java.util.Optional;
@@ -50,6 +51,7 @@ public class HiveMetastoreModule
             bindMetastoreModule("thrift", new ThriftMetastoreModule());
             bindMetastoreModule("file", new FileMetastoreModule());
             bindMetastoreModule("glue", new GlueMetastoreModule());
+            bindMetastoreModule("spark", new SparkMetastoreModule());
             // Load Alluxio metastore support through reflection. This makes Alluxio effectively an optional dependency
             // and allows deploying Trino without the Alluxio jar. Can be useful if the integration is unused and is flagged
             // by a security scanner.
