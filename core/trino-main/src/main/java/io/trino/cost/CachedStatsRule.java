@@ -2,16 +2,25 @@ package io.trino.cost;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.collect.ImmutableList;
 import io.airlift.log.Logger;
 import io.trino.execution.QueryInfo;
+import io.trino.execution.StageInfo;
+import io.trino.sql.planner.Partitioning;
+import io.trino.sql.planner.PartitioningScheme;
+import io.trino.sql.planner.PlanFragment;
 import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.iterative.Lookup;
 import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.ExchangeNode;
 import io.trino.sql.planner.plan.FilterNode;
 import io.trino.sql.planner.plan.JoinNode;
+import io.trino.sql.planner.plan.PlanFragmentId;
 import io.trino.sql.planner.plan.PlanNode;
+import io.trino.sql.planner.plan.PlanNodeId;
 import io.trino.sql.planner.plan.ProjectNode;
+import io.trino.sql.planner.plan.RemoteSourceNode;
+import io.trino.sql.planner.plan.SimplePlanRewriter;
 import io.trino.sql.planner.plan.TableScanNode;
 import io.trino.sql.planner.plan.UnionNode;
 import io.trino.sql.planner.planprinter.PlanNodeStats;
@@ -19,8 +28,15 @@ import io.trino.sql.tree.Expression;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+
+import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static io.trino.execution.StageInfo.getAllStages;
+import static io.trino.sql.planner.SystemPartitioningHandle.SINGLE_DISTRIBUTION;
+import static io.trino.sql.planner.planprinter.PlanNodeStatsSummarizer.aggregateStageStats;
 
 public class CachedStatsRule
 {
@@ -42,6 +58,34 @@ public class CachedStatsRule
     {
         log.info("caching stats for " + finalQueryInfo);
         // TODO lysy join plan fragments roots to one root plan
+
+        List<StageInfo> allStages = getAllStages(finalQueryInfo.getOutputStage());
+        Map<PlanNodeId, PlanNodeStats> nodeStats = aggregateStageStats(allStages);
+        Map<PlanFragmentId, PlanFragment> fragments = allStages.stream().collect(toImmutableMap(stageInfo -> stageInfo.getPlan().getId(), StageInfo::getPlan));
+        PlanNode root = joinFragments(finalQueryInfo.getOutputStage().get().getPlan(), fragments);
+        addStatsRecursively(root, nodeStats);
+    }
+
+    private void addStatsRecursively(PlanNode node, Map<PlanNodeId, PlanNodeStats> nodeStats)
+    {
+        addStats(node, nodeStats.get(node.getId()));
+        node.getSources().forEach(source -> addStatsRecursively(source, nodeStats));
+    }
+
+    private PlanNode joinFragments(PlanFragment fragment, Map<PlanFragmentId, PlanFragment> allFragments)
+    {
+        return SimplePlanRewriter.rewriteWith(new SimplePlanRewriter<>()
+        {
+            @Override
+            public PlanNode visitRemoteSource(RemoteSourceNode node, RewriteContext<Object> context)
+            {
+                List<PlanNode> sources = node.getSourceFragmentIds().stream().map(fragmentId -> joinFragments(allFragments.get(fragmentId), allFragments)).collect(toImmutableList());
+
+                PartitioningScheme partitioningScheme = new PartitioningScheme(Partitioning.create(SINGLE_DISTRIBUTION, ImmutableList.of()), node.getOutputSymbols());
+                return new ExchangeNode(node.getId(), node.getExchangeType(), ExchangeNode.Scope.REMOTE, partitioningScheme, sources,
+                        ImmutableList.of(partitioningScheme.getOutputLayout()), Optional.empty());
+            }
+        }, fragment.getRoot());
     }
 
     private void addStats(PlanNode planNode, PlanNodeStats stats)
