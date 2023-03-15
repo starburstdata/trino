@@ -1,3 +1,39 @@
+df_6926<-df_6922
+df_6927<-df_6922
+df_6929<-df_6922
+df_6926<-df_6923
+df_6927<-df_6923
+df_6929<-df_6923
+df_6926<-df_6924
+df_6927<-df_6924
+df_6929<-df_6924
+df_6926<-df_6925
+df_6927<-df_6925
+df_6929<-df_6925
+df_6940<-df_6922
+df_6941<-df_6922
+df_6943<-df_6922
+df_6940<-df_6923
+df_6941<-df_6923
+df_6943<-df_6923
+df_6940<-df_6924
+df_6941<-df_6924
+df_6943<-df_6924
+df_6940<-df_6925
+df_6941<-df_6925
+df_6943<-df_6925
+df_6954<-df_6922
+df_6955<-df_6922
+df_6957<-df_6922
+df_6954<-df_6923
+df_6955<-df_6923
+df_6957<-df_6923
+df_6954<-df_6924
+df_6955<-df_6924
+df_6957<-df_6924
+df_6954<-df_6925
+df_6955<-df_6925
+df_6957<-df_6925
 local exchange (GATHER, SINGLE, [])
     remote exchange (GATHER, SINGLE, [])
         join ([i_brand_id = i_brand_id_158, i_class_id = i_class_id_159, i_category_id = i_category_id_160, i_manufact_id = i_manufact_id_161], INNER, PARTITIONED, [DF_6922, DF_6923, DF_6924, DF_6925]):

@@ -1,3 +1,5 @@
+df_5533<-df_5532
+df_5523<-df_5522
 local exchange (GATHER, SINGLE, [])
     remote exchange (GATHER, SINGLE, [])
         join ([c_customer_id_75 = c_customer_id], INNER, PARTITIONED, [DF_5522]):

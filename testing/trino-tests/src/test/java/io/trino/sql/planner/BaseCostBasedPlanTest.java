@@ -16,6 +16,7 @@ package io.trino.sql.planner;
 
 import com.google.common.base.VerifyException;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Resources;
 import io.airlift.log.Logger;
 import io.trino.Session;
@@ -45,13 +46,16 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.io.Files.createParentDirs;
 import static com.google.common.io.Files.write;
 import static com.google.common.io.Resources.getResource;
@@ -211,9 +215,11 @@ public abstract class BaseCostBasedPlanTest
         try {
             return getQueryRunner().inTransaction(transactionSession -> {
                 Plan plan = getQueryRunner().createPlan(transactionSession, query, OPTIMIZED_AND_VALIDATED, false, WarningCollector.NOOP);
+                DynamicFilteringPrinter dynamicFilteringPrinter = new DynamicFilteringPrinter();
+                plan.getRoot().accept(dynamicFilteringPrinter, ImmutableMap.of());
                 JoinOrderPrinter joinOrderPrinter = new JoinOrderPrinter(transactionSession);
                 plan.getRoot().accept(joinOrderPrinter, 0);
-                return joinOrderPrinter.result();
+                return dynamicFilteringPrinter.result() + joinOrderPrinter.result();
             });
         }
         catch (RuntimeException e) {
@@ -233,6 +239,50 @@ public abstract class BaseCostBasedPlanTest
             return workingDir;
         }
         throw new IllegalStateException("This class must be executed from trino-tests or Trino source directory");
+    }
+
+    private static class DynamicFilteringPrinter
+            extends SimplePlanVisitor<Map<DynamicFilterId, Set<DynamicFilterId>>>
+    {
+        private final StringBuilder result = new StringBuilder();
+
+        public String result()
+        {
+            return result.toString();
+        }
+
+        @Override
+        public Void visitJoin(JoinNode joinNode, Map<DynamicFilterId, Set<DynamicFilterId>> dependencies)
+        {
+            visitPlan(
+                    joinNode.getRight(),
+                    dependencies.entrySet().stream()
+                            .collect(toImmutableMap(
+                                    Map.Entry::getKey,
+                                    entry -> ImmutableSet.<DynamicFilterId>builder()
+                                            .addAll(entry.getValue())
+                                            .addAll(joinNode.getDynamicFilters().keySet())
+                                            .build())));
+            visitPlan(
+                    joinNode.getLeft(),
+                    ImmutableMap.<DynamicFilterId, Set<DynamicFilterId>>builder()
+                            .putAll(dependencies)
+                            .putAll(joinNode.getDynamicFilters().keySet().stream()
+                                    .collect(toImmutableMap(id -> id, id -> ImmutableSet.of())))
+                            .build());
+            return null;
+        }
+
+        @Override
+        public Void visitFilter(FilterNode node, Map<DynamicFilterId, Set<DynamicFilterId>> dependencies)
+        {
+            List<DynamicFilterId> consumedDfs = extractDynamicFilters(node.getPredicate()).getDynamicConjuncts().stream()
+                    .map(DynamicFilters.Descriptor::getId)
+                    .collect(toImmutableList());
+            consumedDfs.forEach(consumedDf -> dependencies.getOrDefault(consumedDf, ImmutableSet.of()).forEach(producedDf -> result.append(producedDf).append("<-").append(consumedDf).append("\n")));
+            visitPlan(node.getSource(), dependencies);
+            return null;
+        }
     }
 
     private class JoinOrderPrinter

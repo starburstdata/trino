@@ -1,3 +1,5 @@
+df_3317<-df_3315
+df_3318<-df_3315
 local exchange (GATHER, SINGLE, [])
     remote exchange (GATHER, SINGLE, [])
         final aggregation over (channel$gid, groupid, id$gid)

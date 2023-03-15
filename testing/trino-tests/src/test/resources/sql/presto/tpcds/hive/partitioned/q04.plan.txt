@@ -1,3 +1,7 @@
+df_11311<-df_11309
+df_11321<-df_11309
+df_11333<-df_11309
+df_11333<-df_11321
 local exchange (GATHER, SINGLE, [])
     remote exchange (GATHER, SINGLE, [])
         join ([c_customer_id = c_customer_id_172], INNER, PARTITIONED, [DF_11309]):

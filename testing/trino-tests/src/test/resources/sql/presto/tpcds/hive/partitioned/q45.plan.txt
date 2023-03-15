@@ -1,3 +1,5 @@
+df_1708<-df_1707
+df_1710<-df_1707
 local exchange (GATHER, SINGLE, [])
     remote exchange (GATHER, SINGLE, [])
         final aggregation over (ca_city, ca_zip)

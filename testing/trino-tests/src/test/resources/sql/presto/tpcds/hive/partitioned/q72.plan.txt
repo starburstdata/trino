@@ -1,3 +1,7 @@
+df_3853<-df_3848
+df_3844<-df_3842
+df_3845<-df_3842
+df_3846<-df_3842
 local exchange (GATHER, SINGLE, [])
     remote exchange (GATHER, SINGLE, [])
         final aggregation over (d_week_seq, i_item_desc, w_warehouse_name)
