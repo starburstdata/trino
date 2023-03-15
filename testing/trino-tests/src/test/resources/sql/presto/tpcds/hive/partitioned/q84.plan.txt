@@ -1,23 +1,29 @@
 local exchange (GATHER, SINGLE, [])
     remote exchange (GATHER, SINGLE, [])
-        join (INNER, REPLICATED):
-            scan store_returns
+        join ([sr_cdemo_sk = cd_demo_sk], INNER, REPLICATED, [DF_1262]):
+            filter [df_1262]
+                scan store_returns
             local exchange (GATHER, SINGLE, [])
                 remote exchange (REPLICATE, BROADCAST, [])
-                    join (INNER, REPLICATED):
-                        scan customer_demographics
+                    join ([cd_demo_sk = c_current_cdemo_sk], INNER, REPLICATED, [DF_1264]):
+                        filter [df_1264]
+                            scan customer_demographics
                         local exchange (GATHER, SINGLE, [])
                             remote exchange (REPLICATE, BROADCAST, [])
-                                join (INNER, REPLICATED):
-                                    join (INNER, REPLICATED):
-                                        scan customer
+                                join ([c_current_hdemo_sk = hd_demo_sk], INNER, REPLICATED, [DF_1266]):
+                                    join ([c_current_addr_sk = ca_address_sk], INNER, REPLICATED, [DF_1267]):
+                                        filter [df_1266, df_1267]
+                                            scan customer
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                scan customer_address
+                                                filter []
+                                                    scan customer_address
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPLICATE, BROADCAST, [])
-                                            join (INNER, REPLICATED):
-                                                scan household_demographics
+                                            join ([hd_income_band_sk = ib_income_band_sk], INNER, REPLICATED, [DF_1273]):
+                                                filter [df_1273]
+                                                    scan household_demographics
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan income_band
+                                                        filter []
+                                                            scan income_band

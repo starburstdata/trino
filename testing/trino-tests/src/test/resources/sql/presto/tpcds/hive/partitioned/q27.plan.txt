@@ -4,21 +4,26 @@ local exchange (GATHER, SINGLE, [])
             local exchange (REPARTITION, HASH, ["groupid", "i_item_id$gid", "s_state$gid"])
                 remote exchange (REPARTITION, HASH, ["groupid", "i_item_id$gid", "s_state$gid"])
                     partial aggregation over (groupid, i_item_id$gid, s_state$gid)
-                        join (INNER, PARTITIONED):
+                        join ([i_item_sk = ss_item_sk], INNER, PARTITIONED, [DF_1559]):
                             remote exchange (REPARTITION, HASH, ["i_item_sk"])
-                                scan item
+                                filter [df_1559]
+                                    scan item
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPARTITION, HASH, ["ss_item_sk"])
-                                    join (INNER, REPLICATED):
-                                        join (INNER, REPLICATED):
-                                            join (INNER, REPLICATED):
-                                                scan store_sales
+                                    join ([ss_store_sk = s_store_sk], INNER, REPLICATED, [DF_1561]):
+                                        join ([ss_cdemo_sk = cd_demo_sk], INNER, REPLICATED, [DF_1562]):
+                                            join ([ss_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_1563]):
+                                                filter [df_1561, df_1562, df_1563]
+                                                    scan store_sales
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan date_dim
+                                                        filter []
+                                                            scan date_dim
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan customer_demographics
+                                                    filter []
+                                                        scan customer_demographics
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                scan store
+                                                filter []
+                                                    scan store

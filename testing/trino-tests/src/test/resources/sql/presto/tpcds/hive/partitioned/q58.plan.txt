@@ -1,87 +1,101 @@
 local exchange (GATHER, SINGLE, [])
     remote exchange (GATHER, SINGLE, [])
-        join (INNER, PARTITIONED):
-            join (INNER, PARTITIONED):
+        join ([i_item_id_75 = i_item_id], INNER, PARTITIONED, [DF_4666]):
+            join ([i_item_id_75 = i_item_id_203], INNER, PARTITIONED, [DF_4667]):
                 final aggregation over (i_item_id_75)
                     local exchange (GATHER, SINGLE, [])
                         remote exchange (REPARTITION, HASH, ["i_item_id_75"])
                             partial aggregation over (i_item_id_75)
-                                join (INNER, PARTITIONED):
+                                join ([cs_item_sk = i_item_sk_74], INNER, PARTITIONED, [DF_4668]):
                                     remote exchange (REPARTITION, HASH, ["cs_item_sk"])
-                                        join (INNER, REPLICATED):
-                                            scan catalog_sales
+                                        join ([cs_sold_date_sk = d_date_sk_99], INNER, REPLICATED, [DF_4669]):
+                                            filter [df_4668, df_4669]
+                                                scan catalog_sales
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
-                                                    join (INNER, REPLICATED):
-                                                        scan date_dim
+                                                    join ([d_date_101 = d_date_134], INNER, REPLICATED, [DF_4671]):
+                                                        filter [df_4671]
+                                                            scan date_dim
                                                         local exchange (GATHER, SINGLE, [])
                                                             remote exchange (REPLICATE, BROADCAST, [])
                                                                 final aggregation over (d_date_134)
                                                                     local exchange (GATHER, SINGLE, [])
                                                                         remote exchange (REPARTITION, HASH, ["d_date_134"])
                                                                             partial aggregation over (d_date_134)
-                                                                                join (INNER, REPLICATED, can skip output duplicates):
-                                                                                    scan date_dim
+                                                                                join ([d_week_seq_136 = d_week_seq_167], INNER, REPLICATED, can skip output duplicates, [df_4673]):
+                                                                                    filter [df_4673]
+                                                                                        scan date_dim
                                                                                     local exchange (GATHER, SINGLE, [])
                                                                                         remote exchange (REPLICATE, BROADCAST, [])
                                                                                             local exchange (GATHER, SINGLE, [])
                                                                                                 remote exchange (GATHER, SINGLE, [])
-                                                                                                    scan date_dim
+                                                                                                    filter []
+                                                                                                        scan date_dim
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPARTITION, HASH, ["i_item_sk_74"])
-                                            scan item
+                                            filter [df_4666, df_4667]
+                                                scan item
                 final aggregation over (i_item_id_203)
                     local exchange (GATHER, SINGLE, [])
                         remote exchange (REPARTITION, HASH, ["i_item_id_203"])
                             partial aggregation over (i_item_id_203)
-                                join (INNER, PARTITIONED):
+                                join ([ws_item_sk = i_item_sk_202], INNER, PARTITIONED, [DF_4687]):
                                     remote exchange (REPARTITION, HASH, ["ws_item_sk"])
-                                        join (INNER, REPLICATED):
-                                            scan web_sales
+                                        join ([ws_sold_date_sk = d_date_sk_227], INNER, REPLICATED, [DF_4688]):
+                                            filter [df_4687, df_4688]
+                                                scan web_sales
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
-                                                    join (INNER, REPLICATED):
-                                                        scan date_dim
+                                                    join ([d_date_229 = d_date_262], INNER, REPLICATED, [DF_4690]):
+                                                        filter [df_4690]
+                                                            scan date_dim
                                                         local exchange (GATHER, SINGLE, [])
                                                             remote exchange (REPLICATE, BROADCAST, [])
                                                                 final aggregation over (d_date_262)
                                                                     local exchange (GATHER, SINGLE, [])
                                                                         remote exchange (REPARTITION, HASH, ["d_date_262"])
                                                                             partial aggregation over (d_date_262)
-                                                                                join (INNER, REPLICATED, can skip output duplicates):
-                                                                                    scan date_dim
+                                                                                join ([d_week_seq_264 = d_week_seq_295], INNER, REPLICATED, can skip output duplicates, [df_4692]):
+                                                                                    filter [df_4692]
+                                                                                        scan date_dim
                                                                                     local exchange (GATHER, SINGLE, [])
                                                                                         remote exchange (REPLICATE, BROADCAST, [])
                                                                                             local exchange (GATHER, SINGLE, [])
                                                                                                 remote exchange (GATHER, SINGLE, [])
-                                                                                                    scan date_dim
+                                                                                                    filter []
+                                                                                                        scan date_dim
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPARTITION, HASH, ["i_item_sk_202"])
-                                            scan item
+                                            filter [df_4666]
+                                                scan item
             final aggregation over (i_item_id)
                 local exchange (GATHER, SINGLE, [])
                     remote exchange (REPARTITION, HASH, ["i_item_id"])
                         partial aggregation over (i_item_id)
-                            join (INNER, REPLICATED):
-                                join (INNER, REPLICATED):
-                                    scan store_sales
+                            join ([ss_item_sk = i_item_sk], INNER, REPLICATED, [DF_4708]):
+                                join ([ss_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_4709]):
+                                    filter [df_4708, df_4709]
+                                        scan store_sales
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPLICATE, BROADCAST, [])
-                                            join (INNER, REPLICATED):
-                                                scan date_dim
+                                            join ([d_date = d_date_8], INNER, REPLICATED, [DF_4711]):
+                                                filter [df_4711]
+                                                    scan date_dim
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
                                                         final aggregation over (d_date_8)
                                                             local exchange (GATHER, SINGLE, [])
                                                                 remote exchange (REPARTITION, HASH, ["d_date_8"])
                                                                     partial aggregation over (d_date_8)
-                                                                        join (INNER, REPLICATED, can skip output duplicates):
-                                                                            scan date_dim
+                                                                        join ([d_week_seq_10 = d_week_seq_41], INNER, REPLICATED, can skip output duplicates, [df_4713]):
+                                                                            filter [df_4713]
+                                                                                scan date_dim
                                                                             local exchange (GATHER, SINGLE, [])
                                                                                 remote exchange (REPLICATE, BROADCAST, [])
                                                                                     local exchange (GATHER, SINGLE, [])
                                                                                         remote exchange (GATHER, SINGLE, [])
-                                                                                            scan date_dim
+                                                                                            filter []
+                                                                                                scan date_dim
                                 local exchange (GATHER, SINGLE, [])
                                     remote exchange (REPLICATE, BROADCAST, [])
                                         scan item

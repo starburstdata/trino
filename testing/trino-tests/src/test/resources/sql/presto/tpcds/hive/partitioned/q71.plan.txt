@@ -5,28 +5,36 @@ remote exchange (GATHER, SINGLE, [])
                 local exchange (GATHER, SINGLE, [])
                     remote exchange (REPARTITION, HASH, ["i_brand", "i_brand_id", "t_hour", "t_minute"])
                         partial aggregation over (i_brand, i_brand_id, t_hour, t_minute)
-                            join (INNER, PARTITIONED):
+                            join ([time_sk = t_time_sk], INNER, PARTITIONED, [DF_2162]):
                                 remote exchange (REPARTITION, HASH, ["time_sk"])
-                                    join (INNER, REPLICATED):
+                                    join ([sold_item_sk = i_item_sk], INNER, REPLICATED, [DF_2163]):
                                         remote exchange (REPARTITION, ROUND_ROBIN, [])
-                                            join (INNER, REPLICATED):
-                                                scan web_sales
+                                            join ([ws_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_2164]):
+                                                filter [df_2162, df_2163, df_2164]
+                                                    scan web_sales
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan date_dim
-                                            join (INNER, REPLICATED):
-                                                scan catalog_sales
+                                                        filter []
+                                                            scan date_dim
+                                            join ([cs_sold_date_sk = d_date_sk_14], INNER, REPLICATED, [DF_2169]):
+                                                filter [df_2162, df_2163, df_2169]
+                                                    scan catalog_sales
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan date_dim
-                                            join (INNER, REPLICATED):
-                                                scan store_sales
+                                                        filter []
+                                                            scan date_dim
+                                            join ([ss_sold_date_sk = d_date_sk_49], INNER, REPLICATED, [DF_2174]):
+                                                filter [df_2162, df_2163, df_2174]
+                                                    scan store_sales
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan date_dim
+                                                        filter []
+                                                            scan date_dim
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                scan item
+                                                filter []
+                                                    scan item
                                 local exchange (GATHER, SINGLE, [])
                                     remote exchange (REPARTITION, HASH, ["t_time_sk"])
-                                        scan time_dim
+                                        filter []
+                                            scan time_dim

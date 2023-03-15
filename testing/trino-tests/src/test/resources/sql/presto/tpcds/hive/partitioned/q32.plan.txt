@@ -2,29 +2,35 @@ final aggregation over ()
     local exchange (GATHER, SINGLE, [])
         remote exchange (GATHER, SINGLE, [])
             partial aggregation over ()
-                cross join:
-                    join (RIGHT, PARTITIONED):
-                        final aggregation over (cs_item_sk_20)
+                filter []
+                    cross join:
+                        join ([cs_item_sk_20 = cs_item_sk], RIGHT, PARTITIONED, [DF_1784]):
+                            final aggregation over (cs_item_sk_20)
+                                local exchange (GATHER, SINGLE, [])
+                                    remote exchange (REPARTITION, HASH, ["cs_item_sk_20"])
+                                        partial aggregation over (cs_item_sk_20)
+                                            join ([cs_sold_date_sk_39 = d_date_sk_44], INNER, REPLICATED, [DF_1785]):
+                                                filter [df_1784, df_1785]
+                                                    scan catalog_sales
+                                                local exchange (GATHER, SINGLE, [])
+                                                    remote exchange (REPLICATE, BROADCAST, [])
+                                                        filter []
+                                                            scan date_dim
                             local exchange (GATHER, SINGLE, [])
-                                remote exchange (REPARTITION, HASH, ["cs_item_sk_20"])
-                                    partial aggregation over (cs_item_sk_20)
-                                        join (INNER, REPLICATED):
-                                            scan catalog_sales
+                                remote exchange (REPARTITION, HASH, ["cs_item_sk"])
+                                    join ([cs_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_1790]):
+                                        join ([cs_item_sk = i_item_sk], INNER, REPLICATED, [DF_1791]):
+                                            filter [df_1790, df_1791]
+                                                scan catalog_sales
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan date_dim
-                        local exchange (GATHER, SINGLE, [])
-                            remote exchange (REPARTITION, HASH, ["cs_item_sk"])
-                                join (INNER, REPLICATED):
-                                    join (INNER, REPLICATED):
-                                        scan catalog_sales
+                                                    filter []
+                                                        scan item
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                scan item
-                                    local exchange (GATHER, SINGLE, [])
-                                        remote exchange (REPLICATE, BROADCAST, [])
-                                            scan date_dim
-                    local exchange (GATHER, SINGLE, [])
-                        remote exchange (REPLICATE, BROADCAST, [])
-                            single aggregation over ()
-                                values (1 rows)
+                                                filter []
+                                                    scan date_dim
+                        local exchange (GATHER, SINGLE, [])
+                            remote exchange (REPLICATE, BROADCAST, [])
+                                single aggregation over ()
+                                    values (1 rows)

@@ -4,33 +4,41 @@ local exchange (GATHER, SINGLE, [])
             local exchange (GATHER, SINGLE, [])
                 remote exchange (REPARTITION, HASH, ["i_item_desc", "i_item_id", "s_store_id", "s_store_name"])
                     partial aggregation over (i_item_desc, i_item_id, s_store_id, s_store_name)
-                        join (INNER, REPLICATED):
-                            scan item
+                        join ([i_item_sk = cs_item_sk], INNER, REPLICATED, [DF_2439]):
+                            filter [df_2439]
+                                scan item
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPLICATE, BROADCAST, [])
-                                    join (INNER, PARTITIONED):
+                                    join ([s_store_sk = ss_store_sk], INNER, PARTITIONED, [DF_2441]):
                                         remote exchange (REPARTITION, HASH, ["s_store_sk"])
-                                            scan store
+                                            filter [df_2441]
+                                                scan store
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPARTITION, HASH, ["ss_store_sk"])
-                                                join (INNER, REPLICATED):
-                                                    join (INNER, REPLICATED):
-                                                        scan catalog_sales
+                                                join ([cs_sold_date_sk = d_date_sk_42], INNER, REPLICATED, [DF_2443]):
+                                                    join ([cs_item_sk = ss_item_sk, cs_bill_customer_sk = ss_customer_sk], INNER, REPLICATED, [DF_2444, DF_2445]):
+                                                        filter [df_2443, df_2444, df_2445]
+                                                            scan catalog_sales
                                                         local exchange (GATHER, SINGLE, [])
                                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                                join (INNER, REPLICATED):
-                                                                    join (INNER, REPLICATED):
-                                                                        scan store_sales
+                                                                join ([ss_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_2447]):
+                                                                    join ([ss_item_sk = sr_item_sk, ss_customer_sk = sr_customer_sk, ss_ticket_number = sr_ticket_number], INNER, REPLICATED, [DF_2448, DF_2449, DF_2450]):
+                                                                        filter [df_2447, df_2448, df_2449, df_2450]
+                                                                            scan store_sales
                                                                         local exchange (GATHER, SINGLE, [])
                                                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                                                join (INNER, REPLICATED):
-                                                                                    scan store_returns
+                                                                                join ([sr_returned_date_sk = d_date_sk_11], INNER, REPLICATED, [DF_2452]):
+                                                                                    filter [df_2452]
+                                                                                        scan store_returns
                                                                                     local exchange (GATHER, SINGLE, [])
                                                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                                                            scan date_dim
+                                                                                            filter []
+                                                                                                scan date_dim
                                                                     local exchange (GATHER, SINGLE, [])
                                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                                            scan date_dim
+                                                                            filter []
+                                                                                scan date_dim
                                                     local exchange (GATHER, SINGLE, [])
                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                            scan date_dim
+                                                            filter []
+                                                                scan date_dim

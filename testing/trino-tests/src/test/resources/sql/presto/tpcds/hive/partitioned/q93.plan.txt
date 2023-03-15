@@ -4,13 +4,16 @@ local exchange (GATHER, SINGLE, [])
             local exchange (GATHER, SINGLE, [])
                 remote exchange (REPARTITION, HASH, ["ss_customer_sk"])
                     partial aggregation over (ss_customer_sk)
-                        join (INNER, REPLICATED):
-                            join (INNER, PARTITIONED):
+                        join ([sr_reason_sk = r_reason_sk], INNER, REPLICATED, [DF_734]):
+                            join ([ss_item_sk = sr_item_sk, ss_ticket_number = sr_ticket_number], INNER, PARTITIONED, [DF_735, DF_736]):
                                 remote exchange (REPARTITION, HASH, ["ss_item_sk", "ss_ticket_number"])
-                                    scan store_sales
+                                    filter [df_735, df_736]
+                                        scan store_sales
                                 local exchange (GATHER, SINGLE, [])
                                     remote exchange (REPARTITION, HASH, ["sr_item_sk", "sr_ticket_number"])
-                                        scan store_returns
+                                        filter [df_734]
+                                            scan store_returns
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPLICATE, BROADCAST, [])
-                                    scan reason
+                                    filter []
+                                        scan reason

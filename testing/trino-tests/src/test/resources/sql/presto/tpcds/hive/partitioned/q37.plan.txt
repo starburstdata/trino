@@ -4,16 +4,20 @@ local exchange (GATHER, SINGLE, [])
             local exchange (GATHER, SINGLE, [])
                 remote exchange (REPARTITION, HASH, ["i_current_price", "i_item_desc", "i_item_id"])
                     partial aggregation over (i_current_price, i_item_desc, i_item_id)
-                        join (INNER, REPLICATED, can skip output duplicates):
-                            scan catalog_sales
+                        join ([cs_item_sk = inv_item_sk], INNER, REPLICATED, can skip output duplicates, [df_1140]):
+                            filter [df_1140]
+                                scan catalog_sales
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPLICATE, BROADCAST, [])
-                                    join (INNER, REPLICATED, can skip output duplicates):
-                                        join (INNER, REPLICATED, can skip output duplicates):
-                                            scan inventory
+                                    join ([inv_item_sk = i_item_sk], INNER, REPLICATED, can skip output duplicates, [df_1142]):
+                                        join ([inv_date_sk = d_date_sk], INNER, REPLICATED, can skip output duplicates, [df_1143]):
+                                            filter [df_1142, df_1143]
+                                                scan inventory
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan date_dim
+                                                    filter []
+                                                        scan date_dim
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                scan item
+                                                filter []
+                                                    scan item

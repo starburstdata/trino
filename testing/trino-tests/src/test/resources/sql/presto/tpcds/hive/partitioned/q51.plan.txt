@@ -1,27 +1,32 @@
 local exchange (GATHER, SINGLE, [])
     remote exchange (GATHER, SINGLE, [])
-        local exchange (GATHER, SINGLE, [])
-            remote exchange (REPARTITION, HASH, ["expr"])
-                join (FULL, PARTITIONED):
-                    local exchange (GATHER, SINGLE, [])
-                        remote exchange (REPARTITION, HASH, ["ws_item_sk"])
-                            final aggregation over (d_date, ws_item_sk)
-                                local exchange (GATHER, SINGLE, [])
-                                    remote exchange (REPARTITION, HASH, ["d_date", "ws_item_sk"])
-                                        partial aggregation over (d_date, ws_item_sk)
-                                            join (INNER, REPLICATED):
-                                                scan web_sales
-                                                local exchange (GATHER, SINGLE, [])
-                                                    remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan date_dim
-                    local exchange (GATHER, SINGLE, [])
-                        remote exchange (REPARTITION, HASH, ["ss_item_sk"])
-                            final aggregation over (d_date_10, ss_item_sk)
-                                local exchange (GATHER, SINGLE, [])
-                                    remote exchange (REPARTITION, HASH, ["d_date_10", "ss_item_sk"])
-                                        partial aggregation over (d_date_10, ss_item_sk)
-                                            join (INNER, REPLICATED):
-                                                scan store_sales
-                                                local exchange (GATHER, SINGLE, [])
-                                                    remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan date_dim
+        filter []
+            local exchange (GATHER, SINGLE, [])
+                remote exchange (REPARTITION, HASH, ["expr"])
+                    join ([ws_item_sk = ss_item_sk, d_date = d_date_10], FULL, PARTITIONED, []):
+                        local exchange (GATHER, SINGLE, [])
+                            remote exchange (REPARTITION, HASH, ["ws_item_sk"])
+                                final aggregation over (d_date, ws_item_sk)
+                                    local exchange (GATHER, SINGLE, [])
+                                        remote exchange (REPARTITION, HASH, ["d_date", "ws_item_sk"])
+                                            partial aggregation over (d_date, ws_item_sk)
+                                                join ([ws_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_1848]):
+                                                    filter [df_1848]
+                                                        scan web_sales
+                                                    local exchange (GATHER, SINGLE, [])
+                                                        remote exchange (REPLICATE, BROADCAST, [])
+                                                            filter []
+                                                                scan date_dim
+                        local exchange (GATHER, SINGLE, [])
+                            remote exchange (REPARTITION, HASH, ["ss_item_sk"])
+                                final aggregation over (d_date_10, ss_item_sk)
+                                    local exchange (GATHER, SINGLE, [])
+                                        remote exchange (REPARTITION, HASH, ["d_date_10", "ss_item_sk"])
+                                            partial aggregation over (d_date_10, ss_item_sk)
+                                                join ([ss_sold_date_sk = d_date_sk_8], INNER, REPLICATED, [DF_1854]):
+                                                    filter [df_1854]
+                                                        scan store_sales
+                                                    local exchange (GATHER, SINGLE, [])
+                                                        remote exchange (REPLICATE, BROADCAST, [])
+                                                            filter []
+                                                                scan date_dim

@@ -1,8 +1,8 @@
 remote exchange (GATHER, SINGLE, [])
     local exchange (GATHER, UNKNOWN, [])
         remote exchange (REPARTITION, ROUND_ROBIN, [])
-            join (INNER, PARTITIONED):
-                join (INNER, PARTITIONED):
+            join ([d_week_seq = expr_229], INNER, PARTITIONED, [DF_2297]):
+                join ([d_week_seq = d_week_seq_23], INNER, PARTITIONED, [DF_2298]):
                     final aggregation over (d_week_seq)
                         local exchange (GATHER, SINGLE, [])
                             remote exchange (REPARTITION, HASH, ["d_week_seq"])
@@ -11,19 +11,23 @@ remote exchange (GATHER, SINGLE, [])
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPARTITION, HASH, ["d_day_name", "d_week_seq"])
                                                 partial aggregation over (d_day_name, d_week_seq)
-                                                    join (INNER, REPLICATED):
+                                                    join ([sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_2299]):
                                                         remote exchange (REPARTITION, ROUND_ROBIN, [])
-                                                            scan web_sales
-                                                            scan catalog_sales
+                                                            filter [df_2299]
+                                                                scan web_sales
+                                                            filter [df_2299]
+                                                                scan catalog_sales
                                                         local exchange (GATHER, SINGLE, [])
                                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                                scan date_dim
+                                                                filter [df_2297, df_2298]
+                                                                    scan date_dim
                     local exchange (GATHER, SINGLE, [])
                         remote exchange (REPARTITION, HASH, ["d_week_seq_23"])
-                            scan date_dim
+                            filter [df_2297]
+                                scan date_dim
                 local exchange (GATHER, SINGLE, [])
                     remote exchange (REPARTITION, HASH, ["expr_229"])
-                        join (INNER, PARTITIONED):
+                        join ([expr_229 = expr_232, d_week_seq_132 = d_week_seq_178], INNER, PARTITIONED, [DF_2311]):
                             final aggregation over (d_week_seq_132)
                                 local exchange (GATHER, SINGLE, [])
                                     remote exchange (REPARTITION, HASH, ["d_week_seq_132"])
@@ -32,13 +36,17 @@ remote exchange (GATHER, SINGLE, [])
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPARTITION, HASH, ["d_day_name_142", "d_week_seq_132"])
                                                         partial aggregation over (d_day_name_142, d_week_seq_132)
-                                                            join (INNER, REPLICATED):
+                                                            join ([sold_date_sk_50 = d_date_sk_128], INNER, REPLICATED, [DF_2312]):
                                                                 remote exchange (REPARTITION, ROUND_ROBIN, [])
-                                                                    scan web_sales
-                                                                    scan catalog_sales
+                                                                    filter [df_2312]
+                                                                        scan web_sales
+                                                                    filter [df_2312]
+                                                                        scan catalog_sales
                                                                 local exchange (GATHER, SINGLE, [])
                                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                                        scan date_dim
+                                                                        filter [df_2311]
+                                                                            scan date_dim
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPARTITION, HASH, ["d_week_seq_178"])
-                                    scan date_dim
+                                    filter []
+                                        scan date_dim

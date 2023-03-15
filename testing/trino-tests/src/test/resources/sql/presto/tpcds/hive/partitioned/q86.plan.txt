@@ -6,12 +6,14 @@ local exchange (GATHER, SINGLE, [])
                     local exchange (REPARTITION, HASH, ["groupid", "i_category$gid", "i_class$gid"])
                         remote exchange (REPARTITION, HASH, ["groupid", "i_category$gid", "i_class$gid"])
                             partial aggregation over (groupid, i_category$gid, i_class$gid)
-                                join (INNER, REPLICATED):
-                                    join (INNER, REPLICATED):
-                                        scan web_sales
+                                join ([ws_item_sk = i_item_sk], INNER, REPLICATED, [DF_1213]):
+                                    join ([ws_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_1214]):
+                                        filter [df_1213, df_1214]
+                                            scan web_sales
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                scan date_dim
+                                                filter []
+                                                    scan date_dim
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPLICATE, BROADCAST, [])
                                             scan item

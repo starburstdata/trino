@@ -4,18 +4,22 @@ local exchange (GATHER, SINGLE, [])
             local exchange (GATHER, SINGLE, [])
                 remote exchange (REPARTITION, HASH, ["ca_zip"])
                     partial aggregation over (ca_zip)
-                        join (INNER, PARTITIONED):
+                        join ([ca_address_sk = c_current_addr_sk], INNER, PARTITIONED, [DF_992]):
                             remote exchange (REPARTITION, HASH, ["ca_address_sk"])
-                                scan customer_address
+                                filter [df_992]
+                                    scan customer_address
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPARTITION, HASH, ["c_current_addr_sk"])
-                                    join (INNER, PARTITIONED):
+                                    join ([c_customer_sk = cs_bill_customer_sk], INNER, PARTITIONED, [DF_994]):
                                         remote exchange (REPARTITION, HASH, ["c_customer_sk"])
-                                            scan customer
+                                            filter [df_994]
+                                                scan customer
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPARTITION, HASH, ["cs_bill_customer_sk"])
-                                                join (INNER, REPLICATED):
-                                                    scan catalog_sales
+                                                join ([cs_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_996]):
+                                                    filter [df_996]
+                                                        scan catalog_sales
                                                     local exchange (GATHER, SINGLE, [])
                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                            scan date_dim
+                                                            filter []
+                                                                scan date_dim

@@ -4,42 +4,50 @@ final aggregation over ()
             partial aggregation over ()
                 local exchange (GATHER, SINGLE, [])
                     remote exchange (REPARTITION, HASH, ["ws_order_number"])
-                        join (INNER, REPLICATED):
-                            join (INNER, REPLICATED):
-                                join (INNER, REPLICATED):
-                                    join (INNER, REPLICATED):
-                                        scan web_sales
+                        join ([ws_order_number = ws_order_number_25], INNER, REPLICATED, [DF_2239]):
+                            join ([ws_ship_addr_sk = ca_address_sk], INNER, REPLICATED, [DF_2240]):
+                                join ([ws_web_site_sk = web_site_sk], INNER, REPLICATED, [DF_2241]):
+                                    join ([ws_ship_date_sk = d_date_sk], INNER, REPLICATED, [DF_2242]):
+                                        filter [df_2239, df_2240, df_2241, df_2242]
+                                            scan web_sales
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                scan date_dim
+                                                filter []
+                                                    scan date_dim
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPLICATE, BROADCAST, [])
-                                            scan web_site
+                                            filter []
+                                                scan web_site
                                 local exchange (GATHER, SINGLE, [])
                                     remote exchange (REPLICATE, BROADCAST, [])
-                                        scan customer_address
+                                        filter []
+                                            scan customer_address
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPLICATE, BROADCAST, [])
-                                    join (INNER, PARTITIONED):
+                                    join ([ws_order_number_25 = ws_order_number_109], INNER, PARTITIONED, [DF_2256]):
                                         final aggregation over (ws_order_number_25)
                                             local exchange (GATHER, SINGLE, [])
                                                 partial aggregation over (ws_order_number_25)
-                                                    join (INNER, PARTITIONED, can skip output duplicates):
+                                                    join ([ws_order_number_25 = ws_order_number_63], INNER, PARTITIONED, can skip output duplicates, [df_2257]):
                                                         remote exchange (REPARTITION, HASH, ["ws_order_number_25"])
-                                                            scan web_sales
+                                                            filter [df_2256, df_2257]
+                                                                scan web_sales
                                                         local exchange (GATHER, SINGLE, [])
                                                             remote exchange (REPARTITION, HASH, ["ws_order_number_63"])
-                                                                scan web_sales
+                                                                filter [df_2256]
+                                                                    scan web_sales
                                         final aggregation over (ws_order_number_109)
                                             local exchange (GATHER, SINGLE, [])
                                                 partial aggregation over (ws_order_number_109)
-                                                    join (INNER, PARTITIONED, can skip output duplicates):
-                                                        join (INNER, PARTITIONED, can skip output duplicates):
+                                                    join ([ws_order_number_109 = ws_order_number_147], INNER, PARTITIONED, can skip output duplicates, [df_2263]):
+                                                        join ([ws_order_number_109 = wr_order_number], INNER, PARTITIONED, can skip output duplicates, [df_2264]):
                                                             remote exchange (REPARTITION, HASH, ["ws_order_number_109"])
-                                                                scan web_sales
+                                                                filter [df_2263, df_2264]
+                                                                    scan web_sales
                                                             local exchange (GATHER, SINGLE, [])
                                                                 remote exchange (REPARTITION, HASH, ["wr_order_number"])
-                                                                    scan web_returns
+                                                                    filter [df_2263]
+                                                                        scan web_returns
                                                         local exchange (GATHER, SINGLE, [])
                                                             remote exchange (REPARTITION, HASH, ["ws_order_number_147"])
                                                                 scan web_sales

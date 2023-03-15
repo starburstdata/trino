@@ -6,28 +6,33 @@ local exchange (GATHER, SINGLE, [])
                     local exchange (REPARTITION, HASH, ["groupid", "s_county$gid", "s_state$gid_98"])
                         remote exchange (REPARTITION, HASH, ["groupid", "s_county$gid", "s_state$gid_98"])
                             partial aggregation over (groupid, s_county$gid, s_state$gid_98)
-                                join (INNER, PARTITIONED):
+                                join ([s_state = s_state_57], INNER, PARTITIONED, [DF_2393]):
                                     remote exchange (REPARTITION, HASH, ["s_state"])
-                                        join (INNER, REPLICATED):
-                                            join (INNER, REPLICATED):
-                                                scan store_sales
+                                        join ([ss_store_sk = s_store_sk], INNER, REPLICATED, [DF_2394]):
+                                            join ([ss_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_2395]):
+                                                filter [df_2394, df_2395]
+                                                    scan store_sales
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan date_dim
+                                                        filter []
+                                                            scan date_dim
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan store
+                                                    filter [df_2393]
+                                                        scan store
                                     single aggregation over (s_state_57)
                                         final aggregation over (s_state_57)
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPARTITION, HASH, ["s_state_57"])
                                                     partial aggregation over (s_state_57)
-                                                        join (INNER, REPLICATED):
-                                                            join (INNER, REPLICATED):
-                                                                scan store_sales
+                                                        join ([ss_store_sk_12 = s_store_sk_33], INNER, REPLICATED, [DF_2403]):
+                                                            join ([ss_sold_date_sk_28 = d_date_sk_65], INNER, REPLICATED, [DF_2404]):
+                                                                filter [df_2403, df_2404]
+                                                                    scan store_sales
                                                                 local exchange (GATHER, SINGLE, [])
                                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                                        scan date_dim
+                                                                        filter []
+                                                                            scan date_dim
                                                             local exchange (GATHER, SINGLE, [])
                                                                 remote exchange (REPLICATE, BROADCAST, [])
                                                                     scan store

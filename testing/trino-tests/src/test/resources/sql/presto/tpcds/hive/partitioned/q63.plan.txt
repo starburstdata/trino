@@ -1,22 +1,26 @@
 local exchange (GATHER, SINGLE, [])
     remote exchange (GATHER, SINGLE, [])
-        local exchange (GATHER, SINGLE, [])
-            remote exchange (REPARTITION, HASH, ["i_manager_id"])
-                final aggregation over (d_moy, i_manager_id)
-                    local exchange (GATHER, SINGLE, [])
-                        remote exchange (REPARTITION, HASH, ["d_moy", "i_manager_id"])
-                            partial aggregation over (d_moy, i_manager_id)
-                                join (INNER, PARTITIONED):
-                                    remote exchange (REPARTITION, HASH, ["ss_store_sk"])
-                                        join (INNER, REPLICATED):
-                                            join (INNER, REPLICATED):
-                                                scan store_sales
+        filter []
+            local exchange (GATHER, SINGLE, [])
+                remote exchange (REPARTITION, HASH, ["i_manager_id"])
+                    final aggregation over (d_moy, i_manager_id)
+                        local exchange (GATHER, SINGLE, [])
+                            remote exchange (REPARTITION, HASH, ["d_moy", "i_manager_id"])
+                                partial aggregation over (d_moy, i_manager_id)
+                                    join ([ss_store_sk = s_store_sk], INNER, PARTITIONED, [DF_1331]):
+                                        remote exchange (REPARTITION, HASH, ["ss_store_sk"])
+                                            join ([ss_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_1332]):
+                                                join ([ss_item_sk = i_item_sk], INNER, REPLICATED, [DF_1333]):
+                                                    filter [df_1331, df_1332, df_1333]
+                                                        scan store_sales
+                                                    local exchange (GATHER, SINGLE, [])
+                                                        remote exchange (REPLICATE, BROADCAST, [])
+                                                            filter []
+                                                                scan item
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan item
-                                            local exchange (GATHER, SINGLE, [])
-                                                remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan date_dim
-                                    local exchange (GATHER, SINGLE, [])
-                                        remote exchange (REPARTITION, HASH, ["s_store_sk"])
-                                            scan store
+                                                        filter []
+                                                            scan date_dim
+                                        local exchange (GATHER, SINGLE, [])
+                                            remote exchange (REPARTITION, HASH, ["s_store_sk"])
+                                                scan store

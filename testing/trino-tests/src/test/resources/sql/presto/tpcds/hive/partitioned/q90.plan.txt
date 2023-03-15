@@ -3,33 +3,41 @@ cross join:
         local exchange (GATHER, SINGLE, [])
             remote exchange (GATHER, SINGLE, [])
                 partial aggregation over ()
-                    join (INNER, REPLICATED):
-                        join (INNER, REPLICATED):
-                            join (INNER, REPLICATED):
-                                scan web_sales
+                    join ([ws_ship_hdemo_sk = hd_demo_sk], INNER, REPLICATED, [DF_2065]):
+                        join ([ws_sold_time_sk = t_time_sk], INNER, REPLICATED, [DF_2066]):
+                            join ([ws_web_page_sk = wp_web_page_sk], INNER, REPLICATED, [DF_2067]):
+                                filter [df_2065, df_2066, df_2067]
+                                    scan web_sales
                                 local exchange (GATHER, SINGLE, [])
                                     remote exchange (REPLICATE, BROADCAST, [])
-                                        scan web_page
+                                        filter []
+                                            scan web_page
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPLICATE, BROADCAST, [])
-                                    scan time_dim
+                                    filter []
+                                        scan time_dim
                         local exchange (GATHER, SINGLE, [])
                             remote exchange (REPLICATE, BROADCAST, [])
-                                scan household_demographics
+                                filter []
+                                    scan household_demographics
     final aggregation over ()
         local exchange (GATHER, SINGLE, [])
             remote exchange (GATHER, SINGLE, [])
                 partial aggregation over ()
-                    join (INNER, REPLICATED):
-                        join (INNER, REPLICATED):
-                            join (INNER, REPLICATED):
-                                scan web_sales
+                    join ([ws_ship_hdemo_sk_18 = hd_demo_sk_47], INNER, REPLICATED, [DF_2081]):
+                        join ([ws_sold_time_sk_9 = t_time_sk_55], INNER, REPLICATED, [DF_2082]):
+                            join ([ws_web_page_sk_20 = wp_web_page_sk_68], INNER, REPLICATED, [DF_2083]):
+                                filter [df_2081, df_2082, df_2083]
+                                    scan web_sales
                                 local exchange (GATHER, SINGLE, [])
                                     remote exchange (REPLICATE, BROADCAST, [])
-                                        scan web_page
+                                        filter []
+                                            scan web_page
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPLICATE, BROADCAST, [])
-                                    scan time_dim
+                                    filter []
+                                        scan time_dim
                         local exchange (GATHER, SINGLE, [])
                             remote exchange (REPLICATE, BROADCAST, [])
-                                scan household_demographics
+                                filter []
+                                    scan household_demographics

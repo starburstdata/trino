@@ -2,16 +2,20 @@ final aggregation over ()
     local exchange (GATHER, SINGLE, [])
         remote exchange (GATHER, SINGLE, [])
             partial aggregation over ()
-                join (INNER, REPLICATED):
-                    join (INNER, REPLICATED):
-                        join (INNER, REPLICATED):
-                            scan store_sales
+                join ([ss_store_sk = s_store_sk], INNER, REPLICATED, [DF_931]):
+                    join ([ss_hdemo_sk = hd_demo_sk], INNER, REPLICATED, [DF_932]):
+                        join ([ss_sold_time_sk = t_time_sk], INNER, REPLICATED, [DF_933]):
+                            filter [df_931, df_932, df_933]
+                                scan store_sales
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPLICATE, BROADCAST, [])
-                                    scan time_dim
+                                    filter []
+                                        scan time_dim
                         local exchange (GATHER, SINGLE, [])
                             remote exchange (REPLICATE, BROADCAST, [])
-                                scan household_demographics
+                                filter []
+                                    scan household_demographics
                     local exchange (GATHER, SINGLE, [])
                         remote exchange (REPLICATE, BROADCAST, [])
-                            scan store
+                            filter []
+                                scan store

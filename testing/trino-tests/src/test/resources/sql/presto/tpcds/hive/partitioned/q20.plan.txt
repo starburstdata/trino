@@ -6,13 +6,16 @@ local exchange (GATHER, SINGLE, [])
                     local exchange (GATHER, SINGLE, [])
                         remote exchange (REPARTITION, HASH, ["i_category", "i_class", "i_current_price", "i_item_desc", "i_item_id"])
                             partial aggregation over (i_category, i_class, i_current_price, i_item_desc, i_item_id)
-                                join (INNER, PARTITIONED):
+                                join ([cs_item_sk = i_item_sk], INNER, PARTITIONED, [DF_971]):
                                     remote exchange (REPARTITION, HASH, ["cs_item_sk"])
-                                        join (INNER, REPLICATED):
-                                            scan catalog_sales
+                                        join ([cs_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_972]):
+                                            filter [df_971, df_972]
+                                                scan catalog_sales
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan date_dim
+                                                    filter []
+                                                        scan date_dim
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPARTITION, HASH, ["i_item_sk"])
-                                            scan item
+                                            filter []
+                                                scan item

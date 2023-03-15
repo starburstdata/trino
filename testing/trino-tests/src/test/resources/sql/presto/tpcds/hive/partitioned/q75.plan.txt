@@ -1,105 +1,129 @@
 local exchange (GATHER, SINGLE, [])
     remote exchange (GATHER, SINGLE, [])
-        join (INNER, PARTITIONED):
+        join ([i_brand_id = i_brand_id_158, i_class_id = i_class_id_159, i_category_id = i_category_id_160, i_manufact_id = i_manufact_id_161], INNER, PARTITIONED, [DF_6922, DF_6923, DF_6924, DF_6925]):
             single aggregation over (d_year, i_brand_id, i_category_id, i_class_id, i_manufact_id)
                 final aggregation over (d_year, i_brand_id, i_category_id, i_class_id, i_manufact_id, sales_amt, sales_cnt)
                     local exchange (REPARTITION, HASH, ["d_year", "i_brand_id", "i_category_id", "i_class_id", "i_manufact_id"])
                         remote exchange (REPARTITION, HASH, ["i_brand_id_7", "i_category_id_9", "i_class_id_8", "i_manufact_id_10"])
                             partial aggregation over (d_year_14, expr, expr_22, i_brand_id_7, i_category_id_9, i_class_id_8, i_manufact_id_10)
-                                join (RIGHT, PARTITIONED, can skip output duplicates):
+                                join ([cr_order_number = cs_order_number, cr_item_sk = cs_item_sk], RIGHT, PARTITIONED, can skip output duplicates, [df_6926, df_6927]):
                                     remote exchange (REPARTITION, HASH, ["cr_item_sk", "cr_order_number"])
-                                        scan catalog_returns
+                                        filter [df_6926, df_6927]
+                                            scan catalog_returns
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPARTITION, HASH, ["cs_item_sk", "cs_order_number"])
-                                            join (INNER, REPLICATED, can skip output duplicates):
-                                                join (INNER, REPLICATED, can skip output duplicates):
-                                                    scan catalog_sales
+                                            join ([cs_item_sk = i_item_sk], INNER, REPLICATED, can skip output duplicates, [df_6929]):
+                                                join ([cs_sold_date_sk = d_date_sk], INNER, REPLICATED, can skip output duplicates, [df_6930]):
+                                                    filter [df_6929, df_6930]
+                                                        scan catalog_sales
                                                     local exchange (GATHER, SINGLE, [])
                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                            scan date_dim
+                                                            filter []
+                                                                scan date_dim
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan item
+                                                        filter [df_6922, df_6923, df_6924, df_6925]
+                                                            scan item
                         remote exchange (REPARTITION, HASH, ["i_brand_id_34", "i_category_id_38", "i_class_id_36", "i_manufact_id_40"])
                             partial aggregation over (d_year_58, expr_87, expr_88, i_brand_id_34, i_category_id_38, i_class_id_36, i_manufact_id_40)
-                                join (RIGHT, PARTITIONED, can skip output duplicates):
+                                join ([sr_ticket_number = ss_ticket_number, sr_item_sk = ss_item_sk], RIGHT, PARTITIONED, can skip output duplicates, [df_6940, df_6941]):
                                     remote exchange (REPARTITION, HASH, ["sr_item_sk", "sr_ticket_number"])
-                                        scan store_returns
+                                        filter [df_6940, df_6941]
+                                            scan store_returns
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPARTITION, HASH, ["ss_item_sk", "ss_ticket_number"])
-                                            join (INNER, REPLICATED, can skip output duplicates):
-                                                join (INNER, REPLICATED, can skip output duplicates):
-                                                    scan store_sales
+                                            join ([ss_item_sk = i_item_sk_27], INNER, REPLICATED, can skip output duplicates, [df_6943]):
+                                                join ([ss_sold_date_sk = d_date_sk_52], INNER, REPLICATED, can skip output duplicates, [df_6944]):
+                                                    filter [df_6943, df_6944]
+                                                        scan store_sales
                                                     local exchange (GATHER, SINGLE, [])
                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                            scan date_dim
+                                                            filter []
+                                                                scan date_dim
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan item
+                                                        filter [df_6922, df_6923, df_6924, df_6925]
+                                                            scan item
                         remote exchange (REPARTITION, HASH, ["i_brand_id_100", "i_category_id_104", "i_class_id_102", "i_manufact_id_106"])
                             partial aggregation over (d_year_124, expr_153, expr_154, i_brand_id_100, i_category_id_104, i_class_id_102, i_manufact_id_106)
-                                join (RIGHT, PARTITIONED, can skip output duplicates):
+                                join ([wr_order_number = ws_order_number, wr_item_sk = ws_item_sk], RIGHT, PARTITIONED, can skip output duplicates, [df_6954, df_6955]):
                                     remote exchange (REPARTITION, HASH, ["wr_item_sk", "wr_order_number"])
-                                        scan web_returns
+                                        filter [df_6954, df_6955]
+                                            scan web_returns
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPARTITION, HASH, ["ws_item_sk", "ws_order_number"])
-                                            join (INNER, REPLICATED, can skip output duplicates):
-                                                join (INNER, REPLICATED, can skip output duplicates):
-                                                    scan web_sales
+                                            join ([ws_item_sk = i_item_sk_93], INNER, REPLICATED, can skip output duplicates, [df_6957]):
+                                                join ([ws_sold_date_sk = d_date_sk_118], INNER, REPLICATED, can skip output duplicates, [df_6958]):
+                                                    filter [df_6957, df_6958]
+                                                        scan web_sales
                                                     local exchange (GATHER, SINGLE, [])
                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                            scan date_dim
+                                                            filter []
+                                                                scan date_dim
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan item
+                                                        filter [df_6922, df_6923, df_6924, df_6925]
+                                                            scan item
             single aggregation over (d_year_157, i_brand_id_158, i_category_id_160, i_class_id_159, i_manufact_id_161)
                 final aggregation over (d_year_157, i_brand_id_158, i_category_id_160, i_class_id_159, i_manufact_id_161, sales_amt_163, sales_cnt_162)
                     local exchange (GATHER, SINGLE, [])
                         remote exchange (REPARTITION, HASH, ["i_brand_id_216", "i_category_id_220", "i_class_id_218", "i_manufact_id_222"])
                             partial aggregation over (d_year_240, expr_296, expr_297, i_brand_id_216, i_category_id_220, i_class_id_218, i_manufact_id_222)
-                                join (RIGHT, PARTITIONED, can skip output duplicates):
+                                join ([cr_order_number_280 = cs_order_number_187, cr_item_sk_266 = cs_item_sk_185], RIGHT, PARTITIONED, can skip output duplicates, [df_6968, df_6969]):
                                     remote exchange (REPARTITION, HASH, ["cr_item_sk_266", "cr_order_number_280"])
-                                        scan catalog_returns
+                                        filter [df_6968, df_6969]
+                                            scan catalog_returns
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPARTITION, HASH, ["cs_item_sk_185", "cs_order_number_187"])
-                                            join (INNER, REPLICATED, can skip output duplicates):
-                                                join (INNER, REPLICATED, can skip output duplicates):
-                                                    scan catalog_sales
+                                            join ([cs_item_sk_185 = i_item_sk_209], INNER, REPLICATED, can skip output duplicates, [df_6971]):
+                                                join ([cs_sold_date_sk_204 = d_date_sk_234], INNER, REPLICATED, can skip output duplicates, [df_6972]):
+                                                    filter [df_6971, df_6972]
+                                                        scan catalog_sales
                                                     local exchange (GATHER, SINGLE, [])
                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                            scan date_dim
+                                                            filter []
+                                                                scan date_dim
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan item
+                                                        filter []
+                                                            scan item
                         remote exchange (REPARTITION, HASH, ["i_brand_id_332", "i_category_id_336", "i_class_id_334", "i_manufact_id_338"])
                             partial aggregation over (d_year_356, expr_405, expr_406, i_brand_id_332, i_category_id_336, i_class_id_334, i_manufact_id_338)
-                                join (RIGHT, PARTITIONED, can skip output duplicates):
+                                join ([sr_ticket_number_389 = ss_ticket_number_306, sr_item_sk_382 = ss_item_sk_299], RIGHT, PARTITIONED, can skip output duplicates, [df_6982, df_6983]):
                                     remote exchange (REPARTITION, HASH, ["sr_item_sk_382", "sr_ticket_number_389"])
-                                        scan store_returns
+                                        filter [df_6982, df_6983]
+                                            scan store_returns
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPARTITION, HASH, ["ss_item_sk_299", "ss_ticket_number_306"])
-                                            join (INNER, REPLICATED, can skip output duplicates):
-                                                join (INNER, REPLICATED, can skip output duplicates):
-                                                    scan store_sales
+                                            join ([ss_item_sk_299 = i_item_sk_325], INNER, REPLICATED, can skip output duplicates, [df_6985]):
+                                                join ([ss_sold_date_sk_320 = d_date_sk_350], INNER, REPLICATED, can skip output duplicates, [df_6986]):
+                                                    filter [df_6985, df_6986]
+                                                        scan store_sales
                                                     local exchange (GATHER, SINGLE, [])
                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                            scan date_dim
+                                                            filter []
+                                                                scan date_dim
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan item
+                                                        filter []
+                                                            scan item
                         remote exchange (REPARTITION, HASH, ["i_brand_id_452", "i_category_id_456", "i_class_id_454", "i_manufact_id_458"])
                             partial aggregation over (d_year_476, expr_529, expr_530, i_brand_id_452, i_category_id_456, i_class_id_454, i_manufact_id_458)
-                                join (RIGHT, PARTITIONED, can skip output duplicates):
+                                join ([wr_order_number_513 = ws_order_number_423, wr_item_sk_502 = ws_item_sk_409], RIGHT, PARTITIONED, can skip output duplicates, [df_6996, df_6997]):
                                     remote exchange (REPARTITION, HASH, ["wr_item_sk_502", "wr_order_number_513"])
-                                        scan web_returns
+                                        filter [df_6996, df_6997]
+                                            scan web_returns
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPARTITION, HASH, ["ws_item_sk_409", "ws_order_number_423"])
-                                            join (INNER, REPLICATED, can skip output duplicates):
-                                                join (INNER, REPLICATED, can skip output duplicates):
-                                                    scan web_sales
+                                            join ([ws_item_sk_409 = i_item_sk_445], INNER, REPLICATED, can skip output duplicates, [df_6999]):
+                                                join ([ws_sold_date_sk_440 = d_date_sk_470], INNER, REPLICATED, can skip output duplicates, [df_7000]):
+                                                    filter [df_6999, df_7000]
+                                                        scan web_sales
                                                     local exchange (GATHER, SINGLE, [])
                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                            scan date_dim
+                                                            filter []
+                                                                scan date_dim
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan item
+                                                        filter []
+                                                            scan item

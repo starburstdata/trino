@@ -4,29 +4,34 @@ local exchange (GATHER, SINGLE, [])
             local exchange (GATHER, SINGLE, [])
                 remote exchange (REPARTITION, HASH, ["r_reason_desc"])
                     partial aggregation over (r_reason_desc)
-                        join (INNER, REPLICATED):
-                            scan customer_demographics
+                        join ([cd_demo_sk_10 = wr_returning_cdemo_sk, cd_education_status_13 = cd_education_status, cd_marital_status_12 = cd_marital_status], INNER, REPLICATED, [DF_2307, DF_2308, DF_2309]):
+                            filter [df_2307, df_2308, df_2309]
+                                scan customer_demographics
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPLICATE, BROADCAST, [])
-                                    join (INNER, REPLICATED):
-                                        join (INNER, REPLICATED):
-                                            join (INNER, PARTITIONED):
+                                    join ([wr_reason_sk = r_reason_sk], INNER, REPLICATED, [DF_2311]):
+                                        join ([ws_web_page_sk = wp_web_page_sk], INNER, REPLICATED, [DF_2312]):
+                                            join ([ca_address_sk = wr_refunded_addr_sk], INNER, PARTITIONED, [DF_2313]):
                                                 remote exchange (REPARTITION, HASH, ["ca_address_sk"])
-                                                    scan customer_address
+                                                    filter [df_2313]
+                                                        scan customer_address
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPARTITION, HASH, ["wr_refunded_addr_sk"])
-                                                        join (INNER, PARTITIONED):
+                                                        join ([wr_refunded_cdemo_sk = cd_demo_sk], INNER, PARTITIONED, [DF_2315]):
                                                             remote exchange (REPARTITION, HASH, ["wr_refunded_cdemo_sk"])
-                                                                join (INNER, PARTITIONED):
+                                                                join ([wr_item_sk = ws_item_sk, wr_order_number = ws_order_number], INNER, PARTITIONED, [DF_2316, DF_2317]):
                                                                     remote exchange (REPARTITION, HASH, ["wr_item_sk", "wr_order_number"])
-                                                                        scan web_returns
+                                                                        filter [df_2311, df_2315, df_2316, df_2317]
+                                                                            scan web_returns
                                                                     local exchange (GATHER, SINGLE, [])
                                                                         remote exchange (REPARTITION, HASH, ["ws_item_sk", "ws_order_number"])
-                                                                            join (INNER, REPLICATED):
-                                                                                scan web_sales
+                                                                            join ([ws_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_2319]):
+                                                                                filter [df_2312, df_2319]
+                                                                                    scan web_sales
                                                                                 local exchange (GATHER, SINGLE, [])
                                                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                                                        scan date_dim
+                                                                                        filter []
+                                                                                            scan date_dim
                                                             local exchange (GATHER, SINGLE, [])
                                                                 remote exchange (REPARTITION, HASH, ["cd_demo_sk"])
                                                                     scan customer_demographics

@@ -1,48 +1,61 @@
 local exchange (GATHER, SINGLE, [])
     remote exchange (GATHER, SINGLE, [])
-        join (INNER, REPLICATED):
-            final aggregation over (cs_bill_customer_sk, cs_item_sk, d_year_68)
-                local exchange (GATHER, SINGLE, [])
-                    remote exchange (REPARTITION, HASH, ["cs_bill_customer_sk", "cs_item_sk", "d_year_68"])
-                        partial aggregation over (cs_bill_customer_sk, cs_item_sk, d_year_68)
-                            join (INNER, REPLICATED):
-                                join (LEFT, PARTITIONED):
-                                    remote exchange (REPARTITION, HASH, ["cs_item_sk", "cs_order_number"])
-                                        scan catalog_sales
+        join ([cs_bill_customer_sk = ss_customer_sk], INNER, REPLICATED, [DF_3299]):
+            filter []
+                final aggregation over (cs_bill_customer_sk, cs_item_sk, d_year_68)
+                    local exchange (GATHER, SINGLE, [])
+                        remote exchange (REPARTITION, HASH, ["cs_bill_customer_sk", "cs_item_sk", "d_year_68"])
+                            partial aggregation over (cs_bill_customer_sk, cs_item_sk, d_year_68)
+                                join ([cs_sold_date_sk = d_date_sk_62], INNER, REPLICATED, [DF_3300]):
+                                    filter []
+                                        join ([cs_order_number = cr_order_number, cs_item_sk = cr_item_sk], LEFT, PARTITIONED, []):
+                                            remote exchange (REPARTITION, HASH, ["cs_item_sk", "cs_order_number"])
+                                                filter [df_3299, df_3300]
+                                                    scan catalog_sales
+                                            local exchange (GATHER, SINGLE, [])
+                                                remote exchange (REPARTITION, HASH, ["cr_item_sk", "cr_order_number"])
+                                                    filter []
+                                                        scan catalog_returns
                                     local exchange (GATHER, SINGLE, [])
-                                        remote exchange (REPARTITION, HASH, ["cr_item_sk", "cr_order_number"])
-                                            scan catalog_returns
-                                local exchange (GATHER, SINGLE, [])
-                                    remote exchange (REPLICATE, BROADCAST, [])
-                                        scan date_dim
+                                        remote exchange (REPLICATE, BROADCAST, [])
+                                            filter []
+                                                scan date_dim
             local exchange (GATHER, SINGLE, [])
                 remote exchange (REPLICATE, BROADCAST, [])
-                    join (INNER, PARTITIONED):
+                    join ([ss_item_sk = ws_item_sk, ss_customer_sk = ws_bill_customer_sk], INNER, PARTITIONED, [DF_3310, DF_3311]):
                         final aggregation over (d_year, ss_customer_sk, ss_item_sk)
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPARTITION, HASH, ["d_year", "ss_customer_sk", "ss_item_sk"])
                                     partial aggregation over (d_year, ss_customer_sk, ss_item_sk)
-                                        join (INNER, REPLICATED):
-                                            join (LEFT, PARTITIONED):
-                                                remote exchange (REPARTITION, HASH, ["ss_item_sk", "ss_ticket_number"])
-                                                    scan store_sales
-                                                local exchange (GATHER, SINGLE, [])
-                                                    remote exchange (REPARTITION, HASH, ["sr_item_sk", "sr_ticket_number"])
-                                                        scan store_returns
+                                        join ([ss_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_3312]):
+                                            filter []
+                                                join ([ss_ticket_number = sr_ticket_number, ss_item_sk = sr_item_sk], LEFT, PARTITIONED, []):
+                                                    remote exchange (REPARTITION, HASH, ["ss_item_sk", "ss_ticket_number"])
+                                                        filter [df_3310, df_3311, df_3312]
+                                                            scan store_sales
+                                                    local exchange (GATHER, SINGLE, [])
+                                                        remote exchange (REPARTITION, HASH, ["sr_item_sk", "sr_ticket_number"])
+                                                            filter [df_3310]
+                                                                scan store_returns
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan date_dim
-                        final aggregation over (d_year_24, ws_bill_customer_sk, ws_item_sk)
-                            local exchange (GATHER, SINGLE, [])
-                                remote exchange (REPARTITION, HASH, ["d_year_24", "ws_bill_customer_sk", "ws_item_sk"])
-                                    partial aggregation over (d_year_24, ws_bill_customer_sk, ws_item_sk)
-                                        join (INNER, REPLICATED):
-                                            join (LEFT, PARTITIONED):
-                                                remote exchange (REPARTITION, HASH, ["ws_item_sk", "ws_order_number"])
-                                                    scan web_sales
+                                                    filter []
+                                                        scan date_dim
+                        filter []
+                            final aggregation over (d_year_24, ws_bill_customer_sk, ws_item_sk)
+                                local exchange (GATHER, SINGLE, [])
+                                    remote exchange (REPARTITION, HASH, ["d_year_24", "ws_bill_customer_sk", "ws_item_sk"])
+                                        partial aggregation over (d_year_24, ws_bill_customer_sk, ws_item_sk)
+                                            join ([ws_sold_date_sk = d_date_sk_18], INNER, REPLICATED, [DF_3321]):
+                                                filter []
+                                                    join ([ws_order_number = wr_order_number, ws_item_sk = wr_item_sk], LEFT, PARTITIONED, []):
+                                                        remote exchange (REPARTITION, HASH, ["ws_item_sk", "ws_order_number"])
+                                                            filter [df_3321]
+                                                                scan web_sales
+                                                        local exchange (GATHER, SINGLE, [])
+                                                            remote exchange (REPARTITION, HASH, ["wr_item_sk", "wr_order_number"])
+                                                                scan web_returns
                                                 local exchange (GATHER, SINGLE, [])
-                                                    remote exchange (REPARTITION, HASH, ["wr_item_sk", "wr_order_number"])
-                                                        scan web_returns
-                                            local exchange (GATHER, SINGLE, [])
-                                                remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan date_dim
+                                                    remote exchange (REPLICATE, BROADCAST, [])
+                                                        filter []
+                                                            scan date_dim

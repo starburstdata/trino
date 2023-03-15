@@ -23,11 +23,14 @@ import io.trino.execution.warnings.WarningCollector;
 import io.trino.metadata.TableHandle;
 import io.trino.metadata.TableMetadata;
 import io.trino.spi.connector.ConnectorFactory;
+import io.trino.sql.DynamicFilters;
 import io.trino.sql.planner.OptimizerConfig.JoinDistributionType;
 import io.trino.sql.planner.OptimizerConfig.JoinReorderingStrategy;
 import io.trino.sql.planner.assertions.BasePlanTest;
 import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.DynamicFilterId;
 import io.trino.sql.planner.plan.ExchangeNode;
+import io.trino.sql.planner.plan.FilterNode;
 import io.trino.sql.planner.plan.JoinNode;
 import io.trino.sql.planner.plan.SemiJoinNode;
 import io.trino.sql.planner.plan.TableScanNode;
@@ -55,6 +58,7 @@ import static com.google.common.io.Resources.getResource;
 import static io.trino.Session.SessionBuilder;
 import static io.trino.SystemSessionProperties.JOIN_DISTRIBUTION_TYPE;
 import static io.trino.SystemSessionProperties.JOIN_REORDERING_STRATEGY;
+import static io.trino.sql.DynamicFilters.extractDynamicFilters;
 import static io.trino.sql.planner.LogicalPlanner.Stage.OPTIMIZED_AND_VALIDATED;
 import static io.trino.sql.planner.plan.JoinNode.DistributionType.REPLICATED;
 import static io.trino.sql.planner.plan.JoinNode.Type.INNER;
@@ -263,13 +267,23 @@ public abstract class BaseCostBasedPlanTest
             }
             else {
                 if (node.isMaySkipOutputDuplicates()) {
-                    output(indent, "join (%s, %s, can skip output duplicates):", node.getType(), distributionType);
+                    output(indent, "join (%s, %s, %s, can skip output duplicates, %s):", node.getCriteria(), node.getType(), distributionType, node.getDynamicFilters().keySet());
                 }
                 else {
-                    output(indent, "join (%s, %s):", node.getType(), distributionType);
+                    output(indent, "join (%s, %s, %s, %S):", node.getCriteria(), node.getType(), distributionType, node.getDynamicFilters().keySet());
                 }
             }
 
+            return visitPlan(node, indent + 1);
+        }
+
+        @Override
+        public Void visitFilter(FilterNode node, Integer indent)
+        {
+            List<DynamicFilterId> consumedDfs = extractDynamicFilters(node.getPredicate()).getDynamicConjuncts().stream()
+                    .map(DynamicFilters.Descriptor::getId)
+                    .collect(toImmutableList());
+            output(indent, "filter %s", consumedDfs);
             return visitPlan(node, indent + 1);
         }
 

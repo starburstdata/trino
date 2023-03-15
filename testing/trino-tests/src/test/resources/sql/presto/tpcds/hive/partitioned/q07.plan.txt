@@ -4,21 +4,25 @@ local exchange (GATHER, SINGLE, [])
             local exchange (GATHER, SINGLE, [])
                 remote exchange (REPARTITION, HASH, ["i_item_id"])
                     partial aggregation over (i_item_id)
-                        join (INNER, PARTITIONED):
+                        join ([ss_item_sk = i_item_sk], INNER, PARTITIONED, [DF_1455]):
                             remote exchange (REPARTITION, HASH, ["ss_item_sk"])
-                                join (INNER, REPLICATED):
-                                    join (INNER, REPLICATED):
-                                        join (INNER, REPLICATED):
-                                            scan store_sales
+                                join ([ss_promo_sk = p_promo_sk], INNER, REPLICATED, [DF_1456]):
+                                    join ([ss_cdemo_sk = cd_demo_sk], INNER, REPLICATED, [DF_1457]):
+                                        join ([ss_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_1458]):
+                                            filter [df_1455, df_1456, df_1457, df_1458]
+                                                scan store_sales
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan date_dim
+                                                    filter []
+                                                        scan date_dim
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                scan customer_demographics
+                                                filter []
+                                                    scan customer_demographics
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPLICATE, BROADCAST, [])
-                                            scan promotion
+                                            filter []
+                                                scan promotion
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPARTITION, HASH, ["i_item_sk"])
                                     scan item

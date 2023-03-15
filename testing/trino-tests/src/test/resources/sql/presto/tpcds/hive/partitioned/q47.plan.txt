@@ -1,58 +1,70 @@
 local exchange (GATHER, SINGLE, [])
     remote exchange (GATHER, SINGLE, [])
-        join (INNER, PARTITIONED):
-            join (INNER, PARTITIONED):
-                local exchange (GATHER, SINGLE, [])
-                    remote exchange (REPARTITION, HASH, ["i_brand", "i_category", "s_company_name", "s_store_name"])
-                        final aggregation over (d_moy, d_year, i_brand, i_category, s_company_name, s_store_name)
-                            local exchange (GATHER, SINGLE, [])
-                                remote exchange (REPARTITION, HASH, ["d_moy", "d_year", "i_brand", "i_category", "s_company_name", "s_store_name"])
-                                    partial aggregation over (d_moy, d_year, i_brand, i_category, s_company_name, s_store_name)
-                                        join (INNER, REPLICATED):
-                                            join (INNER, REPLICATED):
-                                                join (INNER, REPLICATED):
-                                                    scan store_sales
+        join ([i_category = i_category_145, i_brand = i_brand_141, s_store_name = s_store_name_221, s_company_name = s_company_name_233, rank = expr_257], INNER, PARTITIONED, [DF_3831, DF_3832, DF_3833, DF_3834]):
+            join ([i_category = i_category_21, i_brand = i_brand_17, s_store_name = s_store_name_97, s_company_name = s_company_name_109, rank = expr_258], INNER, PARTITIONED, [DF_3836, DF_3837, DF_3838, DF_3839]):
+                filter []
+                    filter []
+                        local exchange (GATHER, SINGLE, [])
+                            remote exchange (REPARTITION, HASH, ["i_brand", "i_category", "s_company_name", "s_store_name"])
+                                final aggregation over (d_moy, d_year, i_brand, i_category, s_company_name, s_store_name)
+                                    local exchange (GATHER, SINGLE, [])
+                                        remote exchange (REPARTITION, HASH, ["d_moy", "d_year", "i_brand", "i_category", "s_company_name", "s_store_name"])
+                                            partial aggregation over (d_moy, d_year, i_brand, i_category, s_company_name, s_store_name)
+                                                join ([ss_item_sk = i_item_sk], INNER, REPLICATED, [DF_3841]):
+                                                    join ([ss_store_sk = s_store_sk], INNER, REPLICATED, [DF_3842]):
+                                                        join ([ss_sold_date_sk = d_date_sk], INNER, REPLICATED, [DF_3843]):
+                                                            filter [df_3841, df_3842, df_3843]
+                                                                scan store_sales
+                                                            local exchange (GATHER, SINGLE, [])
+                                                                remote exchange (REPLICATE, BROADCAST, [])
+                                                                    filter []
+                                                                        scan date_dim
+                                                        local exchange (GATHER, SINGLE, [])
+                                                            remote exchange (REPLICATE, BROADCAST, [])
+                                                                filter [df_3833, df_3834, df_3838, df_3839]
+                                                                    scan store
                                                     local exchange (GATHER, SINGLE, [])
                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                            scan date_dim
-                                                local exchange (GATHER, SINGLE, [])
-                                                    remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan store
-                                            local exchange (GATHER, SINGLE, [])
-                                                remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan item
+                                                            filter [df_3831, df_3832, df_3836, df_3837]
+                                                                scan item
                 local exchange (GATHER, SINGLE, [])
                     remote exchange (REPARTITION, HASH, ["i_brand_17", "i_category_21", "s_company_name_109", "s_store_name_97"])
                         final aggregation over (d_moy_69, d_year_67, i_brand_17, i_category_21, s_company_name_109, s_store_name_97)
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPARTITION, HASH, ["d_moy_69", "d_year_67", "i_brand_17", "i_category_21", "s_company_name_109", "s_store_name_97"])
                                     partial aggregation over (d_moy_69, d_year_67, i_brand_17, i_category_21, s_company_name_109, s_store_name_97)
-                                        join (INNER, REPLICATED):
-                                            join (INNER, REPLICATED):
-                                                join (INNER, REPLICATED):
-                                                    scan store_sales
+                                        join ([ss_item_sk_35 = i_item_sk_9], INNER, REPLICATED, [DF_3856]):
+                                            join ([ss_store_sk_40 = s_store_sk_92], INNER, REPLICATED, [DF_3857]):
+                                                join ([ss_sold_date_sk_56 = d_date_sk_61], INNER, REPLICATED, [DF_3858]):
+                                                    filter [df_3856, df_3857, df_3858]
+                                                        scan store_sales
                                                     local exchange (GATHER, SINGLE, [])
                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                            scan date_dim
+                                                            filter []
+                                                                scan date_dim
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan store
+                                                        filter [df_3833, df_3834]
+                                                            scan store
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan item
+                                                    filter [df_3831, df_3832]
+                                                        scan item
             local exchange (GATHER, SINGLE, [])
                 remote exchange (REPARTITION, HASH, ["i_brand_141", "i_category_145", "s_company_name_233", "s_store_name_221"])
                     final aggregation over (d_moy_193, d_year_191, i_brand_141, i_category_145, s_company_name_233, s_store_name_221)
                         local exchange (GATHER, SINGLE, [])
                             remote exchange (REPARTITION, HASH, ["d_moy_193", "d_year_191", "i_brand_141", "i_category_145", "s_company_name_233", "s_store_name_221"])
                                 partial aggregation over (d_moy_193, d_year_191, i_brand_141, i_category_145, s_company_name_233, s_store_name_221)
-                                    join (INNER, REPLICATED):
-                                        join (INNER, REPLICATED):
-                                            join (INNER, REPLICATED):
-                                                scan store_sales
+                                    join ([ss_item_sk_159 = i_item_sk_133], INNER, REPLICATED, [DF_3872]):
+                                        join ([ss_store_sk_164 = s_store_sk_216], INNER, REPLICATED, [DF_3873]):
+                                            join ([ss_sold_date_sk_180 = d_date_sk_185], INNER, REPLICATED, [DF_3874]):
+                                                filter [df_3872, df_3873, df_3874]
+                                                    scan store_sales
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan date_dim
+                                                        filter []
+                                                            scan date_dim
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
                                                     scan store

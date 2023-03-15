@@ -2,22 +2,26 @@ final aggregation over ()
     local exchange (GATHER, SINGLE, [])
         remote exchange (GATHER, SINGLE, [])
             partial aggregation over ()
-                join (FULL, PARTITIONED):
+                join ([ss_customer_sk = cs_bill_customer_sk, ss_item_sk = cs_item_sk], FULL, PARTITIONED, []):
                     final aggregation over (ss_customer_sk, ss_item_sk)
                         local exchange (GATHER, SINGLE, [])
                             remote exchange (REPARTITION, HASH, ["ss_customer_sk", "ss_item_sk"])
                                 partial aggregation over (ss_customer_sk, ss_item_sk)
-                                    join (INNER, REPLICATED, can skip output duplicates):
-                                        scan store_sales
+                                    join ([ss_sold_date_sk = d_date_sk], INNER, REPLICATED, can skip output duplicates, [df_1314]):
+                                        filter [df_1314]
+                                            scan store_sales
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                scan date_dim
+                                                filter []
+                                                    scan date_dim
                     final aggregation over (cs_bill_customer_sk, cs_item_sk)
                         local exchange (GATHER, SINGLE, [])
                             remote exchange (REPARTITION, HASH, ["cs_bill_customer_sk", "cs_item_sk"])
                                 partial aggregation over (cs_bill_customer_sk, cs_item_sk)
-                                    join (INNER, REPLICATED, can skip output duplicates):
-                                        scan catalog_sales
+                                    join ([cs_sold_date_sk = d_date_sk_7], INNER, REPLICATED, can skip output duplicates, [df_1319]):
+                                        filter [df_1319]
+                                            scan catalog_sales
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                scan date_dim
+                                                filter []
+                                                    scan date_dim

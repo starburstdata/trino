@@ -9,135 +9,167 @@ cross join:
                                 local exchange (GATHER, SINGLE, [])
                                     remote exchange (GATHER, SINGLE, [])
                                         partial aggregation over ()
-                                            join (INNER, REPLICATED):
-                                                join (INNER, REPLICATED):
-                                                    join (INNER, REPLICATED):
-                                                        scan store_sales
+                                            join ([ss_hdemo_sk = hd_demo_sk], INNER, REPLICATED, [DF_7793]):
+                                                join ([ss_store_sk = s_store_sk], INNER, REPLICATED, [DF_7794]):
+                                                    join ([ss_sold_time_sk = t_time_sk], INNER, REPLICATED, [DF_7795]):
+                                                        filter [df_7793, df_7794, df_7795]
+                                                            scan store_sales
                                                         local exchange (GATHER, SINGLE, [])
                                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                                scan time_dim
+                                                                filter []
+                                                                    scan time_dim
                                                     local exchange (GATHER, SINGLE, [])
                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                            scan store
+                                                            filter []
+                                                                scan store
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan household_demographics
+                                                        filter []
+                                                            scan household_demographics
                             final aggregation over ()
                                 local exchange (GATHER, SINGLE, [])
                                     remote exchange (GATHER, SINGLE, [])
                                         partial aggregation over ()
-                                            join (INNER, REPLICATED):
-                                                join (INNER, REPLICATED):
-                                                    join (INNER, REPLICATED):
-                                                        scan store_sales
+                                            join ([ss_hdemo_sk_13 = hd_demo_sk_36], INNER, REPLICATED, [DF_7809]):
+                                                join ([ss_store_sk_15 = s_store_sk_57], INNER, REPLICATED, [DF_7810]):
+                                                    join ([ss_sold_time_sk_9 = t_time_sk_44], INNER, REPLICATED, [DF_7811]):
+                                                        filter [df_7809, df_7810, df_7811]
+                                                            scan store_sales
                                                         local exchange (GATHER, SINGLE, [])
                                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                                scan time_dim
+                                                                filter []
+                                                                    scan time_dim
                                                     local exchange (GATHER, SINGLE, [])
                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                            scan store
+                                                            filter []
+                                                                scan store
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan household_demographics
+                                                        filter []
+                                                            scan household_demographics
                         final aggregation over ()
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (GATHER, SINGLE, [])
                                     partial aggregation over ()
-                                        join (INNER, REPLICATED):
-                                            join (INNER, REPLICATED):
-                                                join (INNER, REPLICATED):
-                                                    scan store_sales
+                                        join ([ss_hdemo_sk_94 = hd_demo_sk_117], INNER, REPLICATED, [DF_7827]):
+                                            join ([ss_store_sk_96 = s_store_sk_138], INNER, REPLICATED, [DF_7828]):
+                                                join ([ss_sold_time_sk_90 = t_time_sk_125], INNER, REPLICATED, [DF_7829]):
+                                                    filter [df_7827, df_7828, df_7829]
+                                                        scan store_sales
                                                     local exchange (GATHER, SINGLE, [])
                                                         remote exchange (REPLICATE, BROADCAST, [])
-                                                            scan time_dim
+                                                            filter []
+                                                                scan time_dim
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan store
+                                                        filter []
+                                                            scan store
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan household_demographics
+                                                    filter []
+                                                        scan household_demographics
                     final aggregation over ()
                         local exchange (GATHER, SINGLE, [])
                             remote exchange (GATHER, SINGLE, [])
                                 partial aggregation over ()
-                                    join (INNER, REPLICATED):
-                                        join (INNER, REPLICATED):
-                                            join (INNER, REPLICATED):
-                                                scan store_sales
+                                    join ([ss_hdemo_sk_175 = hd_demo_sk_198], INNER, REPLICATED, [DF_7845]):
+                                        join ([ss_store_sk_177 = s_store_sk_219], INNER, REPLICATED, [DF_7846]):
+                                            join ([ss_sold_time_sk_171 = t_time_sk_206], INNER, REPLICATED, [DF_7847]):
+                                                filter [df_7845, df_7846, df_7847]
+                                                    scan store_sales
                                                 local exchange (GATHER, SINGLE, [])
                                                     remote exchange (REPLICATE, BROADCAST, [])
-                                                        scan time_dim
+                                                        filter []
+                                                            scan time_dim
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan store
+                                                    filter []
+                                                        scan store
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                scan household_demographics
+                                                filter []
+                                                    scan household_demographics
                 final aggregation over ()
                     local exchange (GATHER, SINGLE, [])
                         remote exchange (GATHER, SINGLE, [])
                             partial aggregation over ()
-                                join (INNER, REPLICATED):
-                                    join (INNER, REPLICATED):
-                                        join (INNER, REPLICATED):
-                                            scan store_sales
+                                join ([ss_hdemo_sk_256 = hd_demo_sk_279], INNER, REPLICATED, [DF_7863]):
+                                    join ([ss_store_sk_258 = s_store_sk_300], INNER, REPLICATED, [DF_7864]):
+                                        join ([ss_sold_time_sk_252 = t_time_sk_287], INNER, REPLICATED, [DF_7865]):
+                                            filter [df_7863, df_7864, df_7865]
+                                                scan store_sales
                                             local exchange (GATHER, SINGLE, [])
                                                 remote exchange (REPLICATE, BROADCAST, [])
-                                                    scan time_dim
+                                                    filter []
+                                                        scan time_dim
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                scan store
+                                                filter []
+                                                    scan store
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPLICATE, BROADCAST, [])
-                                            scan household_demographics
+                                            filter []
+                                                scan household_demographics
             final aggregation over ()
                 local exchange (GATHER, SINGLE, [])
                     remote exchange (GATHER, SINGLE, [])
                         partial aggregation over ()
-                            join (INNER, REPLICATED):
-                                join (INNER, REPLICATED):
-                                    join (INNER, REPLICATED):
-                                        scan store_sales
+                            join ([ss_hdemo_sk_337 = hd_demo_sk_360], INNER, REPLICATED, [DF_7881]):
+                                join ([ss_store_sk_339 = s_store_sk_381], INNER, REPLICATED, [DF_7882]):
+                                    join ([ss_sold_time_sk_333 = t_time_sk_368], INNER, REPLICATED, [DF_7883]):
+                                        filter [df_7881, df_7882, df_7883]
+                                            scan store_sales
                                         local exchange (GATHER, SINGLE, [])
                                             remote exchange (REPLICATE, BROADCAST, [])
-                                                scan time_dim
+                                                filter []
+                                                    scan time_dim
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPLICATE, BROADCAST, [])
-                                            scan store
+                                            filter []
+                                                scan store
                                 local exchange (GATHER, SINGLE, [])
                                     remote exchange (REPLICATE, BROADCAST, [])
-                                        scan household_demographics
+                                        filter []
+                                            scan household_demographics
         final aggregation over ()
             local exchange (GATHER, SINGLE, [])
                 remote exchange (GATHER, SINGLE, [])
                     partial aggregation over ()
-                        join (INNER, REPLICATED):
-                            join (INNER, REPLICATED):
-                                join (INNER, REPLICATED):
-                                    scan store_sales
+                        join ([ss_hdemo_sk_418 = hd_demo_sk_441], INNER, REPLICATED, [DF_7899]):
+                            join ([ss_store_sk_420 = s_store_sk_462], INNER, REPLICATED, [DF_7900]):
+                                join ([ss_sold_time_sk_414 = t_time_sk_449], INNER, REPLICATED, [DF_7901]):
+                                    filter [df_7899, df_7900, df_7901]
+                                        scan store_sales
                                     local exchange (GATHER, SINGLE, [])
                                         remote exchange (REPLICATE, BROADCAST, [])
-                                            scan time_dim
+                                            filter []
+                                                scan time_dim
                                 local exchange (GATHER, SINGLE, [])
                                     remote exchange (REPLICATE, BROADCAST, [])
-                                        scan store
+                                        filter []
+                                            scan store
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPLICATE, BROADCAST, [])
-                                    scan household_demographics
+                                    filter []
+                                        scan household_demographics
     final aggregation over ()
         local exchange (GATHER, SINGLE, [])
             remote exchange (GATHER, SINGLE, [])
                 partial aggregation over ()
-                    join (INNER, REPLICATED):
-                        join (INNER, REPLICATED):
-                            join (INNER, REPLICATED):
-                                scan store_sales
+                    join ([ss_hdemo_sk_499 = hd_demo_sk_522], INNER, REPLICATED, [DF_7917]):
+                        join ([ss_store_sk_501 = s_store_sk_543], INNER, REPLICATED, [DF_7918]):
+                            join ([ss_sold_time_sk_495 = t_time_sk_530], INNER, REPLICATED, [DF_7919]):
+                                filter [df_7917, df_7918, df_7919]
+                                    scan store_sales
                                 local exchange (GATHER, SINGLE, [])
                                     remote exchange (REPLICATE, BROADCAST, [])
-                                        scan time_dim
+                                        filter []
+                                            scan time_dim
                             local exchange (GATHER, SINGLE, [])
                                 remote exchange (REPLICATE, BROADCAST, [])
-                                    scan store
+                                    filter []
+                                        scan store
                         local exchange (GATHER, SINGLE, [])
                             remote exchange (REPLICATE, BROADCAST, [])
-                                scan household_demographics
+                                filter []
+                                    scan household_demographics
