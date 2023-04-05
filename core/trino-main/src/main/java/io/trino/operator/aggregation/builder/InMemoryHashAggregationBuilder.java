@@ -18,9 +18,10 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Ints;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
+import io.trino.Session;
 import io.trino.array.IntBigArray;
+import io.trino.memory.context.LocalMemoryContext;
 import io.trino.operator.GroupByHash;
-import io.trino.operator.OperatorContext;
 import io.trino.operator.TransformWork;
 import io.trino.operator.UpdateMemory;
 import io.trino.operator.Work;
@@ -56,6 +57,7 @@ public class InMemoryHashAggregationBuilder
     private final boolean partial;
     private final OptionalLong maxPartialMemory;
     private final UpdateMemory updateMemory;
+    private final LocalMemoryContext memoryContext;
 
     private boolean full;
 
@@ -66,11 +68,12 @@ public class InMemoryHashAggregationBuilder
             List<Type> groupByTypes,
             List<Integer> groupByChannels,
             Optional<Integer> hashChannel,
-            OperatorContext operatorContext,
+            Session session,
             Optional<DataSize> maxPartialMemory,
             JoinCompiler joinCompiler,
             BlockTypeOperators blockTypeOperators,
-            UpdateMemory updateMemory)
+            UpdateMemory updateMemory,
+            LocalMemoryContext memoryContext)
     {
         this(aggregatorFactories,
                 step,
@@ -78,12 +81,13 @@ public class InMemoryHashAggregationBuilder
                 groupByTypes,
                 groupByChannels,
                 hashChannel,
-                operatorContext,
+                session,
                 maxPartialMemory,
                 Optional.empty(),
                 joinCompiler,
                 blockTypeOperators,
-                updateMemory);
+                updateMemory,
+                memoryContext);
     }
 
     public InMemoryHashAggregationBuilder(
@@ -93,15 +97,17 @@ public class InMemoryHashAggregationBuilder
             List<Type> groupByTypes,
             List<Integer> groupByChannels,
             Optional<Integer> hashChannel,
-            OperatorContext operatorContext,
+            Session session,
             Optional<DataSize> maxPartialMemory,
             Optional<Integer> unspillIntermediateChannelOffset,
             JoinCompiler joinCompiler,
             BlockTypeOperators blockTypeOperators,
-            UpdateMemory updateMemory)
+            UpdateMemory updateMemory,
+            LocalMemoryContext memoryContext)
     {
+        this.memoryContext = requireNonNull(memoryContext, "memoryContext is null");
         this.groupByHash = createGroupByHash(
-                operatorContext.getSession(),
+                session,
                 groupByTypes,
                 Ints.toArray(groupByChannels),
                 hashChannel,
@@ -129,7 +135,10 @@ public class InMemoryHashAggregationBuilder
     }
 
     @Override
-    public void close() {}
+    public void close()
+    {
+        memoryContext.setBytes(0);
+    }
 
     @Override
     public Work<?> processPage(Page page)

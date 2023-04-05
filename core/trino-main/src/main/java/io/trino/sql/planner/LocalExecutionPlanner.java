@@ -726,6 +726,31 @@ public class LocalExecutionPlanner
             }
         }
 
+        private void addFlushPartialAggregationStateDrivers(boolean isOutputDriver, List<OperatorFactory> operatorFactories)
+        {
+            // For partial aggregation add an additional driver to output the un-flushed aggregated rows shared between splits
+            for (int i = 0; i < operatorFactories.size(); i++) {
+                OperatorFactory operatorFactory = operatorFactories.get(i);
+                if (!(operatorFactory instanceof HashAggregationOperatorFactory hashAggregationOperator)) {
+                    continue;
+                }
+
+                Optional<OperatorFactory> flushPartialAggregationStateOperatorFactory = hashAggregationOperator.createFlushPartialAggregationOperatorFactory();
+                if (flushPartialAggregationStateOperatorFactory.isPresent()) {
+                    // Add a new driver to output aggregated rows shared between splits.
+                    // We duplicate all of the factories above the HashAggregationOperator (the ones reading from the aggregation),
+                    // and replace the HashAggregationOperator with the FlushPartialAggregationOperator (the one that produces un-flushed, aggregated rows).
+                    ImmutableList.Builder<OperatorFactory> newOperators = ImmutableList.builder();
+                    newOperators.add(flushPartialAggregationStateOperatorFactory.get());
+                    operatorFactories.subList(i + 1, operatorFactories.size()).stream()
+                            .map(OperatorFactory::duplicate)
+                            .forEach(newOperators::add);
+
+                    addDriverFactory(false, isOutputDriver, newOperators.build(), OptionalInt.of(1));
+                }
+            }
+        }
+
         private void addDriverFactory(boolean inputDriver, boolean outputDriver, List<OperatorFactory> operatorFactories, OptionalInt driverInstances)
         {
             driverFactories.add(new DriverFactory(getNextPipelineId(), inputDriver, outputDriver, operatorFactories, driverInstances));

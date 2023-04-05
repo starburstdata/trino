@@ -320,7 +320,7 @@ public class SpillableHashAggregationBuilder
                 groupByTypes,
                 groupByChannels,
                 hashChannel,
-                operatorContext,
+                operatorContext.getSession(),
                 Optional.of(DataSize.succinctBytes(0)),
                 joinCompiler,
                 blockTypeOperators,
@@ -328,7 +328,8 @@ public class SpillableHashAggregationBuilder
                     updateMemory();
                     // TODO: Support GroupByHash yielding in spillable hash aggregation (https://github.com/trinodb/trino/issues/460)
                     return true;
-                });
+                },
+                localUserMemoryContext);
         emptyHashAggregationBuilderSize = hashAggregationBuilder.getSizeInMemory();
     }
 }

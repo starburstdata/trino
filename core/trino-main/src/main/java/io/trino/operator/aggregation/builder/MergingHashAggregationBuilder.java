@@ -150,7 +150,7 @@ public class MergingHashAggregationBuilder
                 groupByTypes,
                 groupByPartialChannels,
                 hashChannel,
-                operatorContext,
+                operatorContext.getSession(),
                 Optional.of(DataSize.succinctBytes(0)),
                 Optional.of(overwriteIntermediateChannelOffset),
                 joinCompiler,
