@@ -377,7 +377,6 @@ import static io.trino.util.SpatialJoinUtils.extractSupportedSpatialFunctions;
 import static java.lang.Math.toIntExact;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.HOURS;
 import static java.util.stream.Collectors.partitioningBy;
 import static java.util.stream.IntStream.range;
 
@@ -432,11 +431,9 @@ public class LocalExecutionPlanner
     private final NodeVersion version;
 
     private final NonEvictableCache<FunctionKey, AccumulatorFactory> accumulatorFactoryCache = buildNonEvictableCache(CacheBuilder.newBuilder()
-            .maximumSize(1000)
-            .expireAfterWrite(1, HOURS));
+            .maximumSize(1000));
     private final NonEvictableCache<FunctionKey, AggregationWindowFunctionSupplier> aggregationWindowFunctionSupplierCache = buildNonEvictableCache(CacheBuilder.newBuilder()
-            .maximumSize(1000)
-            .expireAfterWrite(1, HOURS));
+            .maximumSize(1000));
 
     @Inject
     public LocalExecutionPlanner(

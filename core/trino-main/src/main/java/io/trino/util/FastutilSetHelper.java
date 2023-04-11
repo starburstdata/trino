@@ -31,7 +31,6 @@ import java.lang.invoke.MethodHandle;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import static com.google.common.base.Throwables.throwIfUnchecked;
 import static com.google.common.base.Verify.verifyNotNull;
@@ -239,8 +238,7 @@ public final class FastutilSetHelper
     {
         private static final NonEvictableCache<MethodKey<?>, GeneratedMethod<?>> generatedMethodCache = buildNonEvictableCache(
                 CacheBuilder.newBuilder()
-                        .maximumSize(1_000)
-                        .expireAfterWrite(2, TimeUnit.HOURS));
+                        .maximumSize(1_000));
 
         private static <T> T getGeneratedMethod(Type type, Class<T> operatorInterface, MethodHandle methodHandle)
         {

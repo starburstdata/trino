@@ -57,7 +57,6 @@ import static io.trino.spi.StandardErrorCode.FUNCTION_IMPLEMENTATION_ERROR;
 import static io.trino.type.InternalTypeManager.TESTING_TYPE_MANAGER;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.HOURS;
 
 public class FunctionManager
 {
@@ -72,16 +71,13 @@ public class FunctionManager
     public FunctionManager(CatalogServiceProvider<FunctionProvider> functionProviders, GlobalFunctionCatalog globalFunctionCatalog)
     {
         specializedScalarCache = buildNonEvictableCache(CacheBuilder.newBuilder()
-                .maximumSize(1000)
-                .expireAfterWrite(1, HOURS));
+                .maximumSize(1000));
 
         specializedAggregationCache = buildNonEvictableCache(CacheBuilder.newBuilder()
-                .maximumSize(1000)
-                .expireAfterWrite(1, HOURS));
+                .maximumSize(1000));
 
         specializedWindowCache = buildNonEvictableCache(CacheBuilder.newBuilder()
-                .maximumSize(1000)
-                .expireAfterWrite(1, HOURS));
+                .maximumSize(1000));
 
         this.functionProviders = requireNonNull(functionProviders, "functionProviders is null");
         this.globalFunctionCatalog = requireNonNull(globalFunctionCatalog, "globalFunctionCatalog is null");

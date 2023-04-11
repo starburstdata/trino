@@ -29,7 +29,6 @@ import javax.inject.Inject;
 import java.lang.invoke.MethodHandle;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static com.google.common.base.Throwables.throwIfUnchecked;
@@ -69,8 +68,7 @@ public final class BlockTypeOperators
         this.typeOperators = requireNonNull(typeOperators, "typeOperators is null");
         this.generatedBlockOperatorCache = buildNonEvictableCacheWithWeakInvalidateAll(
                 CacheBuilder.newBuilder()
-                        .maximumSize(10_000)
-                        .expireAfterWrite(2, TimeUnit.HOURS));
+                        .maximumSize(10_000));
     }
 
     public BlockPositionEqual getEqualOperator(Type type)

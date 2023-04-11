@@ -52,7 +52,6 @@ import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.trino.collect.cache.CacheUtils.uncheckedCacheGet;
 import static io.trino.collect.cache.SafeCaches.buildNonEvictableCache;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.HOURS;
 
 public class InternalFunctionBundle
         implements FunctionBundle
@@ -77,15 +76,12 @@ public class InternalFunctionBundle
         // This might also mitigate problems like deoptimization storm or unintended interpreted execution.
 
         specializedScalarCache = buildNonEvictableCache(CacheBuilder.newBuilder()
-                .maximumSize(1000)
-                .expireAfterWrite(1, HOURS));
+                .maximumSize(1000));
 
         specializedAggregationCache = buildNonEvictableCache(CacheBuilder.newBuilder()
-                .maximumSize(1000)
-                .expireAfterWrite(1, HOURS));
+                .maximumSize(1000));
         specializedWindowCache = buildNonEvictableCache(CacheBuilder.newBuilder()
-                .maximumSize(1000)
-                .expireAfterWrite(1, HOURS));
+                .maximumSize(1000));
 
         this.functions = functions.stream()
                 .collect(toImmutableMap(function -> function.getFunctionMetadata().getFunctionId(), Function.identity()));
