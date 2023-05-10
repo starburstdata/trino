@@ -18,6 +18,7 @@ import io.airlift.units.Duration;
 import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.plugin.base.classloader.ClassLoaderSafeConnectorSplitSource;
 import io.trino.spi.connector.ConnectorSession;
+import io.trino.spi.connector.ConnectorSplit;
 import io.trino.spi.connector.ConnectorSplitManager;
 import io.trino.spi.connector.ConnectorSplitSource;
 import io.trino.spi.connector.ConnectorTableHandle;
@@ -30,6 +31,12 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.TableScan;
 
 import javax.inject.Inject;
+
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import static io.trino.plugin.iceberg.IcebergSessionProperties.getDynamicFilteringWaitTimeout;
 import static io.trino.plugin.iceberg.IcebergSessionProperties.getMinimumAssignedSplitWeight;
@@ -88,6 +95,56 @@ public class IcebergSplitManager
                 table.isRecordScannedFiles(),
                 getMinimumAssignedSplitWeight(session));
 
-        return new ClassLoaderSafeConnectorSplitSource(splitSource, IcebergSplitManager.class.getClassLoader());
+        return new ClassLoaderSafeConnectorSplitSource(new SortingSplitSource(splitSource), IcebergSplitManager.class.getClassLoader());
+    }
+
+    static class SortingSplitSource
+            implements ConnectorSplitSource
+    {
+        private final ConnectorSplitSource delegate;
+        private List<ConnectorSplit> splits;
+        private int offset;
+
+        SortingSplitSource(ConnectorSplitSource delegate)
+        {
+            this.delegate = requireNonNull(delegate, "delegate is null");
+        }
+
+        @Override
+        public CompletableFuture<ConnectorSplitBatch> getNextBatch(int maxSize)
+        {
+            if (splits == null) {
+                return delegate.getNextBatch(Integer.MAX_VALUE).thenApply(allSplits -> {
+                    splits = allSplits.getSplits().stream().sorted(Comparator.comparing(split -> split.getInfo().toString())).collect(Collectors.toList());
+                    int endIndex = Math.min(maxSize, splits.size());
+                    offset = maxSize;
+                    return new ConnectorSplitBatch(splits.subList(0, endIndex), endIndex == splits.size());
+                });
+            }
+
+            int startIndex = offset;
+            int endIndex = Math.min(startIndex + maxSize, splits.size());
+            offset = endIndex;
+
+            return CompletableFuture.completedFuture(new ConnectorSplitBatch(splits.subList(startIndex, endIndex), endIndex == splits.size()));
+        }
+
+        @Override
+        public void close()
+        {
+            delegate.close();
+        }
+
+        @Override
+        public boolean isFinished()
+        {
+            return delegate.isFinished();
+        }
+
+        @Override
+        public Optional<List<Object>> getTableExecuteSplitsInfo()
+        {
+            return delegate.getTableExecuteSplitsInfo();
+        }
     }
 }
