@@ -114,8 +114,8 @@ public class IcebergSplitManager
         public CompletableFuture<ConnectorSplitBatch> getNextBatch(int maxSize)
         {
             if (splits == null) {
-                return delegate.getNextBatch(Integer.MAX_VALUE).thenApply(allSplits -> {
-                    splits = allSplits.getSplits().stream().sorted(Comparator.comparing(split -> split.getInfo().toString())).collect(Collectors.toList());
+                return getAll().thenApply(allSplits -> {
+                    splits = allSplits;
                     int endIndex = Math.min(maxSize, splits.size());
                     offset = maxSize;
                     return new ConnectorSplitBatch(splits.subList(0, endIndex), endIndex == splits.size());
@@ -127,6 +127,22 @@ public class IcebergSplitManager
             offset = endIndex;
 
             return CompletableFuture.completedFuture(new ConnectorSplitBatch(splits.subList(startIndex, endIndex), endIndex == splits.size()));
+        }
+
+        private CompletableFuture<List<ConnectorSplit>> getAll()
+        {
+            return getAll(ImmutableList.builder());
+        }
+
+        private CompletableFuture<List<ConnectorSplit>> getAll(ImmutableList.Builder<ConnectorSplit> allSplits)
+        {
+            return delegate.getNextBatch(Integer.MAX_VALUE).thenComposeAsync(batch -> {
+                allSplits.addAll(batch.getSplits());
+                if (batch.isNoMoreSplits()) {
+                    return CompletableFuture.completedFuture(allSplits.build());
+                }
+                return getAll(allSplits);
+            });
         }
 
         @Override
