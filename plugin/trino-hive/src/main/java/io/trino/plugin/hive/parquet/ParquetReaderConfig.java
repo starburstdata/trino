@@ -63,7 +63,7 @@ public class ParquetReaderConfig
     }
 
     @Min(128)
-    @Max(65536)
+//    @Max(65536)
     public int getMaxReadBlockRowCount()
     {
         return options.getMaxReadBlockRowCount();
