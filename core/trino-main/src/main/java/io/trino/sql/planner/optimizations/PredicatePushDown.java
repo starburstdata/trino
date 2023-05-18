@@ -1037,7 +1037,50 @@ public class PredicatePushDown
 
                 // Drop predicate after join only if unable to push down to either side
                 if (leftRewrittenConjunct == null && rightRewrittenConjunct == null) {
-                    joinConjuncts.add(conjunct);
+                    if (conjunct instanceof BetweenPredicate between) {
+                        Expression lteMax = new ComparisonExpression(LESS_THAN_OR_EQUAL, between.getValue(), between.getMax());
+                        Expression gteMin = new ComparisonExpression(GREATER_THAN_OR_EQUAL, between.getValue(), between.getMin());
+                        Expression leftRewrittenLteMax = allInference.rewrite(lteMax, leftScope);
+                        Expression leftRewrittenGteMin = allInference.rewrite(gteMin, leftScope);
+                        Expression rightRewrittenLteMax = allInference.rewrite(lteMax, rightScope);
+                        Expression rightRewrittenGteMin = allInference.rewrite(gteMin, rightScope);
+                        if (leftRewrittenLteMax != null) {
+                            leftPushDownConjuncts.add(leftRewrittenLteMax);
+                            if (rightRewrittenGteMin == null) {
+                                // lteMax was pushed down but gteMin not
+                                joinConjuncts.add(gteMin);
+                            }
+                        }
+                        else if (leftRewrittenGteMin != null) {
+                            leftPushDownConjuncts.add(leftRewrittenGteMin);
+                            if (rightRewrittenLteMax == null) {
+                                // gteMin was pushed down but lteMax not
+                                joinConjuncts.add(lteMax);
+                            }
+                        }
+                        if (rightRewrittenLteMax != null) {
+                            rightPushDownConjuncts.add(rightRewrittenLteMax);
+                            if (leftRewrittenGteMin == null) {
+                                // lteMax was pushed down but gteMin not
+                                joinConjuncts.add(gteMin);
+                            }
+                        }
+                        else if (rightRewrittenGteMin != null) {
+                            rightPushDownConjuncts.add(rightRewrittenGteMin);
+                            if (leftRewrittenLteMax == null) {
+                                // gteMin was pushed down but lteMax not
+                                joinConjuncts.add(lteMax);
+                            }
+                        }
+
+                        if (leftRewrittenLteMax == null && rightRewrittenGteMin == null && leftRewrittenGteMin == null && rightRewrittenLteMax == null) {
+                            // neither between side was pushed down to neither join side
+                            joinConjuncts.add(conjunct);
+                        }
+                    }
+                    else {
+                        joinConjuncts.add(conjunct);
+                    }
                 }
             });
 
