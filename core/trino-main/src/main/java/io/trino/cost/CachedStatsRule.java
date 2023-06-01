@@ -67,14 +67,17 @@ public class CachedStatsRule
             // ignore failed queries
             return;
         }
-        log.info("caching stats for " + finalQueryInfo);
-        // TODO lysy join plan fragments roots to one root plan
 
-        List<StageInfo> allStages = getAllStages(finalQueryInfo.getOutputStage());
-        Map<PlanNodeId, PlanNodeStats> nodeStats = aggregateStageStats(allStages);
-        Map<PlanFragmentId, PlanFragment> fragments = allStages.stream().collect(toImmutableMap(stageInfo -> stageInfo.getPlan().getId(), StageInfo::getPlan));
-        PlanNode root = joinFragments(finalQueryInfo.getOutputStage().get().getPlan(), fragments);
-        addStatsRecursively(root, nodeStats);
+        finalQueryInfo.getOutputStage().ifPresent(outputStage -> {
+            if (outputStage.getPlan() != null) {
+                log.info("caching stats for " + finalQueryInfo);
+                List<StageInfo> allStages = getAllStages(finalQueryInfo.getOutputStage());
+                Map<PlanNodeId, PlanNodeStats> nodeStats = aggregateStageStats(allStages);
+                Map<PlanFragmentId, PlanFragment> fragments = allStages.stream().collect(toImmutableMap(stageInfo -> stageInfo.getPlan().getId(), StageInfo::getPlan));
+                PlanNode root = joinFragments(outputStage.getPlan(), fragments);
+                addStatsRecursively(root, nodeStats);
+            }
+        });
     }
 
     private void addStatsRecursively(PlanNode node, Map<PlanNodeId, PlanNodeStats> nodeStats)
