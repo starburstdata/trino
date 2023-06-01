@@ -201,9 +201,14 @@ public class CachedStatsRule
         {
             public static Optional<PlanNodeWrapper> wrap(TableScanNode tableScan)
             {
-                return Optional.of(new TableScan(
-                        tableScan.getTable().getCatalogHandle().getId(),
-                        tableScan.getTable().getConnectorHandle().getTableSignatureId()));
+                try {
+                    return Optional.of(new TableScan(
+                            tableScan.getTable().getCatalogHandle().getId(),
+                            tableScan.getTable().getConnectorHandle().getTableSignatureId()));
+                }
+                catch (UnsupportedOperationException e) {
+                    return Optional.empty();
+                }
             }
         }
     }
