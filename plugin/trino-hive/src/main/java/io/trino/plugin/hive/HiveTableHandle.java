@@ -415,7 +415,7 @@ public class HiveTableHandle
     }
 
     @Override
-    public Object getTableId()
+    public Object getTableSignatureId()
     {
         return getSchemaTableName();
     }

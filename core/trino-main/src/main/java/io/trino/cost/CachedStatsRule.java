@@ -41,6 +41,7 @@ import static io.trino.sql.planner.planprinter.PlanNodeStatsSummarizer.aggregate
 public class CachedStatsRule
 {
     private static final Logger log = Logger.get(CachedStatsRule.class);
+    // row count per sub plan
     private final Cache<PlanNodeWrapper, Long> cache;
 
     public CachedStatsRule()
@@ -180,7 +181,7 @@ public class CachedStatsRule
             {
                 return Optional.of(new TableScan(
                         tableScan.getTable().getCatalogHandle().getId(),
-                        tableScan.getTable().getConnectorHandle().getTableId()));
+                        tableScan.getTable().getConnectorHandle().getTableSignatureId()));
             }
         }
     }
