@@ -235,7 +235,7 @@ class RelationPlanner
             ImmutableList.Builder<Symbol> outputSymbolsBuilder = ImmutableList.builder();
             ImmutableMap.Builder<Symbol, ColumnHandle> columns = ImmutableMap.builder();
             for (Field field : scope.getRelationType().getAllFields()) {
-                Symbol symbol = symbolAllocator.newSymbol(field);
+                Symbol symbol = symbolAllocator.newSymbol(handle.getConnectorHandle().getTableSignatureId().toString(), field);
 
                 outputSymbolsBuilder.add(symbol);
                 columns.put(symbol, analysis.getColumn(field));
@@ -379,7 +379,7 @@ class RelationPlanner
         RelationType relationType = analysis.getScope(node).getRelationType();
         List<Symbol> properOutputs = IntStream.range(0, functionAnalysis.getProperColumnsCount())
                 .mapToObj(relationType::getFieldByIndex)
-                .map(symbolAllocator::newSymbol)
+                .map(field -> symbolAllocator.newSymbol(null, field)) // TODO: needs to be checked
                 .collect(toImmutableList());
 
         outputSymbols.addAll(properOutputs);
@@ -1095,7 +1095,7 @@ class RelationPlanner
 
         Map<Field, Symbol> allocations = analysis.getOutputDescriptor(node)
                 .getVisibleFields().stream()
-                .collect(toImmutableMap(Function.identity(), symbolAllocator::newSymbol));
+                .collect(toImmutableMap(Function.identity(), field -> symbolAllocator.newSymbol(null, field))); // todo: get tableId
 
         UnnestAnalysis unnestAnalysis = analysis.getUnnest(node);
 
@@ -1157,7 +1157,7 @@ class RelationPlanner
         Scope scope = analysis.getScope(node);
         ImmutableList.Builder<Symbol> outputSymbolsBuilder = ImmutableList.builder();
         for (Field field : scope.getRelationType().getVisibleFields()) {
-            Symbol symbol = symbolAllocator.newSymbol(field);
+            Symbol symbol = symbolAllocator.newSymbol(null, field);
             outputSymbolsBuilder.add(symbol);
         }
         List<Symbol> outputSymbols = outputSymbolsBuilder.build();
@@ -1250,7 +1250,7 @@ class RelationPlanner
         RelationType outputFields = analysis.getOutputDescriptor(node);
         List<Symbol> outputs = outputFields
                 .getAllFields().stream()
-                .map(symbolAllocator::newSymbol)
+                .map(field -> symbolAllocator.newSymbol(null, field))
                 .collect(toImmutableList());
 
         ImmutableListMultimap.Builder<Symbol, Symbol> symbolMapping = ImmutableListMultimap.builder();

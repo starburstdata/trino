@@ -14,6 +14,7 @@
 package io.trino.sql.planner;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonValue;
 import io.trino.sql.tree.Expression;
 import io.trino.sql.tree.SymbolReference;
@@ -22,24 +23,36 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
 public class Symbol
-        implements Comparable<Symbol>
-{
+        implements Comparable<Symbol> {
+    private final String tableId;
+    private final String columnId;
     private final String name;
 
-    public static Symbol from(Expression expression)
-    {
+    public static Symbol from(Expression expression) {
         checkArgument(expression instanceof SymbolReference, "Unexpected expression: %s", expression);
-        return new Symbol(((SymbolReference) expression).getName());
+        SymbolReference symbolReference = (SymbolReference) expression;
+        return new Symbol(symbolReference.getTableId(), symbolReference.getColumnId(), symbolReference.getName());
     }
 
     @JsonCreator
-    public Symbol(String name)
+    public Symbol(
+            @JsonProperty("tableId") String tableId,
+            @JsonProperty("columnId") String columnId,
+            @JsonProperty("name") String name)
     {
         requireNonNull(name, "name is null");
         this.name = name;
+        this.columnId = columnId != null ? columnId : name;
+        this.tableId = tableId;
     }
 
-    @JsonValue
+    public Symbol(String name) {
+        this.name = name;
+        this.columnId = name;
+        this.tableId = null;
+    }
+
+    @JsonProperty
     public String getName()
     {
         return name;
@@ -47,13 +60,14 @@ public class Symbol
 
     public SymbolReference toSymbolReference()
     {
-        return new SymbolReference(name);
+        return new SymbolReference(tableId, columnId, name);
     }
 
     @Override
+    @JsonValue
     public String toString()
     {
-        return name;
+        return new StringBuilder().append(tableId).append(",").append(columnId).append(",").append(name).toString();
     }
 
     @Override
@@ -81,5 +95,17 @@ public class Symbol
     public int compareTo(Symbol o)
     {
         return name.compareTo(o.name);
+    }
+
+    @JsonProperty
+    public String getTableId()
+    {
+        return tableId;
+    }
+
+    @JsonProperty
+    public String getColumnId()
+    {
+        return columnId;
     }
 }

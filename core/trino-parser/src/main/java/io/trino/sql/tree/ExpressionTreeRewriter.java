@@ -655,7 +655,7 @@ public final class ExpressionTreeRewriter<C>
             List<LambdaArgumentDeclaration> arguments = node.getArguments().stream()
                     .map(LambdaArgumentDeclaration::getName)
                     .map(Identifier::getValue)
-                    .map(SymbolReference::new)
+                    .map(identifier -> new SymbolReference(null, null, identifier))
                     .map(expression -> rewrite(expression, context.get()))
                     .map(SymbolReference::getName)
                     .map(Identifier::new)

@@ -346,7 +346,7 @@ class QueryPlanner
         List<NodeAndMappings> recursionStepsToUnion = recursionSteps.build();
 
         List<Symbol> unionOutputSymbols = anchorPlan.getFieldMappings().stream()
-                .map(symbol -> symbolAllocator.newSymbol(symbol, "_expanded"))
+                .map(symbol -> symbolAllocator.newSymbol(symbol.getTableId(), symbol.getColumnId(), symbol, "_expanded"))
                 .collect(toImmutableList());
 
         ImmutableListMultimap.Builder<Symbol, Symbol> unionSymbolMapping = ImmutableListMultimap.builder();
@@ -1098,7 +1098,7 @@ class QueryPlanner
         Symbol[] fields = new Symbol[subPlan.getTranslations().getFieldSymbols().size()];
         for (FieldId field : groupingSetAnalysis.getAllFields()) {
             Symbol input = subPlan.getTranslations().getFieldSymbols().get(field.getFieldIndex());
-            Symbol output = symbolAllocator.newSymbol(input, "gid");
+            Symbol output = symbolAllocator.newSymbol(input.getTableId(), input.getColumnId(), input, "gid");
             fields[field.getFieldIndex()] = output;
             groupingSetMappings.put(output, input);
         }

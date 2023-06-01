@@ -3884,7 +3884,7 @@ public class LocalExecutionPlanner
                         LambdaArgumentDeclaration argument = lambdaExpression.getArguments().get(j);
                         Type type = functionType.getArgumentTypes().get(j);
                         lambdaArgumentExpressionTypes.put(NodeRef.of(argument), type);
-                        lambdaArgumentSymbolTypes.put(new Symbol(argument.getName().getValue()), type);
+                        lambdaArgumentSymbolTypes.put(new Symbol(null,  null, argument.getName().getValue()), type);
                     }
                     Map<NodeRef<Expression>, Type> expressionTypes = ImmutableMap.<NodeRef<Expression>, Type>builder()
                             // the lambda expression itself

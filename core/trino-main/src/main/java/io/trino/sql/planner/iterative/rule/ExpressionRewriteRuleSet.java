@@ -181,10 +181,10 @@ public class ExpressionRewriteRuleSet
                                 Optional.empty(),
                                 QualifiedName.of(aggregation.getResolvedFunction().getSignature().getName()),
                                 Optional.empty(),
-                                aggregation.getFilter().map(symbol -> new SymbolReference(symbol.getName())),
+                                aggregation.getFilter().map(symbol -> new SymbolReference(symbol.getTableId(), symbol.getColumnId(), symbol.getName())),
                                 aggregation.getOrderingScheme().map(orderBy -> new OrderBy(orderBy.getOrderBy().stream()
                                         .map(symbol -> new SortItem(
-                                                new SymbolReference(symbol.getName()),
+                                                new SymbolReference(symbol.getTableId(), symbol.getColumnId(), symbol.getName()),
                                                 orderBy.getOrdering(symbol).isAscending() ? ASCENDING : DESCENDING,
                                                 orderBy.getOrdering(symbol).isNullsFirst() ? NullOrdering.FIRST : NullOrdering.LAST))
                                         .collect(toImmutableList()))),

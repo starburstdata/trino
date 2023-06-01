@@ -22,12 +22,24 @@ import java.util.Optional;
 public class SymbolReference
         extends Expression
 {
+    private final String tableId;
+    private final String columnId;
     private final String name;
 
     public SymbolReference(String name)
     {
         super(Optional.empty());
         this.name = name;
+        this.tableId = null;
+        this.columnId = name;
+    }
+
+    public SymbolReference(String tableId, String columnId, String name)
+    {
+        super(Optional.empty());
+        this.name = name;
+        this.tableId = tableId;
+        this.columnId = columnId != null ? columnId : name;
     }
 
     public String getName()
@@ -64,5 +76,13 @@ public class SymbolReference
     public int hashCode()
     {
         return Objects.hash(name);
+    }
+
+    public String getTableId() {
+        return tableId;
+    }
+
+    public String getColumnId() {
+        return columnId;
     }
 }

@@ -50,30 +50,39 @@ public class SymbolAllocator
 
     public Symbol newSymbol(Symbol symbolHint)
     {
-        return newSymbol(symbolHint, null);
+        return newSymbol(symbolHint.getTableId(), symbolHint.getColumnId(), symbolHint, null);
     }
 
-    public Symbol newSymbol(Symbol symbolHint, String suffix)
+    public Symbol newSymbol(String tableId, String columnId, Symbol symbolHint, String suffix)
     {
         checkArgument(symbols.containsKey(symbolHint), "symbolHint not in symbols map");
-        return newSymbol(symbolHint.getName(), symbols.get(symbolHint), suffix);
+        return newSymbol(tableId, columnId, symbolHint.getName(), symbols.get(symbolHint), suffix);
     }
 
-    public Symbol newSymbol(String nameHint, Type type)
+    public Symbol newSymbol(String tableId, String columnId, String nameHint, Type type)
     {
-        return newSymbol(nameHint, type, null);
+        if (columnId == null) {
+            columnId = nameHint;
+        }
+        return newSymbol(tableId, columnId, nameHint, type, null);
     }
+
+    public Symbol newSymbol(String nameHint, Type type) {
+        return newSymbol(null, null, nameHint, type, null);    }
 
     public Symbol newHashSymbol()
     {
-        return newSymbol("$hashValue", BigintType.BIGINT);
+        return newSymbol(null, null, "$hashValue", BigintType.BIGINT);
     }
 
-    public Symbol newSymbol(String nameHint, Type type, @Nullable String suffix)
+    public Symbol newSymbol(String tableId, String nameHint, Type type, @Nullable String suffix) {
+        return newSymbol(tableId, nameHint, nameHint, type, suffix);
+    }
+
+    public Symbol newSymbol(String tableId, String columnId, String nameHint, Type type, @Nullable String suffix)
     {
         requireNonNull(nameHint, "nameHint is null");
         requireNonNull(type, "type is null");
-
         // TODO: workaround for the fact that QualifiedName lowercases parts
         nameHint = nameHint.toLowerCase(ENGLISH);
 
@@ -94,9 +103,9 @@ public class SymbolAllocator
             unique = unique + "$" + suffix;
         }
 
-        Symbol symbol = new Symbol(unique);
+        Symbol symbol = new Symbol(tableId, columnId, unique);
         while (symbols.putIfAbsent(symbol, type) != null) {
-            symbol = new Symbol(unique + "_" + nextId());
+            symbol = new Symbol(tableId, columnId, unique + "_" + nextId());
         }
 
         return symbol;
@@ -110,26 +119,39 @@ public class SymbolAllocator
     public Symbol newSymbol(Expression expression, Type type, String suffix)
     {
         String nameHint = "expr";
+        String tableId = null;
+        String columnId = nameHint;
         if (expression instanceof Identifier identifier) {
             nameHint = identifier.getValue();
+            columnId = nameHint;
         }
         else if (expression instanceof FunctionCall functionCall) {
             nameHint = ResolvedFunction.extractFunctionName(functionCall.getName());
+            columnId = nameHint;
         }
         else if (expression instanceof SymbolReference symbolReference) {
             nameHint = symbolReference.getName();
+            tableId = symbolReference.getTableId();
+            columnId = symbolReference.getColumnId();
         }
         else if (expression instanceof GroupingOperation) {
             nameHint = "grouping";
+            columnId = nameHint;
         }
 
-        return newSymbol(nameHint, type, suffix);
+        return newSymbol(tableId, columnId, nameHint, type, suffix);
     }
 
     public Symbol newSymbol(Field field)
     {
         String nameHint = field.getName().orElse("field");
-        return newSymbol(nameHint, field.getType());
+        return newSymbol(null, null, nameHint, field.getType());
+    }
+
+    public Symbol newSymbol(String tableId, Field field)
+    {
+        String nameHint = field.getName().orElse("field");
+        return newSymbol(tableId, null, nameHint, field.getType());
     }
 
     public TypeProvider getTypes()

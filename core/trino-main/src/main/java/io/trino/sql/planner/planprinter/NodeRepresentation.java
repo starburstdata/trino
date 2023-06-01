@@ -204,7 +204,7 @@ public class NodeRepresentation
 
         public static TypedSymbol typedSymbol(String symbol, String type)
         {
-            return new TypedSymbol(new Symbol(symbol), type);
+            return new TypedSymbol(new Symbol(null, null, symbol), type);
         }
 
         @Override

@@ -173,8 +173,8 @@ public class LogicalIndexExtractor
                 Symbol aggregationSymbol = symbolAllocator.newSymbol(node, type);
                 layout.add(aggregationSymbol);
 
-                Symbol classifierSymbol = symbolAllocator.newSymbol("classifier", VARCHAR);
-                Symbol matchNumberSymbol = symbolAllocator.newSymbol("match_number", BIGINT);
+                Symbol classifierSymbol = symbolAllocator.newSymbol(null, null, "classifier", VARCHAR);
+                Symbol matchNumberSymbol = symbolAllocator.newSymbol(null, null, "match_number", BIGINT);
                 List<Expression> rewrittenArguments = AggregateArgumentsRewriter.rewrite(node.getArguments(), classifierSymbol, matchNumberSymbol);
 
                 AggregationValuePointer descriptor = new AggregationValuePointer(
@@ -263,7 +263,7 @@ public class LogicalIndexExtractor
 
         private Expression rewriteClassifierFunction(FunctionCall node, LogicalIndexContext context)
         {
-            Symbol classifierSymbol = symbolAllocator.newSymbol("classifier", VARCHAR);
+            Symbol classifierSymbol = symbolAllocator.newSymbol(null, null, "classifier", VARCHAR);
             layout.add(classifierSymbol);
 
             Set<IrLabel> labels = ImmutableSet.of();
@@ -283,7 +283,7 @@ public class LogicalIndexExtractor
 
         private Expression rewriteMatchNumberFunction()
         {
-            Symbol matchNumberSymbol = symbolAllocator.newSymbol("match_number", BIGINT);
+            Symbol matchNumberSymbol = symbolAllocator.newSymbol(null, null, "match_number", BIGINT);
             layout.add(matchNumberSymbol);
             // pass default LogicalIndexPointer. It will not be accessed. match_number() is constant in the context of a match.
             // pass the new symbol as input symbol. It will be used to identify match number function.

@@ -70,7 +70,7 @@ public final class LambdaCaptureDesugaringRewriter
             List<Symbol> lambdaArguments = node.getArguments().stream()
                     .map(LambdaArgumentDeclaration::getName)
                     .map(Identifier::getValue)
-                    .map(Symbol::new)
+                    .map(identifier -> new Symbol(null, identifier, identifier))
                     .collect(toImmutableList());
 
             Set<Symbol> captureSymbols = Sets.difference(referencedSymbols, ImmutableSet.copyOf(lambdaArguments));
@@ -93,7 +93,7 @@ public final class LambdaCaptureDesugaringRewriter
 
             if (captureSymbols.size() != 0) {
                 List<Expression> capturedValues = captureSymbols.stream()
-                        .map(symbol -> new SymbolReference(symbol.getName()))
+                        .map(symbol -> new SymbolReference(symbol.getTableId(), symbol.getColumnId(), symbol.getName()))
                         .collect(toImmutableList());
                 rewrittenExpression = new BindExpression(capturedValues, rewrittenExpression);
             }
@@ -105,7 +105,7 @@ public final class LambdaCaptureDesugaringRewriter
         @Override
         public Expression rewriteSymbolReference(SymbolReference node, Context context, ExpressionTreeRewriter<Context> treeRewriter)
         {
-            context.getReferencedSymbols().add(new Symbol(node.getName()));
+            context.getReferencedSymbols().add(new Symbol(node.getTableId(), node.getColumnId(), node.getName()));
             return null;
         }
     }

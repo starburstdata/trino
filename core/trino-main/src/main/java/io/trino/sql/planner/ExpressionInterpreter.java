@@ -382,7 +382,7 @@ public class ExpressionInterpreter
             // ExpressionInterpreter should only be invoked after planning.
             // As a result, this method should be unreachable.
             // However, RelationPlanner.visitUnnest and visitValues invokes evaluateConstantExpression.
-            return ((SymbolResolver) context).getValue(new Symbol(node.getValue()));
+            return ((SymbolResolver) context).getValue(new Symbol(null, null, node.getValue()));
         }
 
         @Override

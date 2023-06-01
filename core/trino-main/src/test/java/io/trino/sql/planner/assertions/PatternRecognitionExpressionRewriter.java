@@ -70,13 +70,13 @@ public class PatternRecognitionExpressionRewriter
                 checkArgument(node.getBase() instanceof Identifier, "chained dereferences not supported");
                 return new LabelDereference(
                         ((Identifier) node.getBase()).getCanonicalValue(),
-                        node.getField().map(identifier -> new SymbolReference(identifier.getValue())));
+                        node.getField().map(identifier -> new SymbolReference(null, null, identifier.getValue())));
             }
 
             @Override
             public Expression rewriteIdentifier(Identifier node, Void context, ExpressionTreeRewriter<Void> treeRewriter)
             {
-                return new SymbolReference(node.getValue());
+                return new SymbolReference(null, null, node.getValue());
             }
 
             @Override

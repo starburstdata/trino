@@ -100,6 +100,7 @@ import io.trino.server.PluginManager.PluginsProvider;
 import io.trino.server.SliceSerialization.SliceDeserializer;
 import io.trino.server.SliceSerialization.SliceSerializer;
 import io.trino.server.protocol.PreparedStatementEncoder;
+import io.trino.server.protocol.SymbolSerialization;
 import io.trino.server.remotetask.HttpLocationFactory;
 import io.trino.spi.PageIndexerFactory;
 import io.trino.spi.PageSorter;
@@ -139,6 +140,7 @@ import io.trino.sql.planner.LocalExecutionPlanner;
 import io.trino.sql.planner.NodePartitioningManager;
 import io.trino.sql.planner.OptimizerConfig;
 import io.trino.sql.planner.RuleStatsRecorder;
+import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.TypeAnalyzer;
 import io.trino.sql.tree.Expression;
 import io.trino.tracing.ForTracing;
@@ -156,7 +158,6 @@ import io.trino.version.EmbedVersion;
 import javax.annotation.PreDestroy;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
@@ -421,6 +422,8 @@ public class ServerMainModule
         jsonBinder(binder).addDeserializerBinding(Slice.class).to(SliceDeserializer.class);
 
         // expression
+        jsonBinder(binder).addDeserializerBinding(Symbol.class).to(SymbolSerialization.SymbolDeserializer.class);
+        jsonBinder(binder).addKeyDeserializerBinding(Symbol.class).to(SymbolSerialization.SymbolKeyDeserializer.class);
         jsonBinder(binder).addSerializerBinding(Expression.class).to(ExpressionSerializer.class);
         jsonBinder(binder).addDeserializerBinding(Expression.class).to(ExpressionDeserializer.class);
 

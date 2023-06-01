@@ -1274,7 +1274,7 @@ public class PlanBuilder
 
     public Symbol symbol(String name, Type type)
     {
-        Symbol symbol = new Symbol(name);
+        Symbol symbol = new Symbol(null, null, name);
 
         Type old = symbols.put(symbol, type);
         if (old != null && !old.equals(type)) {

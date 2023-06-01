@@ -2138,7 +2138,7 @@ public class PlanPrinter
                     rootNode.getClass().getSimpleName(),
                     descriptor,
                     rootNode.getOutputSymbols().stream()
-                            .map(s -> new TypedSymbol(new Symbol(anonymizer.anonymize(s)), types.get(s).getDisplayName()))
+                            .map(s -> new TypedSymbol(new Symbol(s.getTableId(), s.getColumnId(), anonymizer.anonymize(s)), types.get(s).getDisplayName()))
                             .collect(toImmutableList()),
                     stats.map(s -> s.get(rootNode.getId())),
                     estimatedStats,
