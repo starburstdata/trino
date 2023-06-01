@@ -91,6 +91,9 @@ public class CachedStatsRule
 
     private void addStats(PlanNode planNode, PlanNodeStats stats)
     {
+        if (stats == null) {
+            return;
+        }
         PlanNodeWrapper.wrap(planNode, Lookup.noLookup()).ifPresent(key -> {
             cache.put(key, stats.getPlanNodeOutputPositions());
         });
@@ -185,8 +188,4 @@ public class CachedStatsRule
             }
         }
     }
-
-    // TODO lysy: stats cache:
-    // - addStats from finished queries
-    // planNodeWrapper for basic nodes X
 }
