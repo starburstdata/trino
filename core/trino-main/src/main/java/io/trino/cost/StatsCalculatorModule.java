@@ -18,6 +18,9 @@ import com.google.inject.Binder;
 import com.google.inject.Module;
 import com.google.inject.Scopes;
 import com.google.inject.TypeLiteral;
+import com.google.inject.multibindings.ProvidesIntoSet;
+import io.trino.connector.system.FlushQueryStatsCacheProcedure;
+import io.trino.spi.procedure.Procedure;
 import io.trino.sql.PlannerContext;
 
 import javax.inject.Inject;
@@ -38,6 +41,7 @@ public class StatsCalculatorModule
         binder.bind(ScalarStatsCalculator.class).in(Scopes.SINGLETON);
         binder.bind(FilterStatsCalculator.class).in(Scopes.SINGLETON);
         binder.bind(CachedStatsRule.class).in(Scopes.SINGLETON);
+        binder.bind(FlushQueryStatsCacheProcedure.class).in(Scopes.SINGLETON);
         newOptionalBinder(binder, new TypeLiteral<List<ComposableStatsCalculator.Rule<?>>>() {})
                 .setDefault().toProvider(StatsRulesProvider.class).in(Scopes.SINGLETON);
         binder.bind(StatsCalculator.class).to(ComposableStatsCalculator.class).in(Scopes.SINGLETON);
@@ -89,5 +93,11 @@ public class StatsCalculatorModule
 
             return rules.build();
         }
+    }
+
+    @ProvidesIntoSet
+    public static Procedure getFlushQueryStatsCacheProcedure(FlushQueryStatsCacheProcedure procedure)
+    {
+        return procedure.get();
     }
 }

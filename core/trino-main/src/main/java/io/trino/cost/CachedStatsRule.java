@@ -118,6 +118,12 @@ public class CachedStatsRule
         });
     }
 
+    public void flushCache()
+    {
+        log.info("flushing cache");
+        cache.invalidateAll();
+    }
+
     private interface PlanNodeWrapper
     {
         static Optional<PlanNodeWrapper> wrap(PlanNode node, Lookup lookup)
