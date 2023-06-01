@@ -4,7 +4,9 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
 import io.airlift.log.Logger;
+import io.trino.Session;
 import io.trino.execution.QueryInfo;
+import io.trino.execution.QueryState;
 import io.trino.execution.StageInfo;
 import io.trino.sql.planner.Partitioning;
 import io.trino.sql.planner.PartitioningScheme;
@@ -34,6 +36,7 @@ import java.util.Set;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static io.trino.SystemSessionProperties.isQueryStatsCacheEnabled;
 import static io.trino.execution.StageInfo.getAllStages;
 import static io.trino.sql.planner.SystemPartitioningHandle.SINGLE_DISTRIBUTION;
 import static io.trino.sql.planner.planprinter.PlanNodeStatsSummarizer.aggregateStageStats;
@@ -50,13 +53,20 @@ public class CachedStatsRule
     }
 
     // Returns estimated output row count.
-    public Optional<Long> getOutputRowCount(PlanNode node, Lookup lookup)
+    public Optional<Long> getOutputRowCount(PlanNode node, Lookup lookup, Session session)
     {
+        if (!isQueryStatsCacheEnabled(session)) {
+            return Optional.empty();
+        }
         return PlanNodeWrapper.wrap(node, lookup).map(cache::getIfPresent);
     }
 
     public void queryFinished(QueryInfo finalQueryInfo)
     {
+        if (!finalQueryInfo.getState().equals(QueryState.FINISHED)) {
+            // ignore failed queries
+            return;
+        }
         log.info("caching stats for " + finalQueryInfo);
         // TODO lysy join plan fragments roots to one root plan
 
@@ -83,8 +93,14 @@ public class CachedStatsRule
                 List<PlanNode> sources = node.getSourceFragmentIds().stream().map(fragmentId -> joinFragments(allFragments.get(fragmentId), allFragments)).collect(toImmutableList());
 
                 PartitioningScheme partitioningScheme = new PartitioningScheme(Partitioning.create(SINGLE_DISTRIBUTION, ImmutableList.of()), node.getOutputSymbols());
-                return new ExchangeNode(node.getId(), node.getExchangeType(), ExchangeNode.Scope.REMOTE, partitioningScheme, sources,
-                        ImmutableList.of(partitioningScheme.getOutputLayout()), Optional.empty());
+                return new ExchangeNode(
+                        node.getId(),
+                        node.getExchangeType(),
+                        ExchangeNode.Scope.REMOTE,
+                        partitioningScheme,
+                        sources,
+                        sources.stream().map(PlanNode::getOutputSymbols).collect(toImmutableList()),
+                        Optional.empty());
             }
         }, fragment.getRoot());
     }
