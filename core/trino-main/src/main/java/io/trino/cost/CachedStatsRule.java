@@ -31,7 +31,9 @@ import io.trino.sql.planner.plan.SimplePlanRewriter;
 import io.trino.sql.planner.plan.TableScanNode;
 import io.trino.sql.planner.plan.UnionNode;
 import io.trino.sql.planner.planprinter.PlanNodeStats;
+import io.trino.sql.tree.ComparisonExpression;
 import io.trino.sql.tree.Expression;
+import io.trino.sql.tree.Literal;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +48,7 @@ import static io.trino.SystemSessionProperties.isQueryStatsCacheEnabled;
 import static io.trino.execution.StageInfo.getAllStages;
 import static io.trino.sql.planner.SystemPartitioningHandle.SINGLE_DISTRIBUTION;
 import static io.trino.sql.planner.planprinter.PlanNodeStatsSummarizer.aggregateStageStats;
+import static io.trino.sql.tree.ComparisonExpression.Operator.EQUAL;
 
 public class CachedStatsRule
 {
@@ -70,14 +73,71 @@ public class CachedStatsRule
                 return Optional.empty();
             }
 
-            Long rowCount = rowCountsPerFilters.get(signature.filters());
+            Map<PlanNodeWrapper, List<Expression>> filters = signature.filters();
+            Long rowCount = rowCountsPerFilters.get(filters);
             if (rowCount != null) {
                 // exact match found
                 return Optional.of(new RowCountEstimate(rowCount, EstimateConfidence.HIGH));
             }
-            // TODO lysy: find best matching filter if any
-            return Optional.empty();
+            List<Map.Entry<Map<PlanNodeWrapper, List<Expression>>, Long>> matchingStats = rowCountsPerFilters.entrySet().stream().filter(cachedFilters -> filtersMatch(cachedFilters.getKey(), filters)).collect(toImmutableList());
+            if (matchingStats.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(new RowCountEstimate(matchingStats.stream().mapToLong(Map.Entry::getValue).average().orElseThrow(), EstimateConfidence.HIGH));
         });
+    }
+
+    private boolean filtersMatch(Map<PlanNodeWrapper, List<Expression>> cachedFilters, Map<PlanNodeWrapper, List<Expression>> filters)
+    {
+        if (cachedFilters.size() != filters.size()) {
+            return false;
+        }
+        for (Map.Entry<PlanNodeWrapper, List<Expression>> entry : filters.entrySet()) {
+            PlanNodeWrapper planNode = entry.getKey();
+            List<Expression> filterExpressions = entry.getValue();
+            List<Expression> cachedFilterExpressions = cachedFilters.get(planNode);
+            if (cachedFilterExpressions == null) {
+                // no matching filter for node found
+                return false;
+            }
+            // for now we assume number of filters must be the same and filters have to be in the correct order
+            if (filterExpressions.size() != cachedFilterExpressions.size()) {
+                return false;
+            }
+            for (int i = 0; i < filterExpressions.size(); i++) {
+                Expression filter = filterExpressions.get(i);
+                Expression cachedFilter = cachedFilterExpressions.get(i);
+                if (!filtersMatch(cachedFilter, filter)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean filtersMatch(Expression cachedFilter, Expression filter)
+    {
+        if (cachedFilter.equals(filter)) {
+            return true;
+        }
+
+        // only match equal comparison with literal for now
+        if (!(cachedFilter instanceof ComparisonExpression cachedFilterComparison) || !(filter instanceof ComparisonExpression filterComparison)) {
+            return false;
+        }
+
+        if (!cachedFilterComparison.getOperator().equals(EQUAL) || !filterComparison.getOperator().equals(EQUAL)) {
+            return false;
+        }
+
+        if (!cachedFilterComparison.getLeft().equals(filterComparison.getLeft())) {
+            return false;
+        }
+
+        if (!(cachedFilterComparison.getRight() instanceof Literal) || !(filterComparison.getRight() instanceof Literal)) {
+            return false;
+        }
+        return true;
     }
 
     public void queryFinished(QueryInfo finalQueryInfo)
