@@ -415,9 +415,9 @@ public class HiveTableHandle
     }
 
     @Override
-    public Object getTableSignatureId()
+    public Optional<String> getTableSignatureId()
     {
-        return getSchemaTableName();
+        return Optional.of(getSchemaTableName().toString());
     }
 
     @JsonIgnore

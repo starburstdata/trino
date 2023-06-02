@@ -103,9 +103,4 @@ public class InformationSchemaTableHandle
                 Objects.equals(this.prefixes, other.prefixes) &&
                 Objects.equals(this.limit, other.limit);
     }
-
-    @Override
-    public Object getTableSignatureId() {
-        return "null";
-    }
 }

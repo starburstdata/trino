@@ -320,17 +320,11 @@ public class CachedStatsRule
         {
             public static Optional<RowCountPlanSignature> wrap(TableScanNode tableScan)
             {
-                try {
-                    return Optional.of(new RowCountPlanSignature(
-                            new TableScan(
-                                    tableScan.getTable().getCatalogHandle().getId(),
-                                    tableScan.getTable().getConnectorHandle().getTableSignatureId()),
-                            ImmutableMap.of(),
-                            ImmutableList.of())); // TODO lysy: get filters pushed down to table scan
-                }
-                catch (UnsupportedOperationException e) {
-                    return Optional.empty();
-                }
+                return tableScan.getTable().getConnectorHandle().getTableSignatureId()
+                        .map(id -> new RowCountPlanSignature(
+                                new TableScan(tableScan.getTable().getCatalogHandle().getId(), id),
+                                ImmutableMap.of(),
+                                ImmutableList.of())); // TODO lysy: get filters pushed down to table scan
             }
         }
     }

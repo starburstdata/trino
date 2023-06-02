@@ -13,14 +13,16 @@
  */
 package io.trino.spi.connector;
 
+import java.util.Optional;
+
 /**
  * Represents a handle to a relation returned from the connector to the engine.
  * It will be used by the engine whenever given relation will be accessed.
  */
 public interface ConnectorTableHandle
 {
-    default Object getTableSignatureId()
+    default Optional<String> getTableSignatureId()
     {
-        throw new UnsupportedOperationException();
+        return Optional.empty();
     }
 }

@@ -21,6 +21,7 @@ import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.TupleDomain;
 
 import java.util.Objects;
+import java.util.Optional;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
@@ -105,8 +106,8 @@ public class TpchTableHandle
     }
 
     @Override
-    public Object getTableSignatureId()
+    public Optional<String> getTableSignatureId()
     {
-        return new SchemaTableName(schemaName + "_" + this.tableName + "_" + scaleFactor, tableName);
+        return Optional.of(schemaName + "_" + this.tableName + "_" + scaleFactor);
     }
 }
