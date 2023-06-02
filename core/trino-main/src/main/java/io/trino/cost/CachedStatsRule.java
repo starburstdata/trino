@@ -3,6 +3,7 @@ package io.trino.cost;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import io.airlift.log.Logger;
 import io.trino.Session;
 import io.trino.cost.PlanNodeStatsEstimate.EstimateConfidence;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
@@ -47,8 +49,8 @@ import static io.trino.sql.planner.planprinter.PlanNodeStatsSummarizer.aggregate
 public class CachedStatsRule
 {
     private static final Logger log = Logger.get(CachedStatsRule.class);
-    // row count per sub plan
-    private final Cache<PlanNodeWrapper, Long> cache;
+    // row count per sub plan per filters
+    private final Cache<PlanNodeWrapper, Map<Map<PlanNodeWrapper, List<Expression>>, Long>> cache;
 
     public CachedStatsRule()
     {
@@ -61,7 +63,20 @@ public class CachedStatsRule
         if (!isQueryStatsCacheEnabled(session)) {
             return Optional.empty();
         }
-        return PlanNodeWrapper.wrap(node, lookup).map(cache::getIfPresent).map(rowCount -> new RowCountEstimate(rowCount, EstimateConfidence.HIGH));
+        return PlanNodeWrapper.wrap(node, lookup).flatMap(signature -> {
+            Map<Map<PlanNodeWrapper, List<Expression>>, Long> rowCountsPerFilters = cache.getIfPresent(signature.root);
+            if (rowCountsPerFilters == null) {
+                return Optional.empty();
+            }
+
+            Long rowCount = rowCountsPerFilters.get(signature.filters());
+            if (rowCount != null) {
+                // exact match found
+                return Optional.of(new RowCountEstimate(rowCount, EstimateConfidence.HIGH));
+            }
+            // TODO lysy: find best matching filter if any
+            return Optional.empty();
+        });
     }
 
     public void queryFinished(QueryInfo finalQueryInfo)
@@ -116,8 +131,14 @@ public class CachedStatsRule
         if (stats == null) {
             return;
         }
-        PlanNodeWrapper.wrap(planNode, Lookup.noLookup()).ifPresent(key -> {
-            cache.put(key, stats.getPlanNodeOutputPositions());
+        PlanNodeWrapper.wrap(planNode, Lookup.noLookup()).ifPresent(signature -> {
+            cache.asMap().compute(signature.root, (k, filtersToRowCount) -> {
+                if (filtersToRowCount == null) {
+                    filtersToRowCount = new ConcurrentHashMap<>();
+                }
+                filtersToRowCount.put(signature.filters(), stats.getPlanNodeOutputPositions());
+                return filtersToRowCount;
+            });
         });
     }
 
@@ -129,12 +150,12 @@ public class CachedStatsRule
 
     private interface PlanNodeWrapper
     {
-        static Optional<PlanNodeWrapper> wrap(PlanNode node, Lookup lookup)
+        static Optional<RowCountPlanSignature> wrap(PlanNode node, Lookup lookup)
         {
             node = lookup.resolve(node);
-            List<PlanNodeWrapper> sources = new ArrayList<>(node.getSources().size());
+            List<RowCountPlanSignature> sources = new ArrayList<>(node.getSources().size());
             for (PlanNode source : node.getSources()) {
-                Optional<PlanNodeWrapper> wrappedSource = wrap(source, lookup);
+                Optional<RowCountPlanSignature> wrappedSource = wrap(source, lookup);
                 if (wrappedSource.isEmpty()) {
                     // unsupported source
                     return Optional.empty();
@@ -174,37 +195,58 @@ public class CachedStatsRule
         record Union(List<PlanNodeWrapper> sources)
                 implements PlanNodeWrapper
         {
-            public static Optional<PlanNodeWrapper> wrap(List<PlanNodeWrapper> sources)
+            public static Optional<RowCountPlanSignature> wrap(List<RowCountPlanSignature> sources)
             {
-                return Optional.of(new Union(sources));
+                return Optional.of(new RowCountPlanSignature(
+                        new Union(sources.stream().map(RowCountPlanSignature::root).collect(toImmutableList())),
+                        mergeSubPlanFilters(sources),
+                        sources.stream().flatMap(source -> source.rootFilters.stream()).collect(toImmutableList())));
+            }
+
+            private static Map<PlanNodeWrapper, List<Expression>> mergeSubPlanFilters(List<RowCountPlanSignature> sources)
+            {
+                ImmutableMap.Builder<PlanNodeWrapper, List<Expression>> result = ImmutableMap.builder();
+                for (RowCountPlanSignature source : sources) {
+                    result.putAll(source.subPlanFilters);
+                }
+                return result.build();
             }
         }
 
         record Join(JoinNode.Type type, List<JoinNode.EquiJoinClause> criteria, Optional<Expression> filter, PlanNodeWrapper left, PlanNodeWrapper righ)
                 implements PlanNodeWrapper
         {
-            public static Optional<PlanNodeWrapper> wrap(JoinNode node, PlanNodeWrapper left, PlanNodeWrapper right)
+            public static Optional<RowCountPlanSignature> wrap(JoinNode node, RowCountPlanSignature left, RowCountPlanSignature right)
             {
-                return Optional.of(new Join(node.getType(), node.getCriteria(), node.getFilter(), left, right));
+                return Optional.of(new RowCountPlanSignature(
+                        new Join(node.getType(), node.getCriteria(), node.getFilter(), left.root, right.root),
+                        ImmutableMap.<PlanNodeWrapper, List<Expression>>builder().putAll(left.subPlanFilters).putAll(right.subPlanFilters).build(),
+                        ImmutableList.<Expression>builder().addAll(left.rootFilters).addAll(right.rootFilters).build()));
             }
         }
 
         record Aggregation(List<Symbol> groupingKeys, Set<Integer> globalGroupingSets, PlanNodeWrapper source)
                 implements PlanNodeWrapper
         {
-            public static Optional<PlanNodeWrapper> wrap(AggregationNode node, PlanNodeWrapper source)
+            public static Optional<RowCountPlanSignature> wrap(AggregationNode node, RowCountPlanSignature source)
             {
-                return Optional.of(new Aggregation(node.getGroupingKeys(), node.getGlobalGroupingSets(), source));
+                return Optional.of(new RowCountPlanSignature(
+                        new Aggregation(node.getGroupingKeys(), node.getGlobalGroupingSets(), source.root),
+                        mergeIfNecessary(source.subPlanFilters, source.root, source.rootFilters),
+                        ImmutableList.of()));
             }
         }
 
         record Filter(Expression predicate, PlanNodeWrapper source)
                 implements PlanNodeWrapper
         {
-            public static Optional<PlanNodeWrapper> wrap(FilterNode filterNode, PlanNodeWrapper source)
+            public static Optional<RowCountPlanSignature> wrap(FilterNode filterNode, RowCountPlanSignature source)
             {
                 // TODO lysy: ultimetelly the predicate needs to be decoupled from symbols and based on column references
-                return Optional.of(new Filter(filterNode.getPredicate(), source));
+                return Optional.of(new RowCountPlanSignature(
+                        source.root,
+                        source.subPlanFilters,
+                        ImmutableList.<Expression>builder().addAll(source.rootFilters).add(filterNode.getPredicate()).build()));
             }
         }
 
@@ -212,17 +254,47 @@ public class CachedStatsRule
         record TableScan(String catalogId, Object tableId)
                 implements PlanNodeWrapper
         {
-            public static Optional<PlanNodeWrapper> wrap(TableScanNode tableScan)
+            public static Optional<RowCountPlanSignature> wrap(TableScanNode tableScan)
             {
                 try {
-                    return Optional.of(new TableScan(
-                            tableScan.getTable().getCatalogHandle().getId(),
-                            tableScan.getTable().getConnectorHandle().getTableSignatureId()));
+                    return Optional.of(new RowCountPlanSignature(
+                            new TableScan(
+                                    tableScan.getTable().getCatalogHandle().getId(),
+                                    tableScan.getTable().getConnectorHandle().getTableSignatureId()),
+                            ImmutableMap.of(),
+                            ImmutableList.of())); // TODO lysy: get filters pushed down to table scan
                 }
                 catch (UnsupportedOperationException e) {
                     return Optional.empty();
                 }
             }
         }
+    }
+
+    record RowCountPlanSignature(PlanNodeWrapper root, Map<PlanNodeWrapper, List<Expression>> subPlanFilters, List<Expression> rootFilters)
+    {
+        public Map<PlanNodeWrapper, List<Expression>> filters()
+        {
+            return mergeIfNecessary(subPlanFilters, root, rootFilters);
+        }
+    }
+
+    private static Map<PlanNodeWrapper, List<Expression>> mergeIfNecessary(
+            Map<PlanNodeWrapper, List<Expression>> subPlanFilters,
+            PlanNodeWrapper root,
+            List<Expression> rootFilters)
+    {
+        if (rootFilters.isEmpty()) {
+            return subPlanFilters;
+        }
+
+        if (subPlanFilters.isEmpty()) {
+            return ImmutableMap.of(root, rootFilters);
+        }
+
+        return ImmutableMap.<PlanNodeWrapper, List<Expression>>builder()
+                .putAll(subPlanFilters)
+                .put(root, rootFilters)
+                .build();
     }
 }
