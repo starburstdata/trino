@@ -17,6 +17,7 @@ import io.trino.sql.planner.PlanFragment;
 import io.trino.sql.planner.Symbol;
 import io.trino.sql.planner.iterative.Lookup;
 import io.trino.sql.planner.plan.AggregationNode;
+import io.trino.sql.planner.plan.AssignUniqueId;
 import io.trino.sql.planner.plan.ExchangeNode;
 import io.trino.sql.planner.plan.FilterNode;
 import io.trino.sql.planner.plan.JoinNode;
@@ -181,6 +182,9 @@ public class CachedStatsRule
             }
             if (node instanceof MarkDistinctNode) {
                 // ignore mark distinct
+                return Optional.of(sources.get(0));
+            }
+            if (node instanceof AssignUniqueId) {
                 return Optional.of(sources.get(0));
             }
             if (node instanceof FilterNode filterNode) {
