@@ -5,6 +5,8 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
 import io.airlift.log.Logger;
 import io.trino.Session;
+import io.trino.cost.PlanNodeStatsEstimate.EstimateConfidence;
+import io.trino.cost.PlanNodeStatsEstimate.RowCountEstimate;
 import io.trino.execution.QueryInfo;
 import io.trino.execution.QueryState;
 import io.trino.execution.StageInfo;
@@ -17,6 +19,7 @@ import io.trino.sql.planner.plan.AggregationNode;
 import io.trino.sql.planner.plan.ExchangeNode;
 import io.trino.sql.planner.plan.FilterNode;
 import io.trino.sql.planner.plan.JoinNode;
+import io.trino.sql.planner.plan.MarkDistinctNode;
 import io.trino.sql.planner.plan.PlanFragmentId;
 import io.trino.sql.planner.plan.PlanNode;
 import io.trino.sql.planner.plan.PlanNodeId;
@@ -53,12 +56,12 @@ public class CachedStatsRule
     }
 
     // Returns estimated output row count.
-    public Optional<Long> getOutputRowCount(PlanNode node, Lookup lookup, Session session)
+    public Optional<RowCountEstimate> getOutputRowCount(PlanNode node, Lookup lookup, Session session)
     {
         if (!isQueryStatsCacheEnabled(session)) {
             return Optional.empty();
         }
-        return PlanNodeWrapper.wrap(node, lookup).map(cache::getIfPresent);
+        return PlanNodeWrapper.wrap(node, lookup).map(cache::getIfPresent).map(rowCount -> new RowCountEstimate(rowCount, EstimateConfidence.HIGH));
     }
 
     public void queryFinished(QueryInfo finalQueryInfo)
@@ -154,6 +157,10 @@ public class CachedStatsRule
                     return Optional.of(sources.get(0));
                 }
                 return Union.wrap(sources);
+            }
+            if (node instanceof MarkDistinctNode) {
+                // ignore mark distinct
+                return Optional.of(sources.get(0));
             }
             if (node instanceof FilterNode filterNode) {
                 return Filter.wrap(filterNode, sources.get(0));

@@ -16,6 +16,7 @@ package io.trino.cost;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 import io.trino.Session;
+import io.trino.cost.PlanNodeStatsEstimate.RowCountEstimate;
 import io.trino.matching.Pattern;
 import io.trino.matching.pattern.TypeOfPattern;
 import io.trino.sql.planner.TypeProvider;
@@ -72,7 +73,7 @@ public class ComposableStatsCalculator
     @Override
     public PlanNodeStatsEstimate calculateStats(PlanNode node, StatsProvider sourceStats, Lookup lookup, Session session, TypeProvider types, TableStatsProvider tableStatsProvider)
     {
-        Optional<Long> outputRowCount = cachedStatsRule.getOutputRowCount(node, lookup, session);
+        Optional<RowCountEstimate> outputRowCount = cachedStatsRule.getOutputRowCount(node, lookup, session);
         Iterator<Rule<?>> ruleIterator = getCandidates(node).iterator();
         while (ruleIterator.hasNext()) {
             Rule<?> rule = ruleIterator.next();

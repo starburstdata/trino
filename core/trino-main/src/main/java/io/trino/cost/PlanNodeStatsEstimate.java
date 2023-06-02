@@ -41,7 +41,7 @@ public class PlanNodeStatsEstimate
     private static final double DEFAULT_DATA_SIZE_PER_COLUMN = 50;
     private static final PlanNodeStatsEstimate UNKNOWN = new PlanNodeStatsEstimate(NaN, ImmutableMap.of());
 
-    private final double outputRowCount;
+    private final RowCountEstimate outputRowCountEstimate;
     private final PMap<Symbol, SymbolStatsEstimate> symbolStatistics;
 
     public static PlanNodeStatsEstimate unknown()
@@ -49,29 +49,40 @@ public class PlanNodeStatsEstimate
         return UNKNOWN;
     }
 
-    @JsonCreator
     public PlanNodeStatsEstimate(
-            @JsonProperty("outputRowCount") double outputRowCount,
-            @JsonProperty("symbolStatistics") Map<Symbol, SymbolStatsEstimate> symbolStatistics)
+            double outputRowCount,
+            Map<Symbol, SymbolStatsEstimate> symbolStatistics)
     {
-        this(outputRowCount, HashTreePMap.from(requireNonNull(symbolStatistics, "symbolStatistics is null")));
+        this(new RowCountEstimate(outputRowCount), HashTreePMap.from(requireNonNull(symbolStatistics, "symbolStatistics is null")));
     }
 
-    private PlanNodeStatsEstimate(double outputRowCount, PMap<Symbol, SymbolStatsEstimate> symbolStatistics)
+    @JsonCreator
+    public PlanNodeStatsEstimate(
+            @JsonProperty("outputRowCountEstimate") RowCountEstimate outputRowCountEstimate,
+            @JsonProperty("symbolStatistics") Map<Symbol, SymbolStatsEstimate> symbolStatistics)
     {
-        checkArgument(isNaN(outputRowCount) || outputRowCount >= 0, "outputRowCount cannot be negative");
-        this.outputRowCount = outputRowCount;
-        this.symbolStatistics = symbolStatistics;
+        this(outputRowCountEstimate, HashTreePMap.from(requireNonNull(symbolStatistics, "symbolStatistics is null")));
+    }
+
+    private PlanNodeStatsEstimate(RowCountEstimate outputRowCountEstimate, PMap<Symbol, SymbolStatsEstimate> symbolStatistics)
+    {
+        this.outputRowCountEstimate = requireNonNull(outputRowCountEstimate, "outputRowCountEstimate is null");
+        this.symbolStatistics = requireNonNull(symbolStatistics, "symbolStatistics is null");
     }
 
     /**
      * Returns estimated number of rows.
      * Unknown value is represented by {@link Double#NaN}
      */
-    @JsonProperty
     public double getOutputRowCount()
     {
-        return outputRowCount;
+        return outputRowCountEstimate.count;
+    }
+
+    @JsonProperty
+    public RowCountEstimate getOutputRowCountEstimate()
+    {
+        return outputRowCountEstimate;
     }
 
     /**
@@ -90,7 +101,7 @@ public class PlanNodeStatsEstimate
     private double getOutputSizeForSymbol(SymbolStatsEstimate symbolStatistics, Type type)
     {
         checkArgument(type != null, "type is null");
-
+        double outputRowCount = outputRowCountEstimate.count;
         double nullsFraction = firstNonNaN(symbolStatistics.getNullsFraction(), 0d);
         double numberOfNonNullRows = outputRowCount * (1.0 - nullsFraction);
 
@@ -116,7 +127,7 @@ public class PlanNodeStatsEstimate
 
     public PlanNodeStatsEstimate mapOutputRowCount(Function<Double, Double> mappingFunction)
     {
-        return buildFrom(this).setOutputRowCount(mappingFunction.apply(outputRowCount)).build();
+        return buildFrom(this).setOutputRowCountEstimate(outputRowCountEstimate.map(mappingFunction)).build();
     }
 
     public PlanNodeStatsEstimate mapSymbolColumnStatistics(Symbol symbol, Function<SymbolStatsEstimate, SymbolStatsEstimate> mappingFunction)
@@ -144,14 +155,14 @@ public class PlanNodeStatsEstimate
 
     public boolean isOutputRowCountUnknown()
     {
-        return isNaN(outputRowCount);
+        return outputRowCountEstimate.isOutputRowCountUnknown();
     }
 
     @Override
     public String toString()
     {
         return toStringHelper(this)
-                .add("outputRowCount", outputRowCount)
+                .add("outputRowCount", outputRowCountEstimate)
                 .add("symbolStatistics", symbolStatistics)
                 .toString();
     }
@@ -166,14 +177,15 @@ public class PlanNodeStatsEstimate
             return false;
         }
         PlanNodeStatsEstimate that = (PlanNodeStatsEstimate) o;
-        return Double.compare(outputRowCount, that.outputRowCount) == 0 &&
+        return Double.compare(outputRowCountEstimate.count, that.outputRowCountEstimate.count) == 0 &&
+                Objects.equals(outputRowCountEstimate.confidence, that.outputRowCountEstimate.confidence) &&
                 Objects.equals(symbolStatistics, that.symbolStatistics);
     }
 
     @Override
     public int hashCode()
     {
-        return Objects.hash(outputRowCount, symbolStatistics);
+        return Objects.hash(outputRowCountEstimate, symbolStatistics);
     }
 
     public static Builder builder()
@@ -183,28 +195,34 @@ public class PlanNodeStatsEstimate
 
     public static Builder buildFrom(PlanNodeStatsEstimate other)
     {
-        return new Builder(other.getOutputRowCount(), other.symbolStatistics);
+        return new Builder(other.getOutputRowCountEstimate(), other.symbolStatistics);
     }
 
     public static final class Builder
     {
-        private double outputRowCount;
+        private RowCountEstimate rowCountEstimate;
         private PMap<Symbol, SymbolStatsEstimate> symbolStatistics;
 
         public Builder()
         {
-            this(NaN, HashTreePMap.empty());
+            this(RowCountEstimate.UNKNOWN, HashTreePMap.empty());
         }
 
-        private Builder(double outputRowCount, PMap<Symbol, SymbolStatsEstimate> symbolStatistics)
+        private Builder(RowCountEstimate rowCountEstimate, PMap<Symbol, SymbolStatsEstimate> symbolStatistics)
         {
-            this.outputRowCount = outputRowCount;
+            this.rowCountEstimate = rowCountEstimate;
             this.symbolStatistics = symbolStatistics;
         }
 
         public Builder setOutputRowCount(double outputRowCount)
         {
-            this.outputRowCount = outputRowCount;
+            this.rowCountEstimate = rowCountEstimate.map(old -> outputRowCount);
+            return this;
+        }
+
+        public Builder setOutputRowCountEstimate(RowCountEstimate rowCountEstimate)
+        {
+            this.rowCountEstimate = requireNonNull(rowCountEstimate, "rowCountEstimate is null");
             return this;
         }
 
@@ -228,7 +246,39 @@ public class PlanNodeStatsEstimate
 
         public PlanNodeStatsEstimate build()
         {
-            return new PlanNodeStatsEstimate(outputRowCount, symbolStatistics);
+            return new PlanNodeStatsEstimate(rowCountEstimate, symbolStatistics);
         }
+    }
+
+    public record RowCountEstimate(double count, EstimateConfidence confidence)
+    {
+        public static final RowCountEstimate UNKNOWN = new RowCountEstimate(NaN, EstimateConfidence.LOW);
+
+        public RowCountEstimate(double outputRowCount)
+        {
+            this(outputRowCount, EstimateConfidence.LOW);
+        }
+
+        public RowCountEstimate(double count, EstimateConfidence confidence)
+        {
+            checkArgument(isNaN(count) || count >= 0, "outputRowCount cannot be negative");
+            this.count = count;
+            this.confidence = requireNonNull(confidence, "confidence is null");
+        }
+
+        public boolean isOutputRowCountUnknown()
+        {
+            return isNaN(count);
+        }
+
+        public RowCountEstimate map(Function<Double, Double> mappingFunction)
+        {
+            return new RowCountEstimate(mappingFunction.apply(count), confidence);
+        }
+    }
+
+    public enum EstimateConfidence
+    {
+        HIGH, MEDIUM, LOW
     }
 }

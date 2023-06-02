@@ -17,6 +17,8 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import io.trino.cost.PlanNodeStatsEstimate;
+import io.trino.cost.PlanNodeStatsEstimate.RowCountEstimate;
 import io.trino.cost.TaskCountEstimator;
 import io.trino.matching.Captures;
 import io.trino.matching.Pattern;
@@ -37,6 +39,7 @@ import java.util.Set;
 import static io.trino.SystemSessionProperties.getTaskConcurrency;
 import static io.trino.SystemSessionProperties.isOptimizeDistinctAggregationEnabled;
 import static io.trino.SystemSessionProperties.markDistinctStrategy;
+import static io.trino.cost.PlanNodeStatsEstimate.EstimateConfidence.HIGH;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.sql.planner.OptimizerConfig.MarkDistinctStrategy.AUTOMATIC;
 import static io.trino.sql.planner.OptimizerConfig.MarkDistinctStrategy.NONE;
@@ -194,12 +197,15 @@ public class MultipleDistinctAggregationToMarkDistinct
             // global distinct aggregation is computed using a single thread. MarkDistinct will help parallelize the execution.
             return true;
         }
-        if (aggregationNode.getGroupingKeys().size() > 1) {
+
+        RowCountEstimate numberOfDistinctValuesEstimate = context.getStatsProvider().getStats(aggregationNode).getOutputRowCountEstimate();
+
+        if (aggregationNode.getGroupingKeys().size() > 1 && !numberOfDistinctValuesEstimate.confidence().equals(HIGH)) {
             // NDV stats for multiple grouping keys are unreliable, let's keep MarkDistinct for this case to avoid significant slowdown or OOM/too big hash table issues in case of
             // overestimation of very small NDV with big number of distinct values inside the groups.
             return true;
         }
-        double numberOfDistinctValues = context.getStatsProvider().getStats(aggregationNode).getOutputRowCount();
+        double numberOfDistinctValues = numberOfDistinctValuesEstimate.count();
         if (Double.isNaN(numberOfDistinctValues)) {
             // if the estimate is unknown, use MarkDistinct to avoid query failure
             return true;
