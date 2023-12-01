@@ -80,7 +80,8 @@ public class TestRecordingHiveMetastore
     private static final Column TABLE_COLUMN = new Column(
             "column",
             HiveType.HIVE_INT,
-            Optional.of("comment"));
+            Optional.of("comment"),
+            ImmutableMap.of());
     private static final Storage TABLE_STORAGE = new Storage(
             StorageFormat.create("serde", "input", "output"),
             Optional.of("location"),

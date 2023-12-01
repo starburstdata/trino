@@ -28,10 +28,9 @@ import io.trino.spi.connector.ConnectorContext;
 import io.trino.spi.connector.ConnectorFactory;
 import io.trino.testing.containers.Minio;
 import io.trino.testing.minio.MinioClient;
-import io.trino.testng.services.ManageTestResources;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.AfterSuite;
-import org.testng.annotations.BeforeClass;
+import org.junit.AfterClass;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -72,7 +71,6 @@ public abstract class BaseIcebergCostBasedPlanTest
     // The container needs to be shared, since bucket name cannot be reused between tests.
     // The bucket name is used as a key in TrinoFileSystemCache which is managed in static manner.
     @GuardedBy("sharedMinioLock")
-    @ManageTestResources.Suppress(because = "This resource is leaked, but consciously -- there is no known way to avoid that")
     private static Minio sharedMinio;
     private static final Object sharedMinioLock = new Object();
 
@@ -140,7 +138,7 @@ public abstract class BaseIcebergCostBasedPlanTest
     }
 
     @Override
-    @BeforeClass
+    @BeforeAll
     public void prepareTables()
     {
         String schema = getQueryRunner().getDefaultSession().getSchema().orElseThrow();
@@ -190,7 +188,7 @@ public abstract class BaseIcebergCostBasedPlanTest
                 NO_PRIVILEGES);
     }
 
-    @AfterClass(alwaysRun = true)
+    @AfterAll
     public void cleanUp()
             throws Exception
     {
@@ -210,7 +208,7 @@ public abstract class BaseIcebergCostBasedPlanTest
         connectorConfiguration = null;
     }
 
-    @AfterSuite(alwaysRun = true)
+    @AfterClass
     public static void disposeSharedResources()
     {
         synchronized (sharedMinioLock) {

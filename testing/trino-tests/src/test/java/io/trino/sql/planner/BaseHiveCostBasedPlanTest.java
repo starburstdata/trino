@@ -20,7 +20,7 @@ import io.trino.plugin.hive.metastore.UnimplementedHiveMetastore;
 import io.trino.plugin.hive.metastore.recording.HiveMetastoreRecording;
 import io.trino.plugin.hive.metastore.recording.RecordingHiveMetastore;
 import io.trino.spi.connector.ConnectorFactory;
-import org.testng.annotations.BeforeClass;
+import org.junit.jupiter.api.BeforeAll;
 
 import java.io.File;
 import java.net.URL;
@@ -69,7 +69,7 @@ public abstract class BaseHiveCostBasedPlanTest
     }
 
     @Override
-    @BeforeClass
+    @BeforeAll
     public void prepareTables()
     {
         // Nothing to do. Tables are populated using the recording.

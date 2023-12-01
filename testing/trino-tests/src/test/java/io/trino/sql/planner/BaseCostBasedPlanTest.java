@@ -17,6 +17,7 @@ package io.trino.sql.planner;
 import com.google.common.base.VerifyException;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
+import com.google.errorprone.annotations.FormatMethod;
 import io.airlift.log.Logger;
 import io.trino.Session;
 import io.trino.spi.connector.CatalogSchemaTableName;
@@ -33,8 +34,8 @@ import io.trino.sql.planner.plan.SemiJoinNode;
 import io.trino.sql.planner.plan.TableScanNode;
 import io.trino.sql.planner.plan.ValuesNode;
 import io.trino.testing.LocalQueryRunner;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -126,7 +127,7 @@ public abstract class BaseCostBasedPlanTest
 
     protected abstract ConnectorFactory createConnectorFactory();
 
-    @BeforeClass
+    @BeforeAll
     public abstract void prepareTables()
             throws Exception;
 
@@ -352,6 +353,7 @@ public abstract class BaseCostBasedPlanTest
             return null;
         }
 
+        @FormatMethod
         private void output(int indent, String message, Object... args)
         {
             String formattedMessage = format(message, args);
