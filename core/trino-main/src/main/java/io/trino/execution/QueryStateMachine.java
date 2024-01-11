@@ -451,9 +451,13 @@ public class QueryStateMachine
         BasicQueryStats queryStats = new BasicQueryStats(
                 queryStateTimer.getCreateTime(),
                 getEndTime().orElse(null),
+                queryStateTimer.getExecutionStartTime().orElse(null),
+                queryStateTimer.getLastHeartbeat(),
                 queryStateTimer.getQueuedTime(),
                 queryStateTimer.getElapsedTime(),
                 queryStateTimer.getExecutionTime(),
+                queryStateTimer.getAnalysisTime(),
+                queryStateTimer.getPlanningTime(),
 
                 stageStats.getFailedTasks(),
 

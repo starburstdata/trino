@@ -23,6 +23,8 @@ import io.trino.execution.QueryStats;
 import io.trino.operator.BlockedReason;
 import org.joda.time.DateTime;
 
+import javax.annotation.Nullable;
+
 import java.util.OptionalDouble;
 import java.util.Set;
 
@@ -40,9 +42,15 @@ public class BasicQueryStats
     private final DateTime createTime;
     private final DateTime endTime;
 
+    @Nullable
+    private final DateTime executionStartTime;
+    private final DateTime lastHeartbeat;
+
     private final Duration queuedTime;
     private final Duration elapsedTime;
     private final Duration executionTime;
+    private final Duration analysisTime;
+    private final Duration planningTime;
 
     private final int failedTasks;
 
@@ -76,9 +84,13 @@ public class BasicQueryStats
     public BasicQueryStats(
             @JsonProperty("createTime") DateTime createTime,
             @JsonProperty("endTime") DateTime endTime,
+            @JsonProperty("executionStartTime") DateTime executionStartTime,
+            @JsonProperty("lastHeartbeat") DateTime lastHeartbeat,
             @JsonProperty("queuedTime") Duration queuedTime,
             @JsonProperty("elapsedTime") Duration elapsedTime,
             @JsonProperty("executionTime") Duration executionTime,
+            @JsonProperty("analysisTime") Duration analysisTime,
+            @JsonProperty("planningTime") Duration planningTime,
             @JsonProperty("failedTasks") int failedTasks,
             @JsonProperty("totalDrivers") int totalDrivers,
             @JsonProperty("queuedDrivers") int queuedDrivers,
@@ -104,10 +116,14 @@ public class BasicQueryStats
     {
         this.createTime = createTime;
         this.endTime = endTime;
+        this.executionStartTime = executionStartTime;
+        this.lastHeartbeat = requireNonNull(lastHeartbeat, "lastHeartbeat is null");
 
         this.queuedTime = requireNonNull(queuedTime, "queuedTime is null");
         this.elapsedTime = requireNonNull(elapsedTime, "elapsedTime is null");
         this.executionTime = requireNonNull(executionTime, "executionTime is null");
+        this.analysisTime = requireNonNull(analysisTime, "analysisTime is null");
+        this.planningTime = requireNonNull(planningTime, "planningTime is null");
 
         checkArgument(failedTasks >= 0, "failedTasks is negative");
         this.failedTasks = failedTasks;
@@ -147,9 +163,13 @@ public class BasicQueryStats
     {
         this(queryStats.getCreateTime(),
                 queryStats.getEndTime(),
+                queryStats.getExecutionStartTime(),
+                queryStats.getLastHeartbeat(),
                 queryStats.getQueuedTime(),
                 queryStats.getElapsedTime(),
                 queryStats.getExecutionTime(),
+                queryStats.getAnalysisTime(),
+                queryStats.getPlanningTime(),
                 queryStats.getFailedTasks(),
                 queryStats.getTotalDrivers(),
                 queryStats.getQueuedDrivers(),
@@ -180,6 +200,10 @@ public class BasicQueryStats
         return new BasicQueryStats(
                 now,
                 now,
+                now,
+                now,
+                new Duration(0, MILLISECONDS),
+                new Duration(0, MILLISECONDS),
                 new Duration(0, MILLISECONDS),
                 new Duration(0, MILLISECONDS),
                 new Duration(0, MILLISECONDS),
@@ -220,6 +244,18 @@ public class BasicQueryStats
     }
 
     @JsonProperty
+    public DateTime getExecutionStartTime()
+    {
+        return executionStartTime;
+    }
+
+    @JsonProperty
+    public DateTime getLastHeartbeat()
+    {
+        return lastHeartbeat;
+    }
+
+    @JsonProperty
     public Duration getQueuedTime()
     {
         return queuedTime;
@@ -235,6 +271,18 @@ public class BasicQueryStats
     public Duration getExecutionTime()
     {
         return executionTime;
+    }
+
+    @JsonProperty
+    public Duration getAnalysisTime()
+    {
+        return analysisTime;
+    }
+
+    @JsonProperty
+    public Duration getPlanningTime()
+    {
+        return planningTime;
     }
 
     @JsonProperty

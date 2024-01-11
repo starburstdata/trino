@@ -18,6 +18,7 @@ import com.google.inject.Inject;
 import io.trino.dispatcher.DispatchManager;
 import io.trino.execution.QueryInfo;
 import io.trino.execution.QueryState;
+import io.trino.execution.multi.CurrentQueryProvider;
 import io.trino.security.AccessControl;
 import io.trino.server.security.ResourceSecurity;
 import io.trino.spi.QueryId;
@@ -56,13 +57,15 @@ import static java.util.Objects.requireNonNull;
 public class QueryResource
 {
     private final DispatchManager dispatchManager;
+    private final CurrentQueryProvider currentQueryProvider;
     private final AccessControl accessControl;
     private final HttpRequestSessionContextFactory sessionContextFactory;
 
     @Inject
-    public QueryResource(DispatchManager dispatchManager, AccessControl accessControl, HttpRequestSessionContextFactory sessionContextFactory)
+    public QueryResource(DispatchManager dispatchManager, CurrentQueryProvider currentQueryProvider, AccessControl accessControl, HttpRequestSessionContextFactory sessionContextFactory)
     {
         this.dispatchManager = requireNonNull(dispatchManager, "dispatchManager is null");
+        this.currentQueryProvider = requireNonNull(currentQueryProvider, "currentQueryProvider is null");
         this.accessControl = requireNonNull(accessControl, "accessControl is null");
         this.sessionContextFactory = requireNonNull(sessionContextFactory, "sessionContextFactory is null");
     }
@@ -70,6 +73,25 @@ public class QueryResource
     @ResourceSecurity(AUTHENTICATED_USER)
     @GET
     public List<BasicQueryInfo> getAllQueryInfo(@QueryParam("state") String stateFilter, @Context HttpServletRequest servletRequest, @Context HttpHeaders httpHeaders)
+    {
+        QueryState expectedState = stateFilter == null ? null : QueryState.valueOf(stateFilter.toUpperCase(Locale.ENGLISH));
+
+        List<BasicQueryInfo> queries = currentQueryProvider.getQueries();
+        queries = filterQueries(sessionContextFactory.extractAuthorizedIdentity(servletRequest, httpHeaders), queries, accessControl);
+
+        ImmutableList.Builder<BasicQueryInfo> builder = ImmutableList.builder();
+        for (BasicQueryInfo queryInfo : queries) {
+            if (stateFilter == null || queryInfo.getState() == expectedState) {
+                builder.add(queryInfo);
+            }
+        }
+        return builder.build();
+    }
+
+    @ResourceSecurity(AUTHENTICATED_USER)
+    @GET
+    @Path("local")
+    public List<BasicQueryInfo> getAllLocalQueryInfo(@QueryParam("state") String stateFilter, @Context HttpServletRequest servletRequest, @Context HttpHeaders httpHeaders)
     {
         QueryState expectedState = stateFilter == null ? null : QueryState.valueOf(stateFilter.toUpperCase(Locale.ENGLISH));
 
@@ -92,7 +114,7 @@ public class QueryResource
     {
         requireNonNull(queryId, "queryId is null");
 
-        Optional<QueryInfo> queryInfo = dispatchManager.getFullQueryInfo(queryId);
+        Optional<QueryInfo> queryInfo = currentQueryProvider.getFullQueryInfo(queryId);
         if (queryInfo.isEmpty()) {
             return Response.status(Status.GONE).build();
         }
@@ -113,9 +135,9 @@ public class QueryResource
         requireNonNull(queryId, "queryId is null");
 
         try {
-            BasicQueryInfo queryInfo = dispatchManager.getQueryInfo(queryId);
+            BasicQueryInfo queryInfo = currentQueryProvider.getQueryInfo(queryId);
             checkCanKillQueryOwnedBy(sessionContextFactory.extractAuthorizedIdentity(servletRequest, httpHeaders), queryInfo.getSession().toIdentity(), accessControl);
-            dispatchManager.cancelQuery(queryId);
+            currentQueryProvider.cancelQuery(queryId);
         }
         catch (AccessDeniedException e) {
             throw new ForbiddenException();
@@ -145,7 +167,7 @@ public class QueryResource
         requireNonNull(queryId, "queryId is null");
 
         try {
-            BasicQueryInfo queryInfo = dispatchManager.getQueryInfo(queryId);
+            BasicQueryInfo queryInfo = currentQueryProvider.getQueryInfo(queryId);
 
             checkCanKillQueryOwnedBy(sessionContextFactory.extractAuthorizedIdentity(servletRequest, httpHeaders), queryInfo.getSession().toIdentity(), accessControl);
 
@@ -154,7 +176,7 @@ public class QueryResource
                 return Response.status(Status.CONFLICT).build();
             }
 
-            dispatchManager.failQuery(queryId, queryException);
+            currentQueryProvider.failQuery(queryId, queryException);
 
             return Response.status(Status.ACCEPTED).build();
         }

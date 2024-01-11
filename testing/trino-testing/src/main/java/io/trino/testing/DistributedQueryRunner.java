@@ -190,7 +190,7 @@ public class DistributedQueryRunner
                     ImmutableMap.<String, String>builder()
                             .putAll(extraProperties)
                             .putAll(properties)
-                            .buildOrThrow(),
+                            .buildKeepingLast(),
                     environment,
                     additionalModule,
                     baseDataDir,

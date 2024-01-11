@@ -36,6 +36,7 @@ import static io.trino.execution.QueryState.FINISHED;
 import static io.trino.execution.QueryState.RUNNING;
 import static io.trino.operator.BlockedReason.WAITING_FOR_MEMORY;
 import static java.util.concurrent.TimeUnit.MINUTES;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestClusterMemoryLeakDetector
@@ -81,9 +82,13 @@ public class TestClusterMemoryLeakDetector
                 new BasicQueryStats(
                         DateTime.parse("1991-09-06T05:00-05:30"),
                         DateTime.parse("1991-09-06T05:01-05:30"),
+                        DateTime.parse("1991-09-06T05:00:10-05:30"),
+                        DateTime.parse("1991-09-06T05:01-05:30"),
                         new Duration(8, MINUTES),
                         new Duration(7, MINUTES),
                         new Duration(34, MINUTES),
+                        new Duration(10, SECONDS),
+                        new Duration(20, SECONDS),
                         99,
                         13,
                         14,

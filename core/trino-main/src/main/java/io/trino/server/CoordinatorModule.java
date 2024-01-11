@@ -62,6 +62,7 @@ import io.trino.execution.StageInfo;
 import io.trino.execution.TaskInfo;
 import io.trino.execution.TaskManagerConfig;
 import io.trino.execution.TaskStatus;
+import io.trino.execution.multi.CurrentQueryProviderModule;
 import io.trino.execution.resourcegroups.InternalResourceGroupManager;
 import io.trino.execution.resourcegroups.LegacyResourceGroupConfigurationManager;
 import io.trino.execution.resourcegroups.ResourceGroupManager;
@@ -359,6 +360,8 @@ public class CoordinatorModule
         executionPolicyBinder.addBinding("phased").to(PhasedExecutionPolicy.class);
 
         install(new QueryExecutionFactoryModule());
+
+        install(new CurrentQueryProviderModule());
 
         // cleanup
         binder.bind(ExecutorCleanup.class).asEagerSingleton();

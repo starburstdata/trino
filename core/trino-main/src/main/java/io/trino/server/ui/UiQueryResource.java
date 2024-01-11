@@ -18,6 +18,7 @@ import com.google.inject.Inject;
 import io.trino.dispatcher.DispatchManager;
 import io.trino.execution.QueryInfo;
 import io.trino.execution.QueryState;
+import io.trino.execution.multi.CurrentQueryProvider;
 import io.trino.security.AccessControl;
 import io.trino.server.BasicQueryInfo;
 import io.trino.server.HttpRequestSessionContextFactory;
@@ -53,14 +54,14 @@ import static java.util.Objects.requireNonNull;
 @Path("/ui/api/query")
 public class UiQueryResource
 {
-    private final DispatchManager dispatchManager;
+    private final CurrentQueryProvider currentQueryProvider;
     private final AccessControl accessControl;
     private final HttpRequestSessionContextFactory sessionContextFactory;
 
     @Inject
-    public UiQueryResource(DispatchManager dispatchManager, AccessControl accessControl, HttpRequestSessionContextFactory sessionContextFactory)
+    public UiQueryResource(CurrentQueryProvider currentQueryProvider, AccessControl accessControl, HttpRequestSessionContextFactory sessionContextFactory)
     {
-        this.dispatchManager = requireNonNull(dispatchManager, "dispatchManager is null");
+        this.currentQueryProvider = requireNonNull(currentQueryProvider, "currentQueryProvider is null");
         this.accessControl = requireNonNull(accessControl, "accessControl is null");
         this.sessionContextFactory = requireNonNull(sessionContextFactory, "sessionContextFactory is null");
     }
@@ -71,7 +72,7 @@ public class UiQueryResource
     {
         QueryState expectedState = stateFilter == null ? null : QueryState.valueOf(stateFilter.toUpperCase(Locale.ENGLISH));
 
-        List<BasicQueryInfo> queries = dispatchManager.getQueries();
+        List<BasicQueryInfo> queries = currentQueryProvider.getQueries();
         queries = filterQueries(sessionContextFactory.extractAuthorizedIdentity(servletRequest, httpHeaders), queries, accessControl);
 
         ImmutableList.Builder<TrimmedBasicQueryInfo> builder = ImmutableList.builder();
@@ -90,7 +91,7 @@ public class UiQueryResource
     {
         requireNonNull(queryId, "queryId is null");
 
-        Optional<QueryInfo> queryInfo = dispatchManager.getFullQueryInfo(queryId);
+        Optional<QueryInfo> queryInfo = currentQueryProvider.getFullQueryInfo(queryId);
         if (queryInfo.isPresent()) {
             try {
                 checkCanViewQueryOwnedBy(sessionContextFactory.extractAuthorizedIdentity(servletRequest, httpHeaders), queryInfo.get().getSession().toIdentity(), accessControl);
@@ -124,7 +125,7 @@ public class UiQueryResource
         requireNonNull(queryId, "queryId is null");
 
         try {
-            BasicQueryInfo queryInfo = dispatchManager.getQueryInfo(queryId);
+            BasicQueryInfo queryInfo = currentQueryProvider.getQueryInfo(queryId);
 
             checkCanKillQueryOwnedBy(sessionContextFactory.extractAuthorizedIdentity(servletRequest, httpHeaders), queryInfo.getSession().toIdentity(), accessControl);
 
@@ -133,7 +134,7 @@ public class UiQueryResource
                 return Response.status(Status.CONFLICT).build();
             }
 
-            dispatchManager.failQuery(queryId, queryException);
+            currentQueryProvider.failQuery(queryId, queryException);
 
             return Response.status(Status.ACCEPTED).build();
         }
