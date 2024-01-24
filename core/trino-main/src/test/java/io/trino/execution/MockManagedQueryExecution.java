@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableSet;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import io.trino.Session;
+import io.trino.SystemSessionProperties;
 import io.trino.client.NodeVersion;
 import io.trino.execution.StateMachine.StateChangeListener;
 import io.trino.operator.RetryPolicy;
@@ -95,9 +96,9 @@ public class MockManagedQueryExecution
     }
 
     @Override
-    public Session getSession()
+    public int getQueryPriority()
     {
-        return session;
+        return SystemSessionProperties.getQueryPriority(session);
     }
 
     @Override
@@ -285,12 +286,6 @@ public class MockManagedQueryExecution
                 RetryPolicy.NONE,
                 false,
                 new NodeVersion("test"));
-    }
-
-    @Override
-    public DataSize getUserMemoryReservation()
-    {
-        return memoryUsage;
     }
 
     @Override

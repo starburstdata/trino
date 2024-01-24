@@ -32,7 +32,7 @@ import java.util.concurrent.Executor;
 @ThreadSafe
 public interface ResourceGroupManager<C>
 {
-    void submit(ManagedQueryExecution queryExecution, SelectionContext<C> selectionContext, Executor executor);
+    void submit(ManagedQueryExecution queryExecution, SelectionCriteria criteria, SelectionContext<C> selectionContext, Executor executor);
 
     SelectionContext<C> selectGroup(SelectionCriteria criteria);
 

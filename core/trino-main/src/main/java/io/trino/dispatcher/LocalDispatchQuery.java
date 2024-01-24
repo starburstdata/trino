@@ -19,6 +19,7 @@ import io.airlift.log.Logger;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import io.trino.Session;
+import io.trino.SystemSessionProperties;
 import io.trino.event.QueryMonitor;
 import io.trino.execution.ClusterSizeMonitor;
 import io.trino.execution.ExecutionFailureInfo;
@@ -248,14 +249,6 @@ public class LocalDispatchQuery
     }
 
     @Override
-    public DataSize getUserMemoryReservation()
-    {
-        return tryGetQueryExecution()
-                .map(QueryExecution::getUserMemoryReservation)
-                .orElseGet(() -> DataSize.ofBytes(0));
-    }
-
-    @Override
     public BasicQueryInfo getBasicQueryInfo()
     {
         return tryGetQueryExecution()
@@ -281,6 +274,12 @@ public class LocalDispatchQuery
     public Session getSession()
     {
         return stateMachine.getSession();
+    }
+
+    @Override
+    public int getQueryPriority()
+    {
+        return SystemSessionProperties.getQueryPriority(stateMachine.getSession());
     }
 
     @Override

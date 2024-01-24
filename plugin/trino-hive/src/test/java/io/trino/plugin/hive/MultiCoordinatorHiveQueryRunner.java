@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.airlift.log.Logger;
 import io.trino.Session;
+import io.trino.plugin.resourcegroups.ResourceGroupManagerPlugin;
 import io.trino.server.testing.TestingTrinoServer;
 import io.trino.spi.security.Identity;
 import io.trino.spi.security.SelectedRole;
@@ -94,7 +95,8 @@ public final class MultiCoordinatorHiveQueryRunner
         public DistributedQueryRunner build()
                 throws Exception
         {
-            setBackupCoordinatorProperties(ImmutableMap.of("http-server.http.port", "8081"));
+            setBackupCoordinatorProperties(ImmutableMap.of("http-server.http.port", "8081",
+                    "primaryCoordinator", "false"));
             return super.build();
         }
     }
@@ -102,6 +104,7 @@ public final class MultiCoordinatorHiveQueryRunner
     public static void main(String[] args)
             throws Exception
     {
+//        Logging.initialize().setRootLevel(Level.DEBUG);
         Optional<Path> baseDataDir = Optional.empty();
         if (args.length > 0) {
             if (args.length != 1) {
@@ -127,6 +130,11 @@ public final class MultiCoordinatorHiveQueryRunner
                 //.setTpchColumnNaming(ColumnNaming.STANDARD)
                 //.setTpchDecimalTypeMapping(DecimalTypeMapping.DECIMAL)
                 .build();
+        queryRunner.installPlugin(new ResourceGroupManagerPlugin());
+        queryRunner.getCoordinator().getResourceGroupManager().get().setConfigurationManager("file",
+                ImmutableMap.of("resource-groups.config-file", "/Users/lukasz.stec/Library/Application Support/JetBrains/IntelliJIdea2023.3/scratches/query_investigations/multi-coordinator/local-tests/resource-groups.json"));
+        queryRunner.getBackupCoordinator().get().getResourceGroupManager().get().setConfigurationManager("file",
+                ImmutableMap.of("resource-groups.config-file", "/Users/lukasz.stec/Library/Application Support/JetBrains/IntelliJIdea2023.3/scratches/query_investigations/multi-coordinator/local-tests/resource-groups.json"));
         Thread.sleep(10);
         log.info("======== SERVER STARTED ========");
         log.info("\n====\n%s\n==== main", queryRunner.getCoordinator().getBaseUrl());

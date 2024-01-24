@@ -197,14 +197,15 @@ public class DispatchManager
 
             // select resource group
             Optional<String> queryType = getQueryType(preparedQuery.getStatement()).map(Enum::name);
-            SelectionContext<C> selectionContext = resourceGroupManager.selectGroup(new SelectionCriteria(
+            SelectionCriteria selectionCriteria = new SelectionCriteria(
                     sessionContext.getIdentity().getPrincipal().isPresent(),
                     sessionContext.getIdentity().getUser(),
                     sessionContext.getIdentity().getGroups(),
                     sessionContext.getSource(),
                     sessionContext.getClientTags(),
                     sessionContext.getResourceEstimates(),
-                    queryType));
+                    queryType);
+            SelectionContext<C> selectionContext = resourceGroupManager.selectGroup(selectionCriteria);
 
             // apply system default session properties (does not override user set properties)
             session = sessionPropertyDefaults.newSessionWithDefaultProperties(session, queryType, selectionContext.getResourceGroupId());
@@ -220,7 +221,7 @@ public class DispatchManager
             boolean queryAdded = queryCreated(dispatchQuery);
             if (queryAdded && !dispatchQuery.isDone()) {
                 try {
-                    resourceGroupManager.submit(dispatchQuery, selectionContext, dispatchExecutor);
+                    resourceGroupManager.submit(dispatchQuery, selectionCriteria, selectionContext, dispatchExecutor);
                 }
                 catch (Throwable e) {
                     // dispatch query has already been registered, so just fail it directly
@@ -352,6 +353,12 @@ public class DispatchManager
 
         queryTracker.tryGetQuery(queryId)
                 .ifPresent(query -> query.fail(cause));
+    }
+
+    public void startWaitingForResources(QueryId queryId)
+    {
+        DispatchQuery query = getQuery(queryId);
+        dispatchExecutor.execute(query::startWaitingForResources);
     }
 
     private static class DispatchQueryCreationFuture

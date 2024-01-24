@@ -15,7 +15,6 @@ package io.trino.execution;
 
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
-import io.trino.Session;
 import io.trino.execution.StateMachine.StateChangeListener;
 import io.trino.server.BasicQueryInfo;
 import io.trino.spi.ErrorCode;
@@ -35,9 +34,16 @@ public interface ManagedQueryExecution
      */
     void addStateChangeListener(StateChangeListener<QueryState> stateChangeListener);
 
-    Session getSession();
+    default void addDoneCallback(Runnable callback)
+    {
+        addStateChangeListener(newState -> {
+            if (newState.isDone()) {
+                callback.run();
+            }
+        });
+    }
 
-    DataSize getUserMemoryReservation();
+    int getQueryPriority();
 
     DataSize getTotalMemoryReservation();
 

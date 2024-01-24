@@ -542,7 +542,7 @@ public class InternalResourceGroup
             eligibleSubGroups = queue;
             while (!queuedQueries.isEmpty()) {
                 ManagedQueryExecution query = queuedQueries.poll();
-                queryQueue.addOrUpdate(query, getQueryPriority(query.getSession()));
+                queryQueue.addOrUpdate(query, query.getQueryPriority());
             }
             queuedQueries = queryQueue;
         }
@@ -611,11 +611,7 @@ public class InternalResourceGroup
             else {
                 enqueueQuery(query);
             }
-            query.addStateChangeListener(state -> {
-                if (state.isDone()) {
-                    queryFinished(query);
-                }
-            });
+            query.addDoneCallback(() -> queryFinished(query));
         }
     }
 
@@ -623,7 +619,7 @@ public class InternalResourceGroup
     {
         checkState(Thread.holdsLock(root), "Must hold lock to enqueue a query");
         synchronized (root) {
-            queuedQueries.addOrUpdate(query, getQueryPriority(query.getSession()));
+            queuedQueries.addOrUpdate(query, query.getQueryPriority());
             InternalResourceGroup group = this;
             while (group.parent.isPresent()) {
                 group.parent.get().descendantQueuedQueries++;
@@ -905,7 +901,7 @@ public class InternalResourceGroup
             if (queuedQueries.isEmpty()) {
                 return 0;
             }
-            return getQueryPriority(queuedQueries.peek().getSession());
+            return queuedQueries.peek().getQueryPriority();
         }
     }
 

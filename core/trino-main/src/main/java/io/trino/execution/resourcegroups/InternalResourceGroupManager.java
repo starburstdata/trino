@@ -107,7 +107,7 @@ public final class InternalResourceGroupManager<C>
     }
 
     @Override
-    public void submit(ManagedQueryExecution queryExecution, SelectionContext<C> selectionContext, Executor executor)
+    public void submit(ManagedQueryExecution queryExecution, SelectionCriteria criteria, SelectionContext<C> selectionContext, Executor executor)
     {
         checkState(configurationManager.get() != null, "configurationManager not set");
         createGroupIfNecessary(selectionContext, executor);

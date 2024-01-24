@@ -105,6 +105,12 @@ public class InMemoryNodeManager
     }
 
     @Override
+    public InternalNode getPrimaryCoordinator()
+    {
+        return CURRENT_NODE;
+    }
+
+    @Override
     public void refreshNodes() {}
 
     @Override

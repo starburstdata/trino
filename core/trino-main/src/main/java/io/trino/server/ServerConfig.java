@@ -25,6 +25,7 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 public class ServerConfig
 {
     private boolean coordinator = true;
+    private boolean primaryCoordinator = true;
     private boolean concurrentStartup;
     private boolean includeExceptionInResponse = true;
     private Duration gracePeriod = new Duration(2, MINUTES);
@@ -40,6 +41,18 @@ public class ServerConfig
     public ServerConfig setCoordinator(boolean coordinator)
     {
         this.coordinator = coordinator;
+        return this;
+    }
+
+    public boolean isPrimaryCoordinator()
+    {
+        return primaryCoordinator;
+    }
+
+    @Config("primaryCoordinator")
+    public ServerConfig setPrimaryCoordinator(boolean primaryCoordinator)
+    {
+        this.primaryCoordinator = primaryCoordinator;
         return this;
     }
 

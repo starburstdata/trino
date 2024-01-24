@@ -63,6 +63,8 @@ import io.trino.execution.TaskInfo;
 import io.trino.execution.TaskManagerConfig;
 import io.trino.execution.TaskStatus;
 import io.trino.execution.multi.CurrentQueryProviderModule;
+import io.trino.execution.multi.resourcegroups.RemoteResourceGroupPrimaryModule;
+import io.trino.execution.multi.resourcegroups.RemoteResourceGroupSecondaryModule;
 import io.trino.execution.resourcegroups.InternalResourceGroupManager;
 import io.trino.execution.resourcegroups.LegacyResourceGroupConfigurationManager;
 import io.trino.execution.resourcegroups.ResourceGroupManager;
@@ -155,6 +157,13 @@ import static org.weakref.jmx.guice.ExportBinder.newExporter;
 public class CoordinatorModule
         extends AbstractConfigurationAwareModule
 {
+    private final boolean primaryCoordinator;
+
+    public CoordinatorModule(boolean primaryCoordinator)
+    {
+        this.primaryCoordinator = primaryCoordinator;
+    }
+
     @Override
     protected void setup(Binder binder)
     {
@@ -201,7 +210,13 @@ public class CoordinatorModule
         OptionalBinder.newOptionalBinder(binder, SessionSupplier.class).setDefault().to(QuerySessionSupplier.class).in(Scopes.SINGLETON);
         binder.bind(InternalResourceGroupManager.class).in(Scopes.SINGLETON);
         newExporter(binder).export(InternalResourceGroupManager.class).withGeneratedName();
-        binder.bind(ResourceGroupManager.class).to(InternalResourceGroupManager.class);
+        if (primaryCoordinator) {
+            binder.bind(ResourceGroupManager.class).to(InternalResourceGroupManager.class);
+            install(new RemoteResourceGroupPrimaryModule());
+        }
+        else {
+            install(new RemoteResourceGroupSecondaryModule());
+        }
         binder.bind(LegacyResourceGroupConfigurationManager.class).in(Scopes.SINGLETON);
 
         // dispatcher

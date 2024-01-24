@@ -202,7 +202,7 @@ public class ServerMainModule
         ServerConfig serverConfig = buildConfigObject(ServerConfig.class);
 
         if (serverConfig.isCoordinator()) {
-            install(new CoordinatorModule());
+            install(new CoordinatorModule(serverConfig.isPrimaryCoordinator()));
         }
         else {
             install(new WorkerModule());
@@ -449,7 +449,8 @@ public class ServerMainModule
         binder.bind(NodeVersion.class).toInstance(new NodeVersion(nodeVersion));
         discoveryBinder(binder).bindHttpAnnouncement("trino")
                 .addProperty("node_version", nodeVersion)
-                .addProperty("coordinator", String.valueOf(serverConfig.isCoordinator()));
+                .addProperty("coordinator", String.valueOf(serverConfig.isCoordinator()))
+                .addProperty("primaryCoordinator", String.valueOf(serverConfig.isPrimaryCoordinator()));
 
         // server info resource
         jaxrsBinder(binder).bind(ServerInfoResource.class);

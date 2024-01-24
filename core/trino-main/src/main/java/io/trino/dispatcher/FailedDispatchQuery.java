@@ -20,6 +20,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import io.trino.Session;
+import io.trino.SystemSessionProperties;
 import io.trino.client.NodeVersion;
 import io.trino.execution.ExecutionFailureInfo;
 import io.trino.execution.QueryInfo;
@@ -103,6 +104,12 @@ public class FailedDispatchQuery
     public Session getSession()
     {
         return session;
+    }
+
+    @Override
+    public int getQueryPriority()
+    {
+        return SystemSessionProperties.getQueryPriority(session);
     }
 
     @Override
@@ -194,12 +201,6 @@ public class FailedDispatchQuery
 
     @Override
     public DataSize getTotalMemoryReservation()
-    {
-        return DataSize.ofBytes(0);
-    }
-
-    @Override
-    public DataSize getUserMemoryReservation()
     {
         return DataSize.ofBytes(0);
     }

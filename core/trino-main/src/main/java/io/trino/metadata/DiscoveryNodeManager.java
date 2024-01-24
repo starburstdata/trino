@@ -92,6 +92,8 @@ public final class DiscoveryNodeManager
     private Set<InternalNode> coordinators;
 
     @GuardedBy("this")
+    private volatile InternalNode primaryCoordinatorNode;
+    @GuardedBy("this")
     private final List<Consumer<AllNodes>> listeners = new ArrayList<>();
 
     @Inject
@@ -218,12 +220,14 @@ public final class DiscoveryNodeManager
         ImmutableSet.Builder<InternalNode> inactiveNodesBuilder = ImmutableSet.builder();
         ImmutableSet.Builder<InternalNode> shuttingDownNodesBuilder = ImmutableSet.builder();
         ImmutableSet.Builder<InternalNode> coordinatorsBuilder = ImmutableSet.builder();
+        ImmutableSet.Builder<InternalNode> primaryCoordinatorsBuilder = ImmutableSet.builder();
         ImmutableSetMultimap.Builder<CatalogHandle, InternalNode> byCatalogHandleBuilder = ImmutableSetMultimap.builder();
 
         for (ServiceDescriptor service : services) {
             URI uri = getHttpUri(service, httpsRequired);
             NodeVersion nodeVersion = getNodeVersion(service);
             boolean coordinator = isCoordinator(service);
+            boolean primaryCoordinator = isPrimaryCoordinator(service);
             if (uri != null && nodeVersion != null) {
                 InternalNode node = new InternalNode(service.getNodeId(), uri, nodeVersion, coordinator);
                 NodeState nodeState = getNodeState(node);
@@ -233,6 +237,9 @@ public final class DiscoveryNodeManager
                         activeNodesBuilder.add(node);
                         if (coordinator) {
                             coordinatorsBuilder.add(node);
+                            if (primaryCoordinator) {
+                                primaryCoordinatorsBuilder.add(node);
+                            }
                         }
 
                         // record available active nodes organized by catalog handle
@@ -278,6 +285,14 @@ public final class DiscoveryNodeManager
             // assign allNodes to a local variable for use in the callback below
             this.allNodes = allNodes;
             coordinators = coordinatorsBuilder.build();
+            Set<InternalNode> primaryCoordinators = primaryCoordinatorsBuilder.build();
+            if (primaryCoordinators.size() > 1) {
+                log.warn("more than one primary coordinator %s", primaryCoordinators);
+            }
+            else if (primaryCoordinators.isEmpty()) {
+                log.warn("no primary coordinator!", primaryCoordinators);
+            }
+            this.primaryCoordinatorNode = primaryCoordinators.stream().findFirst().orElse(null);
 
             // notify listeners
             List<Consumer<AllNodes>> listeners = ImmutableList.copyOf(this.listeners);
@@ -370,6 +385,12 @@ public final class DiscoveryNodeManager
     }
 
     @Override
+    public InternalNode getPrimaryCoordinator()
+    {
+        return requireNonNull(primaryCoordinatorNode, "primaryCoordinatorNode is null");
+    }
+
+    @Override
     public synchronized void addNodeChangeListener(Consumer<AllNodes> listener)
     {
         listeners.add(requireNonNull(listener, "listener is null"));
@@ -401,5 +422,10 @@ public final class DiscoveryNodeManager
     private static boolean isCoordinator(ServiceDescriptor service)
     {
         return Boolean.parseBoolean(service.getProperties().get("coordinator"));
+    }
+
+    private static boolean isPrimaryCoordinator(ServiceDescriptor service)
+    {
+        return Boolean.parseBoolean(service.getProperties().get("primaryCoordinator"));
     }
 }

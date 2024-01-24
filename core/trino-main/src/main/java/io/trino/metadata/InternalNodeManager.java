@@ -37,6 +37,8 @@ public interface InternalNodeManager
 
     Set<InternalNode> getCoordinators();
 
+    InternalNode getPrimaryCoordinator();
+
     AllNodes getAllNodes();
 
     void refreshNodes();

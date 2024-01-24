@@ -13,6 +13,8 @@
  */
 package io.trino.spi.resourcegroups;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.trino.spi.session.ResourceEstimates;
 
 import java.util.Optional;
@@ -31,11 +33,13 @@ public final class SelectionCriteria
     private final ResourceEstimates resourceEstimates;
     private final Optional<String> queryType;
 
+    @JsonCreator
     public SelectionCriteria(
             boolean authenticated,
             String user,
             Set<String> userGroups,
             Optional<String> source,
+            @JsonProperty("tags")
             Set<String> clientTags,
             ResourceEstimates resourceEstimates,
             Optional<String> queryType)
@@ -49,36 +53,43 @@ public final class SelectionCriteria
         this.queryType = requireNonNull(queryType, "queryType is null");
     }
 
+    @JsonProperty
     public boolean isAuthenticated()
     {
         return authenticated;
     }
 
+    @JsonProperty
     public String getUser()
     {
         return user;
     }
 
+    @JsonProperty
     public Set<String> getUserGroups()
     {
         return userGroups;
     }
 
+    @JsonProperty
     public Optional<String> getSource()
     {
         return source;
     }
 
+    @JsonProperty
     public Set<String> getTags()
     {
         return clientTags;
     }
 
+    @JsonProperty
     public ResourceEstimates getResourceEstimates()
     {
         return resourceEstimates;
     }
 
+    @JsonProperty
     public Optional<String> getQueryType()
     {
         return queryType;
