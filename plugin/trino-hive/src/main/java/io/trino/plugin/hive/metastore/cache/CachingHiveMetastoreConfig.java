@@ -27,16 +27,18 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class CachingHiveMetastoreConfig
 {
-    // Use 5 mins for stats cache TTL by default. 5 mins will be sufficient to help
+    // Use 20 mins for stats cache TTL by default. 20 mins will be sufficient to help
     // significantly when there is high number of concurrent queries.
-    // 5 mins will also prevent stats from being stalled for a long time since
+    // 20 mins will also prevent stats from being stalled for a long time since
     // time window where table data can be altered is limited.
-    public static final Duration DEFAULT_STATS_CACHE_TTL = new Duration(5, MINUTES);
+    // Set 20 mins becasue statsCacheTtl cannot be smaller than metastoreCacheTtl,
+    // and we do not want to refresh metadata too often
+    public static final Duration DEFAULT_STATS_CACHE_TTL = new Duration(20, MINUTES);
 
-    private Duration metastoreCacheTtl = new Duration(0, SECONDS);
+    private Duration metastoreCacheTtl = DEFAULT_STATS_CACHE_TTL;
     private Optional<Duration> statsCacheTtl = Optional.empty();
-    private Optional<Duration> metastoreRefreshInterval = Optional.empty();
-    private long metastoreCacheMaximumSize = 10000;
+    private Optional<Duration> metastoreRefreshInterval = Optional.of(new Duration(10, MINUTES));
+    private long metastoreCacheMaximumSize = 100000;
     private int maxMetastoreRefreshThreads = 10;
     private boolean cacheMissing = true;
     private boolean partitionCacheEnabled = true;

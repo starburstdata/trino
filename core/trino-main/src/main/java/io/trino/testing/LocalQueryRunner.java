@@ -141,6 +141,9 @@ import io.trino.spi.Plugin;
 import io.trino.spi.connector.CatalogHandle;
 import io.trino.spi.connector.Connector;
 import io.trino.spi.connector.ConnectorFactory;
+import io.trino.spi.exchange.ExchangeManager;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
+import io.trino.spi.session.PropertyMetadata;
 import io.trino.spi.type.TypeManager;
 import io.trino.spi.type.TypeOperators;
 import io.trino.spiller.FileSingleStreamSpillerFactory;
@@ -395,6 +398,7 @@ public class LocalQueryRunner
                 metadata,
                 accessControl,
                 nodeManager,
+                RemoteCacheInvalidationClient.noOp(),
                 pageSorter,
                 pageIndexerFactory,
                 nodeInfo,

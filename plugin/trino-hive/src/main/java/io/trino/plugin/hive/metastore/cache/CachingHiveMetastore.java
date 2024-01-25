@@ -28,6 +28,7 @@ import io.airlift.jmx.CacheStatsMBean;
 import io.airlift.units.Duration;
 import io.trino.cache.EvictableCacheBuilder;
 import io.trino.hive.thrift.metastore.DataOperationType;
+import io.trino.plugin.base.CatalogName;
 import io.trino.plugin.hive.HiveColumnStatisticType;
 import io.trino.plugin.hive.HivePartition;
 import io.trino.plugin.hive.HiveType;
@@ -50,9 +51,11 @@ import io.trino.plugin.hive.metastore.PartitionWithStatistics;
 import io.trino.plugin.hive.metastore.PrincipalPrivileges;
 import io.trino.plugin.hive.metastore.Table;
 import io.trino.spi.TrinoException;
+import io.trino.spi.connector.CatalogSchemaTableName;
 import io.trino.spi.connector.RelationType;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.function.LanguageFunction;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.RoleGrant;
 import io.trino.spi.type.Type;
@@ -114,6 +117,10 @@ public final class CachingHiveMetastore
 
     private final HiveMetastore delegate;
     private final boolean cacheMissing;
+
+    private final RemoteCacheInvalidationClient remoteCacheInvalidationClient;
+    private final CatalogName catalogName;
+
     private final LoadingCache<String, Optional<Database>> databaseCache;
     private final LoadingCache<String, List<String>> databaseNamesCache;
     private final LoadingCache<HiveTableName, Optional<Table>> tableCache;
@@ -138,6 +145,8 @@ public final class CachingHiveMetastore
         return new CachingHiveMetastore(
                 delegate,
                 true,
+                RemoteCacheInvalidationClient.noOp(),
+                new CatalogName("unknown"),
                 new CacheFactory(maximumSize),
                 new CacheFactory(maximumSize),
                 new CacheFactory(maximumSize),
@@ -146,6 +155,8 @@ public final class CachingHiveMetastore
 
     public static CachingHiveMetastore createCachingHiveMetastore(
             HiveMetastore delegate,
+            RemoteCacheInvalidationClient remoteCacheInvalidationClient,
+            CatalogName catalogName,
             Duration metadataCacheTtl,
             Duration statsCacheTtl,
             Optional<Duration> refreshInterval,
@@ -186,6 +197,8 @@ public final class CachingHiveMetastore
         return new CachingHiveMetastore(
                 delegate,
                 cacheMissing,
+                remoteCacheInvalidationClient,
+                catalogName,
                 cacheFactory,
                 partitionCacheFactory,
                 statsCacheFactory,
@@ -195,6 +208,8 @@ public final class CachingHiveMetastore
     private CachingHiveMetastore(
             HiveMetastore delegate,
             boolean cacheMissing,
+            RemoteCacheInvalidationClient remoteCacheInvalidationClient,
+            CatalogName catalogName,
             CacheFactory cacheFactory,
             CacheFactory partitionCacheFactory,
             CacheFactory statsCacheFactory,
@@ -202,6 +217,8 @@ public final class CachingHiveMetastore
     {
         this.delegate = requireNonNull(delegate, "delegate is null");
         this.cacheMissing = cacheMissing;
+        this.remoteCacheInvalidationClient = requireNonNull(remoteCacheInvalidationClient, "remoteCacheInvalidationClient is null");
+        this.catalogName = requireNonNull(catalogName, "catalogName is null");
 
         databaseNamesCache = cacheFactory.buildCache(ignored -> loadAllDatabases());
         databaseCache = cacheFactory.buildCache(this::loadDatabase);
@@ -825,6 +842,11 @@ public final class CachingHiveMetastore
 
     public void invalidateTable(String databaseName, String tableName)
     {
+        invalidateTable(databaseName, tableName, true);
+    }
+
+    public void invalidateTable(String databaseName, String tableName, boolean invalidateRemote)
+    {
         HiveTableName hiveTableName = new HiveTableName(databaseName, tableName);
         tableCache.invalidate(hiveTableName);
         tableNamesCache.invalidate(databaseName);
@@ -837,6 +859,9 @@ public final class CachingHiveMetastore
         tableStatisticsCache.invalidate(hiveTableName);
         invalidateTablesWithParameterCache(databaseName, tableName);
         invalidatePartitionCache(databaseName, tableName);
+        if (invalidateRemote) {
+            remoteCacheInvalidationClient.invalidateTable(new CatalogSchemaTableName(catalogName.toString(), databaseName, tableName));
+        }
     }
 
     private void invalidateTablesWithParameterCache(String databaseName, String tableName)

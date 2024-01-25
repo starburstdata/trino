@@ -27,6 +27,7 @@ import io.trino.plugin.hive.metastore.HiveMetastore;
 import io.trino.plugin.hive.metastore.HiveMetastoreFactory;
 import io.trino.spi.NodeManager;
 import io.trino.spi.TrinoException;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
 import io.trino.spi.security.ConnectorIdentity;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -34,6 +35,7 @@ import org.weakref.jmx.Flatten;
 import org.weakref.jmx.Managed;
 import org.weakref.jmx.Nested;
 
+import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Function;
@@ -49,6 +51,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 public class SharedHiveMetastoreCache
 {
     private final boolean enabled;
+    private final RemoteCacheInvalidationClient remoteCacheInvalidationClient;
     private final CatalogName catalogName;
 
     private final Duration metadataCacheTtl;
@@ -69,9 +72,11 @@ public class SharedHiveMetastoreCache
     public SharedHiveMetastoreCache(
             CatalogName catalogName,
             NodeManager nodeManager,
+            RemoteCacheInvalidationClient remoteCacheInvalidationClient,
             CachingHiveMetastoreConfig config,
             ImpersonationCachingConfig impersonationCachingConfig)
     {
+        this.remoteCacheInvalidationClient = remoteCacheInvalidationClient;
         requireNonNull(nodeManager, "nodeManager is null");
         requireNonNull(catalogName, "catalogName is null");
 
@@ -141,6 +146,8 @@ public class SharedHiveMetastoreCache
     {
         return CachingHiveMetastore.createCachingHiveMetastore(
                 metastoreFactory.createMetastore(identity),
+                remoteCacheInvalidationClient,
+                catalogName,
                 metadataCacheTtl,
                 statsCacheTtl,
                 metastoreRefreshInterval,
@@ -212,6 +219,11 @@ public class SharedHiveMetastoreCache
                 throwIfInstanceOf(e.getCause(), TrinoException.class);
                 throw e;
             }
+        }
+
+        public Collection<CachingHiveMetastore> getAllHiveMetastores()
+        {
+            return cache.asMap().values();
         }
 
         @Managed

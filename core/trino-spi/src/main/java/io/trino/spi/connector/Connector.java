@@ -68,6 +68,14 @@ public interface Connector
     }
 
     /**
+     * @throws UnsupportedOperationException if this connector does not metadata cache invalidation
+     */
+    default ConnectorMetadataCacheInvalidator getConnectorMetadataCacheInvalidator()
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
      * @throws UnsupportedOperationException if this connector does not support reading tables page at a time
      */
     default ConnectorPageSourceProvider getPageSourceProvider()

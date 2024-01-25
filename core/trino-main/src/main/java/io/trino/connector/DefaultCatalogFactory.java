@@ -35,6 +35,7 @@ import io.trino.spi.connector.CatalogHandle;
 import io.trino.spi.connector.Connector;
 import io.trino.spi.connector.ConnectorContext;
 import io.trino.spi.connector.ConnectorFactory;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
 import io.trino.spi.type.TypeManager;
 import io.trino.sql.planner.OptimizerConfig;
 import io.trino.transaction.TransactionManager;
@@ -57,6 +58,7 @@ public class DefaultCatalogFactory
     private final AccessControl accessControl;
 
     private final InternalNodeManager nodeManager;
+    private final RemoteCacheInvalidationClient remoteCacheInvalidationClient;
     private final PageSorter pageSorter;
     private final PageIndexerFactory pageIndexerFactory;
     private final NodeInfo nodeInfo;
@@ -75,6 +77,7 @@ public class DefaultCatalogFactory
             Metadata metadata,
             AccessControl accessControl,
             InternalNodeManager nodeManager,
+            RemoteCacheInvalidationClient remoteCacheInvalidationClient,
             PageSorter pageSorter,
             PageIndexerFactory pageIndexerFactory,
             NodeInfo nodeInfo,
@@ -88,6 +91,7 @@ public class DefaultCatalogFactory
         this.metadata = requireNonNull(metadata, "metadata is null");
         this.accessControl = requireNonNull(accessControl, "accessControl is null");
         this.nodeManager = requireNonNull(nodeManager, "nodeManager is null");
+        this.remoteCacheInvalidationClient = requireNonNull(remoteCacheInvalidationClient, "remoteCacheInvalidationClient is null");
         this.pageSorter = requireNonNull(pageSorter, "pageSorter is null");
         this.pageIndexerFactory = requireNonNull(pageIndexerFactory, "pageIndexerFactory is null");
         this.nodeInfo = requireNonNull(nodeInfo, "nodeInfo is null");
@@ -193,6 +197,7 @@ public class DefaultCatalogFactory
                 versionEmbedder,
                 typeManager,
                 new InternalMetadataProvider(metadata, typeManager),
+                remoteCacheInvalidationClient,
                 pageSorter,
                 pageIndexerFactory);
 

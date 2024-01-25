@@ -28,6 +28,7 @@ import io.trino.spi.connector.Connector;
 import io.trino.spi.connector.ConnectorAccessControl;
 import io.trino.spi.connector.ConnectorCapabilities;
 import io.trino.spi.connector.ConnectorIndexProvider;
+import io.trino.spi.connector.ConnectorMetadataCacheInvalidator;
 import io.trino.spi.connector.ConnectorNodePartitioningProvider;
 import io.trino.spi.connector.ConnectorPageSinkProvider;
 import io.trino.spi.connector.ConnectorPageSourceProvider;
@@ -78,6 +79,7 @@ public class ConnectorServices
     private final Optional<FunctionProvider> functionProvider;
     private final CatalogTableFunctions tableFunctions;
     private final Optional<ConnectorSplitManager> splitManager;
+    private final Optional<ConnectorMetadataCacheInvalidator> connectorMetadataCacheInvalidator;
     private final Optional<ConnectorPageSourceProvider> pageSourceProvider;
     private final Optional<ConnectorPageSinkProvider> pageSinkProvider;
     private final Optional<ConnectorIndexProvider> indexProvider;
@@ -127,6 +129,14 @@ public class ConnectorServices
         catch (UnsupportedOperationException ignored) {
         }
         this.splitManager = Optional.ofNullable(splitManager);
+
+        ConnectorMetadataCacheInvalidator connectorMetadataCacheInvalidator = null;
+        try {
+            connectorMetadataCacheInvalidator = connector.getConnectorMetadataCacheInvalidator();
+        }
+        catch (UnsupportedOperationException ignored) {
+        }
+        this.connectorMetadataCacheInvalidator = Optional.ofNullable(connectorMetadataCacheInvalidator);
 
         ConnectorPageSourceProvider connectorPageSourceProvider = null;
         try {
@@ -259,6 +269,11 @@ public class ConnectorServices
     public Optional<ConnectorSplitManager> getSplitManager()
     {
         return splitManager;
+    }
+
+    public Optional<ConnectorMetadataCacheInvalidator> getConnectorMetadataCacheInvalidator()
+    {
+        return connectorMetadataCacheInvalidator;
     }
 
     public Optional<ConnectorPageSourceProvider> getPageSourceProvider()

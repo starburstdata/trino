@@ -27,6 +27,7 @@ import io.trino.metadata.LanguageFunctionProvider;
 import io.trino.metadata.WorkerLanguageFunctionProvider;
 import io.trino.server.ui.NoWebUiAuthenticationFilter;
 import io.trino.server.ui.WebUiAuthenticationFilter;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
 
 import static com.google.common.reflect.Reflection.newProxy;
 
@@ -55,6 +56,7 @@ public class WorkerModule
         binder.bind(LanguageFunctionProvider.class).to(WorkerLanguageFunctionProvider.class).in(Scopes.SINGLETON);
 
         binder.bind(WebUiAuthenticationFilter.class).to(NoWebUiAuthenticationFilter.class).in(Scopes.SINGLETON);
+        binder.bind(RemoteCacheInvalidationClient.class).toInstance(RemoteCacheInvalidationClient.noOp());
     }
 
     @Provides

@@ -32,7 +32,7 @@ public class StatusCodeCheckResponseHandler
         if (!isOk(response)) {
             throw new TrinoException(
                     StandardErrorCode.GENERIC_INTERNAL_ERROR,
-                    "startWaitingForResources request failed with http status code: %s, request %s, response: %s".formatted(response.getStatusCode(), request, response));
+                    "request failed with http status code: %s, request %s, response: %s".formatted(response.getStatusCode(), request, response));
         }
         return null;
     }

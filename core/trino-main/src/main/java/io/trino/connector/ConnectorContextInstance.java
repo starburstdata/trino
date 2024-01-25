@@ -22,6 +22,7 @@ import io.trino.spi.VersionEmbedder;
 import io.trino.spi.connector.CatalogHandle;
 import io.trino.spi.connector.ConnectorContext;
 import io.trino.spi.connector.MetadataProvider;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
 import io.trino.spi.type.TypeManager;
 
 import static java.util.Objects.requireNonNull;
@@ -35,6 +36,7 @@ public class ConnectorContextInstance
     private final VersionEmbedder versionEmbedder;
     private final TypeManager typeManager;
     private final MetadataProvider metadataProvider;
+    private final RemoteCacheInvalidationClient remoteCacheInvalidationClient;
     private final PageSorter pageSorter;
     private final PageIndexerFactory pageIndexerFactory;
     private final CatalogHandle catalogHandle;
@@ -47,6 +49,7 @@ public class ConnectorContextInstance
             VersionEmbedder versionEmbedder,
             TypeManager typeManager,
             MetadataProvider metadataProvider,
+            RemoteCacheInvalidationClient remoteCacheInvalidationClient,
             PageSorter pageSorter,
             PageIndexerFactory pageIndexerFactory)
     {
@@ -56,6 +59,7 @@ public class ConnectorContextInstance
         this.versionEmbedder = requireNonNull(versionEmbedder, "versionEmbedder is null");
         this.typeManager = requireNonNull(typeManager, "typeManager is null");
         this.metadataProvider = requireNonNull(metadataProvider, "metadataProvider is null");
+        this.remoteCacheInvalidationClient = requireNonNull(remoteCacheInvalidationClient, "remoteCacheInvalidationClient is null");
         this.pageSorter = requireNonNull(pageSorter, "pageSorter is null");
         this.pageIndexerFactory = requireNonNull(pageIndexerFactory, "pageIndexerFactory is null");
         this.catalogHandle = requireNonNull(catalogHandle, "catalogHandle is null");
@@ -101,6 +105,12 @@ public class ConnectorContextInstance
     public MetadataProvider getMetadataProvider()
     {
         return metadataProvider;
+    }
+
+    @Override
+    public RemoteCacheInvalidationClient getRemoteCacheInvalidationClient()
+    {
+        return remoteCacheInvalidationClient;
     }
 
     @Override

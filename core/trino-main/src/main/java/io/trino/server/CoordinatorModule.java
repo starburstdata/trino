@@ -63,6 +63,7 @@ import io.trino.execution.TaskInfo;
 import io.trino.execution.TaskManagerConfig;
 import io.trino.execution.TaskStatus;
 import io.trino.execution.multi.CurrentQueryProviderModule;
+import io.trino.execution.multi.cache.RemoteCacheInvalidatorModule;
 import io.trino.execution.multi.resourcegroups.RemoteResourceGroupPrimaryModule;
 import io.trino.execution.multi.resourcegroups.RemoteResourceGroupSecondaryModule;
 import io.trino.execution.resourcegroups.InternalResourceGroupManager;
@@ -377,6 +378,7 @@ public class CoordinatorModule
         install(new QueryExecutionFactoryModule());
 
         install(new CurrentQueryProviderModule());
+        install(new RemoteCacheInvalidatorModule());
 
         // cleanup
         binder.bind(ExecutorCleanup.class).asEagerSingleton();

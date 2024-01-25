@@ -22,6 +22,7 @@ import io.trino.plugin.base.session.SessionPropertiesProvider;
 import io.trino.spi.connector.Connector;
 import io.trino.spi.connector.ConnectorAccessControl;
 import io.trino.spi.connector.ConnectorMetadata;
+import io.trino.spi.connector.ConnectorMetadataCacheInvalidator;
 import io.trino.spi.connector.ConnectorNodePartitioningProvider;
 import io.trino.spi.connector.ConnectorPageSinkProvider;
 import io.trino.spi.connector.ConnectorPageSourceProvider;
@@ -52,6 +53,7 @@ public class HiveConnector
     private final Injector injector;
     private final LifeCycleManager lifeCycleManager;
     private final ConnectorSplitManager splitManager;
+    private final ConnectorMetadataCacheInvalidator connectorMetadataCacheInvalidator;
     private final ConnectorPageSourceProvider pageSourceProvider;
     private final ConnectorPageSinkProvider pageSinkProvider;
     private final ConnectorNodePartitioningProvider nodePartitioningProvider;
@@ -78,6 +80,7 @@ public class HiveConnector
             LifeCycleManager lifeCycleManager,
             HiveTransactionManager transactionManager,
             ConnectorSplitManager splitManager,
+            ConnectorMetadataCacheInvalidator connectorMetadataCacheInvalidator,
             ConnectorPageSourceProvider pageSourceProvider,
             ConnectorPageSinkProvider pageSinkProvider,
             ConnectorNodePartitioningProvider nodePartitioningProvider,
@@ -100,6 +103,7 @@ public class HiveConnector
         this.lifeCycleManager = requireNonNull(lifeCycleManager, "lifeCycleManager is null");
         this.transactionManager = requireNonNull(transactionManager, "transactionManager is null");
         this.splitManager = requireNonNull(splitManager, "splitManager is null");
+        this.connectorMetadataCacheInvalidator = requireNonNull(connectorMetadataCacheInvalidator, "connectorMetadataCacheInvalidator is null");
         this.pageSourceProvider = requireNonNull(pageSourceProvider, "pageSourceProvider is null");
         this.pageSinkProvider = requireNonNull(pageSinkProvider, "pageSinkProvider is null");
         this.nodePartitioningProvider = requireNonNull(nodePartitioningProvider, "nodePartitioningProvider is null");
@@ -133,6 +137,12 @@ public class HiveConnector
     public ConnectorSplitManager getSplitManager()
     {
         return splitManager;
+    }
+
+    @Override
+    public ConnectorMetadataCacheInvalidator getConnectorMetadataCacheInvalidator()
+    {
+        return connectorMetadataCacheInvalidator;
     }
 
     @Override

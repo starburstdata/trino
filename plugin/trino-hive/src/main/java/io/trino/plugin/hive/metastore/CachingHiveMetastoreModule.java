@@ -20,10 +20,12 @@ import com.google.inject.Singleton;
 import io.airlift.configuration.AbstractConfigurationAwareModule;
 import io.trino.plugin.hive.metastore.cache.CachingHiveMetastore;
 import io.trino.plugin.hive.metastore.cache.CachingHiveMetastoreConfig;
+import io.trino.plugin.hive.metastore.cache.HiveMetadataCacheInvalidator;
 import io.trino.plugin.hive.metastore.cache.ImpersonationCachingConfig;
 import io.trino.plugin.hive.metastore.cache.SharedHiveMetastoreCache;
 import io.trino.plugin.hive.metastore.cache.SharedHiveMetastoreCache.CachingHiveMetastoreFactory;
 import io.trino.plugin.hive.metastore.procedure.FlushMetadataCacheProcedure;
+import io.trino.spi.connector.ConnectorMetadataCacheInvalidator;
 import io.trino.spi.procedure.Procedure;
 
 import java.util.Optional;
@@ -49,6 +51,7 @@ public class CachingHiveMetastoreModule
         // TODO this should only be bound when impersonation is actually enabled
         configBinder(binder).bindConfig(ImpersonationCachingConfig.class);
         binder.bind(SharedHiveMetastoreCache.class).in(Scopes.SINGLETON);
+        binder.bind(ConnectorMetadataCacheInvalidator.class).to(HiveMetadataCacheInvalidator.class).in(Scopes.SINGLETON);
         // export under the old name, for backwards compatibility
         newExporter(binder).export(HiveMetastoreFactory.class)
                 .as(generator -> generator.generatedNameOf(CachingHiveMetastore.class));

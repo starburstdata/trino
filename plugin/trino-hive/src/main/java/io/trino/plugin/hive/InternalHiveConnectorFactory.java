@@ -31,6 +31,7 @@ import io.trino.plugin.base.CatalogName;
 import io.trino.plugin.base.CatalogNameModule;
 import io.trino.plugin.base.TypeDeserializerModule;
 import io.trino.plugin.base.classloader.ClassLoaderSafeConnectorAccessControl;
+import io.trino.plugin.base.classloader.ClassLoaderSafeConnectorMetadataCacheInvalidator;
 import io.trino.plugin.base.classloader.ClassLoaderSafeConnectorPageSinkProvider;
 import io.trino.plugin.base.classloader.ClassLoaderSafeConnectorPageSourceProvider;
 import io.trino.plugin.base.classloader.ClassLoaderSafeConnectorSplitManager;
@@ -54,6 +55,7 @@ import io.trino.spi.classloader.ThreadContextClassLoader;
 import io.trino.spi.connector.Connector;
 import io.trino.spi.connector.ConnectorAccessControl;
 import io.trino.spi.connector.ConnectorContext;
+import io.trino.spi.connector.ConnectorMetadataCacheInvalidator;
 import io.trino.spi.connector.ConnectorNodePartitioningProvider;
 import io.trino.spi.connector.ConnectorPageSinkProvider;
 import io.trino.spi.connector.ConnectorPageSourceProvider;
@@ -63,6 +65,7 @@ import io.trino.spi.connector.TableProcedureMetadata;
 import io.trino.spi.eventlistener.EventListener;
 import io.trino.spi.function.FunctionProvider;
 import io.trino.spi.function.table.ConnectorTableFunction;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
 import io.trino.spi.procedure.Procedure;
 import org.weakref.jmx.guice.MBeanModule;
 
@@ -117,6 +120,7 @@ public final class InternalHiveConnectorFactory
                         binder.bind(Tracer.class).toInstance(context.getTracer());
                         binder.bind(NodeVersion.class).toInstance(new NodeVersion(context.getNodeManager().getCurrentNode().getVersion()));
                         binder.bind(NodeManager.class).toInstance(context.getNodeManager());
+                        binder.bind(RemoteCacheInvalidationClient.class).toInstance(context.getRemoteCacheInvalidationClient());
                         binder.bind(VersionEmbedder.class).toInstance(context.getVersionEmbedder());
                         binder.bind(MetadataProvider.class).toInstance(context.getMetadataProvider());
                         binder.bind(PageIndexerFactory.class).toInstance(context.getPageIndexerFactory());
@@ -135,6 +139,7 @@ public final class InternalHiveConnectorFactory
             LifeCycleManager lifeCycleManager = injector.getInstance(LifeCycleManager.class);
             HiveTransactionManager transactionManager = injector.getInstance(HiveTransactionManager.class);
             ConnectorSplitManager splitManager = injector.getInstance(ConnectorSplitManager.class);
+            ConnectorMetadataCacheInvalidator connectorMetadataCacheInvalidator = injector.getInstance(ConnectorMetadataCacheInvalidator.class);
             ConnectorPageSourceProvider connectorPageSource = injector.getInstance(ConnectorPageSourceProvider.class);
             ConnectorPageSinkProvider pageSinkProvider = injector.getInstance(ConnectorPageSinkProvider.class);
             ConnectorNodePartitioningProvider connectorDistributionProvider = injector.getInstance(ConnectorNodePartitioningProvider.class);
@@ -159,6 +164,7 @@ public final class InternalHiveConnectorFactory
                     lifeCycleManager,
                     transactionManager,
                     new ClassLoaderSafeConnectorSplitManager(splitManager, classLoader),
+                    new ClassLoaderSafeConnectorMetadataCacheInvalidator(connectorMetadataCacheInvalidator, classLoader),
                     new ClassLoaderSafeConnectorPageSourceProvider(connectorPageSource, classLoader),
                     new ClassLoaderSafeConnectorPageSinkProvider(pageSinkProvider, classLoader),
                     new ClassLoaderSafeNodePartitioningProvider(connectorDistributionProvider, classLoader),

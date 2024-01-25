@@ -19,6 +19,7 @@ import io.trino.spi.NodeManager;
 import io.trino.spi.PageIndexerFactory;
 import io.trino.spi.PageSorter;
 import io.trino.spi.VersionEmbedder;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
 import io.trino.spi.type.TypeManager;
 
 public interface ConnectorContext
@@ -65,6 +66,11 @@ public interface ConnectorContext
     }
 
     default MetadataProvider getMetadataProvider()
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    default RemoteCacheInvalidationClient getRemoteCacheInvalidationClient()
     {
         throw new UnsupportedOperationException();
     }

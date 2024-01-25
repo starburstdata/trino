@@ -23,6 +23,7 @@ import io.airlift.units.Duration;
 import io.trino.hive.thrift.metastore.ColumnStatisticsData;
 import io.trino.hive.thrift.metastore.ColumnStatisticsObj;
 import io.trino.hive.thrift.metastore.LongColumnStatsData;
+import io.trino.plugin.base.CatalogName;
 import io.trino.plugin.hive.HiveBasicStatistics;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.HiveMetastoreClosure;
@@ -42,6 +43,7 @@ import io.trino.plugin.hive.metastore.thrift.ThriftMetastore;
 import io.trino.plugin.hive.metastore.thrift.ThriftMetastoreClient;
 import io.trino.plugin.hive.metastore.thrift.ThriftMetastoreStats;
 import io.trino.spi.connector.SchemaTableName;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.Range;
 import io.trino.spi.predicate.TupleDomain;
@@ -1174,6 +1176,8 @@ public class TestCachingHiveMetastore
     {
         return CachingHiveMetastore.createCachingHiveMetastore(
                 hiveMetastore,
+                RemoteCacheInvalidationClient.noOp(),
+                new CatalogName("unknown"),
                 cacheTtl,
                 CACHE_TTL,
                 Optional.of(new Duration(1, TimeUnit.MINUTES)),

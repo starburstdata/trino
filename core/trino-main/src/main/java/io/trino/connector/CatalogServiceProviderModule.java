@@ -32,11 +32,13 @@ import io.trino.metadata.TablePropertyManager;
 import io.trino.security.AccessControlManager;
 import io.trino.spi.connector.ConnectorAccessControl;
 import io.trino.spi.connector.ConnectorIndexProvider;
+import io.trino.spi.connector.ConnectorMetadataCacheInvalidator;
 import io.trino.spi.connector.ConnectorNodePartitioningProvider;
 import io.trino.spi.connector.ConnectorPageSinkProvider;
 import io.trino.spi.connector.ConnectorPageSourceProvider;
 import io.trino.spi.connector.ConnectorSplitManager;
 import io.trino.spi.function.FunctionProvider;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
 
 import java.util.Optional;
 import java.util.Set;
@@ -55,6 +57,13 @@ public class CatalogServiceProviderModule
     public static CatalogServiceProvider<ConnectorSplitManager> createSplitManagerProvider(ConnectorServicesProvider connectorServicesProvider)
     {
         return new ConnectorCatalogServiceProvider<>("split manager", connectorServicesProvider, connector -> connector.getSplitManager().orElse(null));
+    }
+
+    @Provides
+    @Singleton
+    public static CatalogServiceProvider<ConnectorMetadataCacheInvalidator> createConnectorMetadataCacheInvalidatorProvider(ConnectorServicesProvider connectorServicesProvider)
+    {
+        return new ConnectorCatalogServiceProvider<>("connector metadata cache invalidator", connectorServicesProvider, connector -> connector.getConnectorMetadataCacheInvalidator().orElse(null));
     }
 
     @Provides
