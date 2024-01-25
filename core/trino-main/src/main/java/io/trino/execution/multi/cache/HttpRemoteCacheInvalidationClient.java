@@ -64,7 +64,7 @@ public class HttpRemoteCacheInvalidationClient
     }
 
     @Override
-    public void invalidateDatabase(CatalogSchemaName catalogSchemaName)
+    public void invalidateSchema(CatalogSchemaName catalogSchemaName)
     {
         invalidateOnCoordinators(coordinator -> invalidateDatabase(coordinator, catalogSchemaName));
     }
@@ -85,6 +85,12 @@ public class HttpRemoteCacheInvalidationClient
     public void invalidateAll(String catalogName)
     {
         invalidateOnCoordinators(coordinator -> invalidateAll(coordinator, catalogName));
+    }
+
+    @Override
+    public void invalidateAllSchemas(String catalogName)
+    {
+        invalidateOnCoordinators(coordinator -> invalidateAllSchemas(coordinator, catalogName));
     }
 
     private void invalidateOnCoordinators(Function<InternalNode, Future<Void>> invalidatorCall)
@@ -111,7 +117,7 @@ public class HttpRemoteCacheInvalidationClient
         return httpClient.executeAsync(request, checkResponseStatusCode());
     }
 
-    public Future<Void> invalidateDatabase(InternalNode coordinator, CatalogSchemaName catalogSchemaName)
+    private Future<Void> invalidateDatabase(InternalNode coordinator, CatalogSchemaName catalogSchemaName)
     {
         Request request = preparePost()
                 .setUri(uriBuilderFrom(coordinator.getInternalUri())
@@ -124,7 +130,7 @@ public class HttpRemoteCacheInvalidationClient
         return httpClient.executeAsync(request, checkResponseStatusCode());
     }
 
-    public Future<Void> invalidatePartition(InternalNode coordinator, CatalogSchemaTableName table, Optional<String> partitionPredicate)
+    private Future<Void> invalidatePartition(InternalNode coordinator, CatalogSchemaTableName table, Optional<String> partitionPredicate)
     {
         Request request = preparePost()
                 .setUri(uriBuilderFrom(coordinator.getInternalUri())
@@ -137,7 +143,7 @@ public class HttpRemoteCacheInvalidationClient
         return httpClient.executeAsync(request, checkResponseStatusCode());
     }
 
-    public Future<Void> invalidateTablePrivilege(InternalNode coordinator, CatalogSchemaTableName table, String tableOwner, TrinoPrincipal grantee)
+    private Future<Void> invalidateTablePrivilege(InternalNode coordinator, CatalogSchemaTableName table, String tableOwner, TrinoPrincipal grantee)
     {
         Request request = preparePost()
                 .setUri(uriBuilderFrom(coordinator.getInternalUri())
@@ -150,11 +156,24 @@ public class HttpRemoteCacheInvalidationClient
         return httpClient.executeAsync(request, checkResponseStatusCode());
     }
 
-    public Future<Void> invalidateAll(InternalNode coordinator, String catalogName)
+    private Future<Void> invalidateAll(InternalNode coordinator, String catalogName)
     {
         Request request = preparePost()
                 .setUri(uriBuilderFrom(coordinator.getInternalUri())
                         .appendPath("/v1/cache/invalidate/metadata/all")
+                        .appendPath(catalogName)
+                        .build())
+                .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
+                .build();
+
+        return httpClient.executeAsync(request, checkResponseStatusCode());
+    }
+
+    private Future<Void> invalidateAllSchemas(InternalNode coordinator, String catalogName)
+    {
+        Request request = preparePost()
+                .setUri(uriBuilderFrom(coordinator.getInternalUri())
+                        .appendPath("/v1/cache/invalidate/metadata/schemas")
                         .appendPath(catalogName)
                         .build())
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())

@@ -60,4 +60,12 @@ public class ClassLoaderSafeConnectorMetadataCacheInvalidator
             delegate.invalidateAll();
         }
     }
+
+    @Override
+    public void invalidateSchemas()
+    {
+        try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(classLoader)) {
+            delegate.invalidateSchemas();
+        }
+    }
 }

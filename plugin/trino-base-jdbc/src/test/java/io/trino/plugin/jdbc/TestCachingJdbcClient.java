@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.Futures;
 import io.airlift.testing.TestingTicker;
 import io.airlift.units.Duration;
+import io.trino.plugin.base.CatalogName;
 import io.trino.plugin.base.session.SessionPropertiesProvider;
 import io.trino.plugin.jdbc.JdbcProcedureHandle.ProcedureQuery;
 import io.trino.plugin.jdbc.credential.ExtraCredentialConfig;
@@ -28,6 +29,7 @@ import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.ConnectorIdentity;
 import io.trino.spi.session.PropertyMetadata;
@@ -1159,6 +1161,8 @@ public class TestCachingJdbcClient
                     ticker,
                     delegate,
                     sessionPropertiesProviders,
+                    RemoteCacheInvalidationClient.noOp(),
+                    new CatalogName("unknown"),
                     identityCacheMapping,
                     config.getMetadataCacheTtl(),
                     config.getSchemaNamesCacheTtl(),

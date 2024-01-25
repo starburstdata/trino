@@ -23,12 +23,14 @@ import com.google.inject.Inject;
 import io.airlift.jmx.CacheStatsMBean;
 import io.airlift.units.Duration;
 import io.trino.cache.EvictableCacheBuilder;
+import io.trino.plugin.base.CatalogName;
 import io.trino.plugin.base.session.SessionPropertiesProvider;
 import io.trino.plugin.jdbc.IdentityCacheMapping.IdentityCacheKey;
 import io.trino.plugin.jdbc.JdbcProcedureHandle.ProcedureQuery;
 import io.trino.plugin.jdbc.expression.ParameterizedExpression;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.AggregateFunction;
+import io.trino.spi.connector.CatalogSchemaTableName;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorSession;
@@ -40,6 +42,7 @@ import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.SystemTable;
 import io.trino.spi.connector.TableScanRedirectApplicationResult;
 import io.trino.spi.expression.ConnectorExpression;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.session.PropertyMetadata;
 import io.trino.spi.statistics.TableStatistics;
@@ -79,8 +82,9 @@ public class CachingJdbcClient
     private final List<PropertyMetadata<?>> sessionProperties;
     // specifies whether missing values should be cached
     private final boolean cacheMissing;
+    private final RemoteCacheInvalidationClient remoteCacheInvalidationClient;
+    private final CatalogName catalogName;
     private final IdentityCacheMapping identityMapping;
-
     private final Cache<IdentityCacheKey, Set<String>> schemaNamesCache;
     private final Cache<TableNamesCacheKey, List<SchemaTableName>> tableNamesCache;
     private final Cache<TableHandlesByNameCacheKey, Optional<JdbcTableHandle>> tableHandlesByNameCache;
@@ -93,6 +97,8 @@ public class CachingJdbcClient
     public CachingJdbcClient(
             @StatsCollecting JdbcClient delegate,
             Set<SessionPropertiesProvider> sessionPropertiesProviders,
+            RemoteCacheInvalidationClient remoteCacheInvalidationClient,
+            CatalogName catalogName,
             IdentityCacheMapping identityMapping,
             BaseJdbcConfig config)
     {
@@ -100,6 +106,8 @@ public class CachingJdbcClient
                 Ticker.systemTicker(),
                 delegate,
                 sessionPropertiesProviders,
+                remoteCacheInvalidationClient,
+                catalogName,
                 identityMapping,
                 config.getMetadataCacheTtl(),
                 config.getSchemaNamesCacheTtl(),
@@ -113,6 +121,8 @@ public class CachingJdbcClient
             Ticker ticker,
             JdbcClient delegate,
             Set<SessionPropertiesProvider> sessionPropertiesProviders,
+            RemoteCacheInvalidationClient remoteCacheInvalidationClient,
+            CatalogName catalogName,
             IdentityCacheMapping identityMapping,
             Duration metadataCachingTtl,
             Duration schemaNamesCachingTtl,
@@ -126,6 +136,8 @@ public class CachingJdbcClient
                 .flatMap(provider -> provider.getSessionProperties().stream())
                 .collect(toImmutableList());
         this.cacheMissing = cacheMissing;
+        this.remoteCacheInvalidationClient = requireNonNull(remoteCacheInvalidationClient, "remoteCacheInvalidationClient is null");
+        this.catalogName = requireNonNull(catalogName, "catalogName is null");
         this.identityMapping = requireNonNull(identityMapping, "identityMapping is null");
 
         schemaNamesCache = buildCache(ticker, cacheMaximumSize, schemaNamesCachingTtl);
@@ -622,12 +634,20 @@ public class CachingJdbcClient
     @Managed
     public void flushCache()
     {
+        flushCache(true);
+    }
+
+    public void flushCache(boolean invalidateRemote)
+    {
         schemaNamesCache.invalidateAll();
         tableNamesCache.invalidateAll();
         tableHandlesByNameCache.invalidateAll();
         tableHandlesByQueryCache.invalidateAll();
         columnsCache.invalidateAll();
         statisticsCache.invalidateAll();
+        if (invalidateRemote) {
+            remoteCacheInvalidationClient.invalidateAll(catalogName.toString());
+        }
     }
 
     private IdentityCacheKey getIdentityKey(ConnectorSession session)
@@ -649,16 +669,32 @@ public class CachingJdbcClient
 
     private void invalidateSchemasCache()
     {
+        invalidateSchemasCache(true);
+    }
+
+    public void invalidateSchemasCache(boolean invalidateRemote)
+    {
         schemaNamesCache.invalidateAll();
+        if (invalidateRemote) {
+            remoteCacheInvalidationClient.invalidateAllSchemas(catalogName.toString());
+        }
     }
 
     private void invalidateTableCaches(SchemaTableName schemaTableName)
+    {
+        invalidateTableCaches(schemaTableName, true);
+    }
+
+    public void invalidateTableCaches(SchemaTableName schemaTableName, boolean invalidateRemote)
     {
         invalidateColumnsCache(schemaTableName);
         invalidateAllIf(tableHandlesByNameCache, key -> key.tableName.equals(schemaTableName));
         tableHandlesByQueryCache.invalidateAll();
         invalidateAllIf(tableNamesCache, key -> key.schemaName.equals(Optional.of(schemaTableName.getSchemaName())));
         invalidateAllIf(statisticsCache, key -> key.mayReference(schemaTableName));
+        if (invalidateRemote) {
+            remoteCacheInvalidationClient.invalidateTable(new CatalogSchemaTableName(catalogName.toString(), schemaTableName));
+        }
     }
 
     private void invalidateColumnsCache(SchemaTableName table)

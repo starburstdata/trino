@@ -17,6 +17,8 @@ import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import io.airlift.units.Duration;
+import io.trino.plugin.base.CatalogName;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
 
 import java.util.Set;
 
@@ -45,6 +47,8 @@ public class DefaultJdbcMetadataFactory
                 Ticker.systemTicker(),
                 jdbcClient,
                 Set.of(),
+                RemoteCacheInvalidationClient.noOp(),
+                new CatalogName("unknwon"),
                 new SingletonIdentityCacheMapping(),
                 new Duration(1, DAYS),
                 new Duration(1, DAYS),

@@ -741,7 +741,7 @@ public final class CachingHiveMetastore
         databaseCache.invalidate(databaseName);
         databaseNamesCache.invalidateAll();
         if (invalidateRemote) {
-            remoteCacheInvalidationClient.invalidateDatabase(new CatalogSchemaName(catalogName.toString(), databaseName));
+            remoteCacheInvalidationClient.invalidateSchema(new CatalogSchemaName(catalogName.toString(), databaseName));
         }
     }
 

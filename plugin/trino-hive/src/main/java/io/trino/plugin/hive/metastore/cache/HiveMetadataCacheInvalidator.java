@@ -66,6 +66,12 @@ public class HiveMetadataCacheInvalidator
         invalidate(cachingHiveMetastore -> cachingHiveMetastore.flushCache(false));
     }
 
+    @Override
+    public void invalidateSchemas()
+    {
+        throw new UnsupportedOperationException();
+    }
+
     private void invalidate(Consumer<CachingHiveMetastore> invalidator)
     {
         if (hiveMetastoreFactory instanceof CachingHiveMetastoreFactory factory) {

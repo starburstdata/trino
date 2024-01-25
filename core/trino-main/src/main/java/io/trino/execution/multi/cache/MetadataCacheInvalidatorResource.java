@@ -73,6 +73,14 @@ public class MetadataCacheInvalidatorResource
         getInvalidator(catalogName).invalidateAll();
     }
 
+    @ResourceSecurity(INTERNAL_ONLY)
+    @POST
+    @Path("schemas/{catalogName}")
+    public void invalidateSchemas(@PathParam("catalogName") String catalogName)
+    {
+        getInvalidator(catalogName).invalidateSchemas();
+    }
+
     private ConnectorMetadataCacheInvalidator getInvalidator(String catalogName)
     {
         Catalog catalog = catalogManager.getCatalog(catalogName)

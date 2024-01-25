@@ -13,10 +13,13 @@
  */
 package io.trino.plugin.hive;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.airlift.log.Logger;
 import io.trino.Session;
+import io.trino.plugin.postgresql.PostgreSqlPlugin;
+import io.trino.plugin.postgresql.TestingPostgreSqlServer;
 import io.trino.plugin.resourcegroups.ResourceGroupManagerPlugin;
 import io.trino.server.testing.TestingTrinoServer;
 import io.trino.spi.security.Identity;
@@ -26,6 +29,8 @@ import io.trino.tpch.TpchTable;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import static io.trino.plugin.hive.HiveQueryRunner.HIVE_CATALOG;
@@ -33,6 +38,8 @@ import static io.trino.plugin.hive.HiveQueryRunner.TPCH_SCHEMA;
 import static io.trino.plugin.hive.security.HiveSecurityModule.ALLOW_ALL;
 import static io.trino.spi.security.SelectedRole.Type.ROLE;
 import static io.trino.testing.TestingSession.testSessionBuilder;
+import static io.trino.tpch.TpchTable.CUSTOMER;
+import static io.trino.tpch.TpchTable.NATION;
 import static java.nio.file.Files.createDirectories;
 
 public final class MultiCoordinatorHiveQueryRunner
@@ -135,6 +142,19 @@ public final class MultiCoordinatorHiveQueryRunner
                 ImmutableMap.of("resource-groups.config-file", "/Users/lukasz.stec/Library/Application Support/JetBrains/IntelliJIdea2023.3/scratches/query_investigations/multi-coordinator/local-tests/resource-groups.json"));
         queryRunner.getBackupCoordinator().get().getResourceGroupManager().get().setConfigurationManager("file",
                 ImmutableMap.of("resource-groups.config-file", "/Users/lukasz.stec/Library/Application Support/JetBrains/IntelliJIdea2023.3/scratches/query_investigations/multi-coordinator/local-tests/resource-groups.json"));
+
+        TestingPostgreSqlServer postgreSqlServer = new TestingPostgreSqlServer();
+
+        Map<String, String> connectorProperties = new HashMap<>();
+        connectorProperties.putIfAbsent("connection-url", postgreSqlServer.getJdbcUrl());
+        connectorProperties.putIfAbsent("connection-user", postgreSqlServer.getUser());
+        connectorProperties.putIfAbsent("connection-password", postgreSqlServer.getPassword());
+        connectorProperties.putIfAbsent("postgresql.include-system-tables", "true");
+        //connectorProperties.putIfAbsent("postgresql.experimental.enable-string-pushdown-with-collate", "true");
+
+        queryRunner.installPlugin(new PostgreSqlPlugin());
+        queryRunner.createCatalog("postgresql", "postgresql", connectorProperties);
+
         Thread.sleep(10);
         log.info("======== SERVER STARTED ========");
         log.info("\n====\n%s\n==== main", queryRunner.getCoordinator().getBaseUrl());

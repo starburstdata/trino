@@ -22,6 +22,7 @@ import io.trino.spi.connector.Connector;
 import io.trino.spi.connector.ConnectorAccessControl;
 import io.trino.spi.connector.ConnectorCapabilities;
 import io.trino.spi.connector.ConnectorMetadata;
+import io.trino.spi.connector.ConnectorMetadataCacheInvalidator;
 import io.trino.spi.connector.ConnectorPageSinkProvider;
 import io.trino.spi.connector.ConnectorRecordSetProvider;
 import io.trino.spi.connector.ConnectorSession;
@@ -46,6 +47,7 @@ public class JdbcConnector
 {
     private final LifeCycleManager lifeCycleManager;
     private final ConnectorSplitManager jdbcSplitManager;
+    private final ConnectorMetadataCacheInvalidator connectorMetadataCacheInvalidator;
     private final ConnectorRecordSetProvider jdbcRecordSetProvider;
     private final ConnectorPageSinkProvider jdbcPageSinkProvider;
     private final Optional<ConnectorAccessControl> accessControl;
@@ -59,6 +61,7 @@ public class JdbcConnector
     public JdbcConnector(
             LifeCycleManager lifeCycleManager,
             ConnectorSplitManager jdbcSplitManager,
+            ConnectorMetadataCacheInvalidator connectorMetadataCacheInvalidator,
             ConnectorRecordSetProvider jdbcRecordSetProvider,
             ConnectorPageSinkProvider jdbcPageSinkProvider,
             Optional<ConnectorAccessControl> accessControl,
@@ -70,6 +73,7 @@ public class JdbcConnector
     {
         this.lifeCycleManager = requireNonNull(lifeCycleManager, "lifeCycleManager is null");
         this.jdbcSplitManager = requireNonNull(jdbcSplitManager, "jdbcSplitManager is null");
+        this.connectorMetadataCacheInvalidator = requireNonNull(connectorMetadataCacheInvalidator, "connectorMetadataCacheInvalidator is null");
         this.jdbcRecordSetProvider = requireNonNull(jdbcRecordSetProvider, "jdbcRecordSetProvider is null");
         this.jdbcPageSinkProvider = requireNonNull(jdbcPageSinkProvider, "jdbcPageSinkProvider is null");
         this.accessControl = requireNonNull(accessControl, "accessControl is null");
@@ -112,6 +116,12 @@ public class JdbcConnector
     public ConnectorSplitManager getSplitManager()
     {
         return jdbcSplitManager;
+    }
+
+    @Override
+    public ConnectorMetadataCacheInvalidator getConnectorMetadataCacheInvalidator()
+    {
+        return connectorMetadataCacheInvalidator;
     }
 
     @Override

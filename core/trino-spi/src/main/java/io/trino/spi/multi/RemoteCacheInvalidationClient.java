@@ -10,13 +10,15 @@ public interface RemoteCacheInvalidationClient
 {
     void invalidateTable(CatalogSchemaTableName table);
 
-    void invalidateDatabase(CatalogSchemaName catalogSchemaName);
+    void invalidateSchema(CatalogSchemaName catalogSchemaName);
 
     void invalidatePartition(CatalogSchemaTableName catalogSchemaTableName, Optional<String> partitionPredicate);
 
     void invalidateTablePrivilege(CatalogSchemaTableName catalogSchemaTableName, String tableOwner, TrinoPrincipal grantee);
 
     void invalidateAll(String catalogName);
+
+    void invalidateAllSchemas(String catalogName);
 
     static RemoteCacheInvalidationClient noOp()
     {
@@ -28,7 +30,7 @@ public interface RemoteCacheInvalidationClient
             }
 
             @Override
-            public void invalidateDatabase(CatalogSchemaName catalogSchemaName)
+            public void invalidateSchema(CatalogSchemaName catalogSchemaName)
             {
             }
 
@@ -44,6 +46,11 @@ public interface RemoteCacheInvalidationClient
 
             @Override
             public void invalidateAll(String catalogName)
+            {
+            }
+
+            @Override
+            public void invalidateAllSchemas(String catalogName)
             {
             }
         };

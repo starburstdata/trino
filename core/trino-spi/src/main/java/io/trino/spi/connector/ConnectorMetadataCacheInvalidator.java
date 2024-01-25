@@ -6,13 +6,30 @@ import java.util.Optional;
 
 public interface ConnectorMetadataCacheInvalidator
 {
-    void invalidateTable(SchemaTableName table);
+    default void invalidateTable(SchemaTableName table)
+    {
+        throw new UnsupportedOperationException();
+    }
 
-    void invalidateSchema(CatalogSchemaName catalogSchemaName);
+    default void invalidateSchema(CatalogSchemaName catalogSchemaName)
+    {
+        throw new UnsupportedOperationException();
+    }
 
-    void invalidatePartition(CatalogSchemaTableName table, Optional<String> partitionPredicate);
+    default void invalidatePartition(CatalogSchemaTableName table, Optional<String> partitionPredicate)
+    {
+        throw new UnsupportedOperationException();
+    }
 
-    void invalidateTablePrivilege(CatalogSchemaTableName table, String tableOwner, TrinoPrincipal grantee);
+    default void invalidateTablePrivilege(CatalogSchemaTableName table, String tableOwner, TrinoPrincipal grantee)
+    {
+        throw new UnsupportedOperationException();
+    }
 
     void invalidateAll();
+
+    default void invalidateSchemas()
+    {
+        throw new UnsupportedOperationException();
+    }
 }

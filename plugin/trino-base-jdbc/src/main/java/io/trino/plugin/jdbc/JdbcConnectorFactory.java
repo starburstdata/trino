@@ -23,6 +23,7 @@ import io.trino.spi.VersionEmbedder;
 import io.trino.spi.connector.Connector;
 import io.trino.spi.connector.ConnectorContext;
 import io.trino.spi.connector.ConnectorFactory;
+import io.trino.spi.multi.RemoteCacheInvalidationClient;
 import io.trino.spi.type.TypeManager;
 
 import java.util.Map;
@@ -60,6 +61,7 @@ public class JdbcConnectorFactory
 
         Bootstrap app = new Bootstrap(
                 binder -> binder.bind(TypeManager.class).toInstance(context.getTypeManager()),
+                binder -> binder.bind(RemoteCacheInvalidationClient.class).toInstance(context.getRemoteCacheInvalidationClient()),
                 binder -> binder.bind(NodeManager.class).toInstance(context.getNodeManager()),
                 binder -> binder.bind(VersionEmbedder.class).toInstance(context.getVersionEmbedder()),
                 binder -> binder.bind(OpenTelemetry.class).toInstance(context.getOpenTelemetry()),
