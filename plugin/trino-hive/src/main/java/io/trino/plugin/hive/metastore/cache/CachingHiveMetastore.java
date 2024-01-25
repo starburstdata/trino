@@ -51,6 +51,7 @@ import io.trino.plugin.hive.metastore.PartitionWithStatistics;
 import io.trino.plugin.hive.metastore.PrincipalPrivileges;
 import io.trino.plugin.hive.metastore.Table;
 import io.trino.spi.TrinoException;
+import io.trino.spi.connector.CatalogSchemaName;
 import io.trino.spi.connector.CatalogSchemaTableName;
 import io.trino.spi.connector.RelationType;
 import io.trino.spi.connector.SchemaTableName;
@@ -244,6 +245,11 @@ public final class CachingHiveMetastore
     @Managed
     public void flushCache()
     {
+        flushCache(true);
+    }
+
+    public void flushCache(boolean invalidateRemote)
+    {
         databaseNamesCache.invalidateAll();
         tableNamesCache.invalidateAll();
         allTableNamesCache.invalidateAll();
@@ -259,6 +265,9 @@ public final class CachingHiveMetastore
         tableStatisticsCache.invalidateAll();
         partitionStatisticsCache.invalidateAll();
         rolesCache.invalidateAll();
+        if (invalidateRemote) {
+            remoteCacheInvalidationClient.invalidateAll(catalogName.toString());
+        }
     }
 
     public void flushPartitionCache(String schemaName, String tableName, List<String> partitionColumns, List<String> partitionValues)
@@ -269,7 +278,7 @@ public final class CachingHiveMetastore
         requireNonNull(partitionValues, "partitionValues is null");
 
         String providedPartitionName = makePartName(partitionColumns, partitionValues);
-        invalidatePartitionCache(schemaName, tableName, partitionNameToCheck -> partitionNameToCheck.map(value -> value.equals(providedPartitionName)).orElse(false));
+        invalidatePartitionCache(schemaName, tableName, Optional.of(providedPartitionName));
     }
 
     private AtomicReference<PartitionStatistics> refreshTableStatistics(HiveTableName tableName, AtomicReference<PartitionStatistics> currentValueHolder)
@@ -724,8 +733,16 @@ public final class CachingHiveMetastore
 
     private void invalidateDatabase(String databaseName)
     {
+        invalidateDatabase(databaseName, true);
+    }
+
+    public void invalidateDatabase(String databaseName, boolean invalidateRemote)
+    {
         databaseCache.invalidate(databaseName);
         databaseNamesCache.invalidateAll();
+        if (invalidateRemote) {
+            remoteCacheInvalidationClient.invalidateDatabase(new CatalogSchemaName(catalogName.toString(), databaseName));
+        }
     }
 
     @Override
@@ -1043,19 +1060,27 @@ public final class CachingHiveMetastore
 
     private void invalidatePartitionCache(String databaseName, String tableName)
     {
-        invalidatePartitionCache(databaseName, tableName, partitionName -> true);
+        invalidatePartitionCache(databaseName, tableName, Optional.empty(), true);
     }
 
-    private void invalidatePartitionCache(String databaseName, String tableName, Predicate<Optional<String>> partitionPredicate)
+    private void invalidatePartitionCache(String databaseName, String tableName, Optional<String> partitionPredicate)
+    {
+        invalidatePartitionCache(databaseName, tableName, partitionPredicate, true);
+    }
+
+    public void invalidatePartitionCache(String databaseName, String tableName, Optional<String> partitionPredicate, boolean invalidateRemote)
     {
         HiveTableName hiveTableName = hiveTableName(databaseName, tableName);
 
         Predicate<HivePartitionName> hivePartitionPredicate = partitionName -> partitionName.getHiveTableName().equals(hiveTableName) &&
-                partitionPredicate.test(partitionName.getPartitionName());
+                partitionPredicate.isEmpty() || partitionPredicate.equals(partitionName.getPartitionName());
 
         invalidateAllIf(partitionCache, hivePartitionPredicate);
         invalidateAllIf(partitionFilterCache, partitionFilter -> partitionFilter.getHiveTableName().equals(hiveTableName));
         invalidateAllIf(partitionStatisticsCache, hivePartitionPredicate);
+        if (invalidateRemote) {
+            remoteCacheInvalidationClient.invalidatePartition(new CatalogSchemaTableName(catalogName.toString(), databaseName, tableName), partitionPredicate);
+        }
     }
 
     @Override
@@ -1082,9 +1107,20 @@ public final class CachingHiveMetastore
 
     private void invalidateTablePrivilegeCacheEntries(String databaseName, String tableName, String tableOwner, HivePrincipal grantee)
     {
+        invalidateTablePrivilegeCacheEntries(databaseName, tableName, tableOwner, grantee, true);
+    }
+
+    public void invalidateTablePrivilegeCacheEntries(String databaseName, String tableName, String tableOwner, HivePrincipal grantee, boolean invalidateRemote)
+    {
         // some callers of table privilege methods use Optional.of(grantee), some Optional.empty() (to get all privileges), so have to invalidate them both
         tablePrivilegesCache.invalidate(new UserTableKey(Optional.of(grantee), databaseName, tableName, Optional.of(tableOwner)));
         tablePrivilegesCache.invalidate(new UserTableKey(Optional.empty(), databaseName, tableName, Optional.of(tableOwner)));
+        if (invalidateRemote) {
+            remoteCacheInvalidationClient.invalidateTablePrivilege(
+                    new CatalogSchemaTableName(catalogName.toString(), databaseName, tableName),
+                    tableOwner,
+                    grantee.toTrinoPrincipal());
+        }
     }
 
     @Override
