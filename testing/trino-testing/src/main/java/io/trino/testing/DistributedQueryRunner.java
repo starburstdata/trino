@@ -421,6 +421,11 @@ public class DistributedQueryRunner
         return coordinator;
     }
 
+    public Optional<TestingTrinoServer> getBackupCoordinator()
+    {
+        return backupCoordinator;
+    }
+
     public List<TestingTrinoServer> getServers()
     {
         return ImmutableList.copyOf(servers);
