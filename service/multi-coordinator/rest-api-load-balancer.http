@@ -1,0 +1,42 @@
+
+# curl https://localhost:8080/v1/statement/
+#--header "Authorization: Basic YWRtaW46cGFzc3dvcmQ="
+#--header "X-Trino-User: admin"
+#--header "X-Trino-Schema: sf1"
+#--header "X-Trino-Source: somesource"
+#--header "X-Trino-Time-Zone: UTC"
+#--header "X-Trino-Catalog: tpch"
+#--header "User-Agent: trino-cli"
+#--data "select * from nation"
+POST http://localhost:9292/v1/statement/
+X-Trino-User: admin
+X-Trino-Schema: sf1
+X-Trino-Source: somesource
+X-Trino-Time-Zone: UTC
+X-Trino-Catalog: tpch
+User-Agent: trino-cli
+Content-Type: application/text
+
+select * from system.runtime.queries order by started desc limit 2
+
+###
+# curl https://localhost:8080/v1/statement/
+#--header "Authorization: Basic YWRtaW46cGFzc3dvcmQ="
+#--header "X-Trino-User: admin"
+#--header "X-Trino-Schema: sf1"
+#--header "X-Trino-Source: somesource"
+#--header "X-Trino-Time-Zone: UTC"
+#--header "X-Trino-Catalog: tpch"
+#--header "User-Agent: trino-cli"
+#--data "select * from nation"
+# @no-redirect
+POST http://127.0.0.1:8080/v1/statement/
+X-Trino-User: admin
+X-Trino-Schema: sf1
+X-Trino-Source: somesource
+X-Trino-Time-Zone: UTC
+X-Trino-Catalog: tpch
+User-Agent: trino-cli
+Content-Type: application/text
+
+select * from system.runtime.queries order by started desc limit 2
