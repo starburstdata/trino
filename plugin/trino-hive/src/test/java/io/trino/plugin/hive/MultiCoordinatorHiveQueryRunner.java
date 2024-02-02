@@ -13,7 +13,6 @@
  */
 package io.trino.plugin.hive;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.airlift.log.Logger;
@@ -38,8 +37,6 @@ import static io.trino.plugin.hive.HiveQueryRunner.TPCH_SCHEMA;
 import static io.trino.plugin.hive.security.HiveSecurityModule.ALLOW_ALL;
 import static io.trino.spi.security.SelectedRole.Type.ROLE;
 import static io.trino.testing.TestingSession.testSessionBuilder;
-import static io.trino.tpch.TpchTable.CUSTOMER;
-import static io.trino.tpch.TpchTable.NATION;
 import static java.nio.file.Files.createDirectories;
 
 public final class MultiCoordinatorHiveQueryRunner
@@ -143,6 +140,16 @@ public final class MultiCoordinatorHiveQueryRunner
         queryRunner.getBackupCoordinator().get().getResourceGroupManager().get().setConfigurationManager("file",
                 ImmutableMap.of("resource-groups.config-file", "/Users/lukasz.stec/Library/Application Support/JetBrains/IntelliJIdea2023.3/scratches/query_investigations/multi-coordinator/local-tests/resource-groups.json"));
 
+        addPostgresConnector(queryRunner);
+
+        Thread.sleep(10);
+        log.info("======== SERVER STARTED ========");
+        log.info("\n====\n%s\n==== main", queryRunner.getCoordinator().getBaseUrl());
+        log.info("\n====\n%s\n==== backup", queryRunner.getBackupCoordinator().map(TestingTrinoServer::getBaseUrl).orElseThrow());
+    }
+
+    private static void addPostgresConnector(DistributedQueryRunner queryRunner)
+    {
         TestingPostgreSqlServer postgreSqlServer = new TestingPostgreSqlServer();
 
         Map<String, String> connectorProperties = new HashMap<>();
@@ -154,10 +161,5 @@ public final class MultiCoordinatorHiveQueryRunner
 
         queryRunner.installPlugin(new PostgreSqlPlugin());
         queryRunner.createCatalog("postgresql", "postgresql", connectorProperties);
-
-        Thread.sleep(10);
-        log.info("======== SERVER STARTED ========");
-        log.info("\n====\n%s\n==== main", queryRunner.getCoordinator().getBaseUrl());
-        log.info("\n====\n%s\n==== backup", queryRunner.getBackupCoordinator().map(TestingTrinoServer::getBaseUrl).orElseThrow());
     }
 }
