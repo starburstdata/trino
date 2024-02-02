@@ -111,6 +111,8 @@ public interface QueryManager
      */
     void failQuery(QueryId queryId, Throwable cause);
 
+    void failTask(TaskId taskId, Exception exception);
+
     /**
      * Attempts to fail the query due to a user cancellation.  If the query is already in a final
      * state, the call is ignored.  If the query does not exist, the call is ignored.

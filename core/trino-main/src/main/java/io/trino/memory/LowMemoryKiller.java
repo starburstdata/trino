@@ -17,6 +17,8 @@ package io.trino.memory;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.BindingAnnotation;
 import io.airlift.units.Duration;
+import io.trino.execution.QueryInfo;
+import io.trino.execution.StageInfo;
 import io.trino.execution.TaskId;
 import io.trino.execution.TaskInfo;
 import io.trino.operator.RetryPolicy;
@@ -94,6 +96,22 @@ public interface LowMemoryKiller
 
     record RunningTaskInfo(Duration totalScheduledTime, Duration totalBlockedTime, boolean speculative)
     {
+        public static Map<TaskId, LowMemoryKiller.RunningTaskInfo> getTaskInfo(QueryInfo queryInfo)
+        {
+            ImmutableMap.Builder<TaskId, LowMemoryKiller.RunningTaskInfo> taskInfosBuilder = ImmutableMap.builder();
+            queryInfo.getOutputStage().ifPresent(stage -> getTaskInfos(stage, taskInfosBuilder));
+            return taskInfosBuilder.buildOrThrow();
+        }
+
+        private static void getTaskInfos(StageInfo stageInfo, ImmutableMap.Builder<TaskId, LowMemoryKiller.RunningTaskInfo> taskInfosBuilder)
+        {
+            for (TaskInfo taskInfo : stageInfo.getTasks()) {
+                taskInfosBuilder.put(taskInfo.getTaskStatus().getTaskId(), LowMemoryKiller.RunningTaskInfo.from(taskInfo));
+            }
+            for (StageInfo subStage : stageInfo.getSubStages()) {
+                getTaskInfos(subStage, taskInfosBuilder);
+            }
+        }
         public static RunningTaskInfo from(TaskInfo taskInfo)
         {
             TaskStats stats = taskInfo.getStats();

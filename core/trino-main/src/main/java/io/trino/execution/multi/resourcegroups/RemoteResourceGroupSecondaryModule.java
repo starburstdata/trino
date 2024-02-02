@@ -2,6 +2,7 @@ package io.trino.execution.multi.resourcegroups;
 
 import com.google.inject.Binder;
 import com.google.inject.Singleton;
+import com.google.inject.util.Providers;
 import io.airlift.configuration.AbstractConfigurationAwareModule;
 import io.trino.execution.multi.resourcegroups.ResourceGroupEvaluationPrimaryResource.QueryResourceGroupState;
 import io.trino.execution.multi.resourcegroups.ResourceGroupEvaluationPrimaryResource.SubmitQueryRequest;
@@ -25,5 +26,6 @@ public class RemoteResourceGroupSecondaryModule
         binder.bind(ResourceGroupEvaluationPrimaryClient.class).in(Singleton.class);
         binder.bind(ResourceGroupManager.class).to(RemoteResourceGroupManager.class);
         jaxrsBinder(binder).bind(ResourceGroupEvaluationSecondaryResource.class);
+        binder.bind(RemoteQueryTracker.class).toProvider(Providers.of(null));
     }
 }

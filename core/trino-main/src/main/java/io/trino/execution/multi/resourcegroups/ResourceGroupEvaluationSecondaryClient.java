@@ -1,5 +1,7 @@
 package io.trino.execution.multi.resourcegroups;
 
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
@@ -8,6 +10,7 @@ import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.Request;
 import io.airlift.json.JsonCodec;
+import io.trino.execution.TaskId;
 import io.trino.execution.multi.resourcegroups.ResourceGroupEvaluationPrimaryResource.QueryResourceGroupState;
 import io.trino.execution.resourcegroups.QueryQueueFullException;
 import io.trino.metadata.InternalNode;
@@ -36,6 +39,7 @@ public class ResourceGroupEvaluationSecondaryClient
 {
     private final HttpClient httpClient;
     private final JsonCodec<FailQueryRequest> failQueryRequestCodec;
+    private final JsonCodec<FailTaskRequest> failTaskRequestCodec;
     private final JsonCodec<QueryStateRequest> queryStateRequestCodec;
     private final JsonCodec<QueryStateResponse> queryStateResponseCodec;
 
@@ -43,11 +47,13 @@ public class ResourceGroupEvaluationSecondaryClient
     public ResourceGroupEvaluationSecondaryClient(
             @ForRemoteResourceGroupClient HttpClient httpClient,
             JsonCodec<FailQueryRequest> failQueryRequestCodec,
+            JsonCodec<FailTaskRequest> failTaskRequestCodec,
             JsonCodec<QueryStateRequest> queryStateRequestCodec,
             JsonCodec<QueryStateResponse> queryStateResponseCodec)
     {
         this.httpClient = requireNonNull(httpClient, "httpClient is null");
         this.failQueryRequestCodec = requireNonNull(failQueryRequestCodec, "failQueryRequestCodec is null");
+        this.failTaskRequestCodec = requireNonNull(failTaskRequestCodec, "failTaskRequestCodec is null");
         this.queryStateRequestCodec = requireNonNull(queryStateRequestCodec, "queryStateRequestCodec is null");
         this.queryStateResponseCodec = requireNonNull(queryStateResponseCodec, "queryStateResponseCodec is null");
     }
@@ -73,6 +79,20 @@ public class ResourceGroupEvaluationSecondaryClient
                         .build())
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .setBodyGenerator(jsonBodyGenerator(failQueryRequestCodec, requestBody))
+                .build();
+
+        httpClient.execute(request, checkResponseStatusCode());
+    }
+
+    public void failTask(InternalNode coordinator, TaskId taskId, Exception reason)
+    {
+        FailTaskRequest requestBody = new FailTaskRequest(taskId, FailureCause.from(reason));
+        Request request = preparePost()
+                .setUri(uriBuilderFrom(coordinator.getInternalUri())
+                        .appendPath("/v1/resourceGroups/failTask")
+                        .build())
+                .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
+                .setBodyGenerator(jsonBodyGenerator(failTaskRequestCodec, requestBody))
                 .build();
 
         httpClient.execute(request, checkResponseStatusCode());
@@ -112,10 +132,27 @@ public class ResourceGroupEvaluationSecondaryClient
         }
     }
 
+    @JsonSerialize
+    public record FailTaskRequest(
+            TaskId taskId,
+            FailureCause cause)
+    {
+        public FailTaskRequest
+        {
+            requireNonNull(taskId, "taskId is null");
+            requireNonNull(cause, "cause is null");
+        }
+    }
+
+    @JsonSubTypes({
+            @JsonSubTypes.Type(value = GenericErrorCause.class),
+            @JsonSubTypes.Type(value = QueryQueueFull.class)
+    })
+    @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@class")
     public sealed interface FailureCause
             permits GenericErrorCause, QueryQueueFull
     {
-        Throwable toException();
+        Exception toException();
 
         static FailureCause from(Throwable cause)
         {
@@ -133,7 +170,7 @@ public class ResourceGroupEvaluationSecondaryClient
         }
 
         @Override
-        public Throwable toException()
+        public Exception toException()
         {
             return new TrinoException(StandardErrorCode.GENERIC_INTERNAL_ERROR, message);
         }
@@ -149,7 +186,7 @@ public class ResourceGroupEvaluationSecondaryClient
         }
 
         @Override
-        public Throwable toException()
+        public Exception toException()
         {
             return new QueryQueueFullException(resourceGroup);
         }

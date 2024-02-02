@@ -4,6 +4,8 @@ import com.google.inject.Inject;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.Request;
 import io.airlift.json.JsonCodec;
+import io.trino.Session;
+import io.trino.SessionRepresentation;
 import io.trino.execution.ManagedQueryExecution;
 import io.trino.execution.multi.resourcegroups.ResourceGroupEvaluationPrimaryResource.QueryResourceGroupState;
 import io.trino.execution.multi.resourcegroups.ResourceGroupEvaluationPrimaryResource.SubmitQueryRequest;
@@ -43,9 +45,9 @@ public class ResourceGroupEvaluationPrimaryClient
         this.queryResourceGroupStateCodec = requireNonNull(queryResourceGroupStateCodec, "queryResourceGroupStateCodec is null");
     }
 
-    public void submit(QueryId queryId, int queryPriority, SelectionCriteria selectionCriteria)
+    public void submit(QueryId queryId, int queryPriority, SelectionCriteria selectionCriteria, Session session)
     {
-        SubmitQueryRequest requestBody = new SubmitQueryRequest(currentNodeId, queryId, queryPriority, selectionCriteria);
+        SubmitQueryRequest requestBody = new SubmitQueryRequest(currentNodeId, queryId, queryPriority, selectionCriteria, session.toSessionRepresentation());
         Request request = preparePost()
                 .setUri(uriBuilderFrom(nodeManager.getPrimaryCoordinator().getInternalUri())
                         .appendPath("/v1/resourceGroups/submit")

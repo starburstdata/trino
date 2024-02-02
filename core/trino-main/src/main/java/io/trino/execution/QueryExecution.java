@@ -14,6 +14,7 @@
 package io.trino.execution;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
@@ -23,12 +24,14 @@ import io.trino.execution.QueryTracker.TrackedQuery;
 import io.trino.execution.StateMachine.StateChangeListener;
 import io.trino.execution.querystats.PlanOptimizersStatsCollector;
 import io.trino.execution.warnings.WarningCollector;
+import io.trino.memory.LowMemoryKiller;
 import io.trino.server.BasicQueryInfo;
 import io.trino.server.protocol.Slug;
 import io.trino.spi.type.Type;
 import io.trino.sql.planner.Plan;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.function.Consumer;
 
@@ -74,6 +77,11 @@ public interface QueryExecution
     void recordHeartbeat();
 
     boolean shouldWaitForMinWorkers();
+
+    default Map<TaskId, LowMemoryKiller.RunningTaskInfo> getTaskInfo()
+    {
+        return LowMemoryKiller.RunningTaskInfo.getTaskInfo(getQueryInfo());
+    }
 
     /**
      * Add a listener for the final query info.  This notification is guaranteed to be fired only once.

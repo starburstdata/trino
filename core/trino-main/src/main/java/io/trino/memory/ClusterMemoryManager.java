@@ -414,24 +414,11 @@ public class ClusterMemoryManager
 
     private RunningQueryInfo createQueryMemoryInfo(QueryExecution query)
     {
-        QueryInfo queryInfo = query.getQueryInfo();
-        ImmutableMap.Builder<TaskId, RunningTaskInfo> taskInfosBuilder = ImmutableMap.builder();
-        queryInfo.getOutputStage().ifPresent(stage -> getTaskInfos(stage, taskInfosBuilder));
         return new RunningQueryInfo(
                 query.getQueryId(),
                 query.getTotalMemoryReservation().toBytes(),
-                taskInfosBuilder.buildOrThrow(),
+                query.getTaskInfo(),
                 getRetryPolicy(query.getSession()));
-    }
-
-    private void getTaskInfos(StageInfo stageInfo, ImmutableMap.Builder<TaskId, RunningTaskInfo> taskInfosBuilder)
-    {
-        for (TaskInfo taskInfo : stageInfo.getTasks()) {
-            taskInfosBuilder.put(taskInfo.getTaskStatus().getTaskId(), RunningTaskInfo.from(taskInfo));
-        }
-        for (StageInfo subStage : stageInfo.getSubStages()) {
-            getTaskInfos(subStage, taskInfosBuilder);
-        }
     }
 
     private long getQueryMemoryReservation(QueryExecution query)

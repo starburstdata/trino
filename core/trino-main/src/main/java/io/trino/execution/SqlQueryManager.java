@@ -13,6 +13,7 @@
  */
 package io.trino.execution;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.errorprone.annotations.ThreadSafe;
@@ -29,8 +30,10 @@ import io.trino.ExceededScanLimitException;
 import io.trino.Session;
 import io.trino.execution.QueryExecution.QueryOutputInfo;
 import io.trino.execution.StateMachine.StateChangeListener;
+import io.trino.execution.multi.resourcegroups.RemoteQueryTracker;
 import io.trino.memory.ClusterMemoryManager;
 import io.trino.server.BasicQueryInfo;
+import io.trino.server.ServerConfig;
 import io.trino.server.protocol.Slug;
 import io.trino.spi.QueryId;
 import io.trino.spi.TrinoException;
@@ -39,6 +42,8 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.weakref.jmx.Managed;
 import org.weakref.jmx.Nested;
+
+import javax.annotation.Nullable;
 
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -49,6 +54,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.util.concurrent.Futures.immediateFailedFuture;
@@ -72,6 +78,8 @@ public class SqlQueryManager
     private final ClusterMemoryManager memoryManager;
     private final Tracer tracer;
     private final QueryTracker<QueryExecution> queryTracker;
+    // non empty on primary coordinator only
+    private final Optional<RemoteQueryTracker> remoteQueryTracker;
 
     private final Duration maxQueryCpuTime;
     private final Optional<DataSize> maxQueryScanPhysicalBytes;
@@ -83,10 +91,11 @@ public class SqlQueryManager
     private final ThreadPoolExecutorMBean queryManagementExecutorMBean;
 
     @Inject
-    public SqlQueryManager(ClusterMemoryManager memoryManager, Tracer tracer, QueryManagerConfig queryManagerConfig)
+    public SqlQueryManager(ClusterMemoryManager memoryManager, Tracer tracer, @Nullable RemoteQueryTracker remoteQueryTracker, QueryManagerConfig queryManagerConfig)
     {
         this.memoryManager = requireNonNull(memoryManager, "memoryManager is null");
         this.tracer = requireNonNull(tracer, "tracer is null");
+        this.remoteQueryTracker = Optional.ofNullable(remoteQueryTracker);
 
         this.maxQueryCpuTime = queryManagerConfig.getQueryMaxCpuTime();
         this.maxQueryScanPhysicalBytes = queryManagerConfig.getQueryMaxScanPhysicalBytes();
@@ -276,6 +285,15 @@ public class SqlQueryManager
     }
 
     @Override
+    public void failTask(TaskId taskId, Exception cause)
+    {
+        requireNonNull(cause, "cause is null");
+
+        queryTracker.tryGetQuery(taskId.getQueryId())
+                .ifPresent(query -> query.failTask(taskId, cause));
+    }
+
+    @Override
     public void cancelQuery(QueryId queryId)
     {
         log.debug("Cancel query %s", queryId);
@@ -314,9 +332,16 @@ public class SqlQueryManager
      */
     private void enforceMemoryLimits()
     {
-        List<QueryExecution> runningQueries = queryTracker.getAllQueries().stream()
-                .filter(query -> query.getState() == RUNNING)
-                .collect(toImmutableList());
+        // do the memory enforcement on primary coordinator only, but check leaks on all (second param to memoryManager.process)
+        List<QueryExecution> runningQueries = remoteQueryTracker.isPresent() ?
+                Stream.concat(
+                                queryTracker.getAllQueries().stream()
+                                        .filter(query -> query.getState() == RUNNING),
+                                remoteQueryTracker.get().getAllQueries().stream()
+                                        .filter(query -> query.getState() == RUNNING))
+                        .collect(toImmutableList()) :
+                ImmutableList.of();
+
         memoryManager.process(runningQueries, this::getQueries);
     }
 

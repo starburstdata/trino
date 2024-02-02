@@ -32,7 +32,7 @@ public class RemoteResourceGroupManager<T>
     @Override
     public void submit(ManagedQueryExecution queryExecution, SelectionCriteria criteria, SelectionContext<T> selectionContext, Executor executor)
     {
-        resourceGroupEvaluationPrimaryClient.submit(queryExecution.getBasicQueryInfo().getQueryId(), queryExecution.getQueryPriority(), criteria);
+        resourceGroupEvaluationPrimaryClient.submit(queryExecution.getBasicQueryInfo().getQueryId(), queryExecution.getQueryPriority(), criteria, queryExecution.getSession());
         queryExecution.addStateChangeListener(newState -> {
             resourceGroupEvaluationPrimaryClient.queryStateChanged(queryExecution);
         });

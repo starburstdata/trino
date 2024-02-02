@@ -14,15 +14,21 @@
 package io.trino.execution.multi.resourcegroups;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
+import io.trino.SessionRepresentation;
 import io.trino.dispatcher.DispatchExecutor;
 import io.trino.execution.ManagedQueryExecution;
 import io.trino.execution.QueryState;
+import io.trino.execution.TaskId;
 import io.trino.execution.multi.resourcegroups.RemoteManagedQueryExecution.RemoteQueryState;
 import io.trino.execution.resourcegroups.ResourceGroupManager;
+import io.trino.memory.LowMemoryKiller.RunningTaskInfo;
 import io.trino.metadata.InternalNodeManager;
+import io.trino.metadata.SessionPropertyManager;
+import io.trino.operator.RetryPolicy;
 import io.trino.server.security.ResourceSecurity;
 import io.trino.spi.QueryId;
 import io.trino.spi.resourcegroups.SelectionContext;
@@ -34,6 +40,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import org.joda.time.DateTime;
 
+import java.util.Map;
+
+import static io.trino.SystemSessionProperties.getRetryPolicy;
+import static io.trino.memory.LowMemoryKiller.RunningTaskInfo.getTaskInfo;
 import static io.trino.server.security.ResourceSecurity.AccessType.INTERNAL_ONLY;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -48,6 +58,7 @@ public class ResourceGroupEvaluationPrimaryResource
 
     private final InternalNodeManager nodeManager;
     private final RemoteQueryTracker remoteQueryTracker;
+    private final SessionPropertyManager sessionPropertyManager;
 
     @Inject
     public ResourceGroupEvaluationPrimaryResource(
@@ -55,13 +66,15 @@ public class ResourceGroupEvaluationPrimaryResource
             DispatchExecutor dispatchExecutor,
             ResourceGroupEvaluationSecondaryClient resourceGroupEvaluationSecondaryClient,
             InternalNodeManager nodeManager,
-            RemoteQueryTracker remoteQueryTracker)
+            RemoteQueryTracker remoteQueryTracker,
+            SessionPropertyManager sessionPropertyManager)
     {
         this.resourceGroupManager = requireNonNull(resourceGroupManager, "resourceGroupManager is null");
         this.dispatchExecutor = requireNonNull(dispatchExecutor, "dispatchExecutor is null");
         this.resourceGroupEvaluationSecondaryClient = requireNonNull(resourceGroupEvaluationSecondaryClient, "resourceGroupEvaluationSecondaryClient is null");
         this.nodeManager = requireNonNull(nodeManager, "nodeManager is null");
         this.remoteQueryTracker = requireNonNull(remoteQueryTracker, "remoteQueryTracker is null");
+        this.sessionPropertyManager = requireNonNull(sessionPropertyManager, "sessionPropertyManager is null");
     }
 
     @ResourceSecurity(INTERNAL_ONLY)
@@ -79,7 +92,7 @@ public class ResourceGroupEvaluationPrimaryResource
                         .findAny()
                         .orElseThrow(),
                 request.queryId(),
-                request.queryPriority());
+                request.sessionRepresentation().toSession(sessionPropertyManager));
         remoteQueryTracker.add(remoteManagedQueryExecution);
         SelectionContext selectionContext = resourceGroupManager.selectGroup(request.selectionCriteria());
 
@@ -103,22 +116,30 @@ public class ResourceGroupEvaluationPrimaryResource
     }
 
     @JsonSerialize
-    public record SubmitQueryRequest(String coordinatorId, QueryId queryId, int queryPriority, SelectionCriteria selectionCriteria)
+    public record SubmitQueryRequest(String coordinatorId, QueryId queryId, int queryPriority, SelectionCriteria selectionCriteria, SessionRepresentation sessionRepresentation)
     {
         public SubmitQueryRequest
         {
             requireNonNull(coordinatorId, "coordinatorId is null");
             requireNonNull(queryId, "queryId is null");
             requireNonNull(selectionCriteria, "selectionCriteria is null");
+            requireNonNull(sessionRepresentation, "sessionRepresentation is null");
         }
     }
 
-    public record QueryResourceGroupState(QueryId queryId, QueryState state, long totalCpuTimeNanos, long totalMemoryReservationBytes)
+    public record QueryResourceGroupState(
+            QueryId queryId,
+            QueryState state,
+            long totalCpuTimeNanos,
+            long totalMemoryReservationBytes,
+            long userMemoryReservationBytes,
+            Map<TaskId, RunningTaskInfo> taskInfo)
     {
         public QueryResourceGroupState
         {
             requireNonNull(queryId, "queryId is null");
             requireNonNull(state, "state is null");
+            requireNonNull(taskInfo, "taskInfo is null");
         }
 
         public static QueryResourceGroupState fromQuery(ManagedQueryExecution query)
@@ -127,7 +148,10 @@ public class ResourceGroupEvaluationPrimaryResource
                     query.getBasicQueryInfo().getQueryId(),
                     query.getState(),
                     query.getTotalCpuTime().roundTo(NANOSECONDS),
-                    query.getTotalMemoryReservation().toBytes());
+                    query.getTotalMemoryReservation().toBytes(),
+                    query.getBasicQueryInfo().getQueryStats().getUserMemoryReservation().toBytes(),
+                    // task info is only needed for FTE
+                    getRetryPolicy(query.getSession()) == RetryPolicy.TASK ? getTaskInfo(query.getFullQueryInfo()) : ImmutableMap.of());
         }
 
         public RemoteQueryState toRemoteQueryState()
@@ -136,7 +160,9 @@ public class ResourceGroupEvaluationPrimaryResource
                     state,
                     new Duration(totalCpuTimeNanos, NANOSECONDS),
                     DataSize.ofBytes(totalMemoryReservationBytes),
-                    DateTime.now());
+                    DataSize.ofBytes(userMemoryReservationBytes),
+                    DateTime.now(),
+                    taskInfo);
         }
     }
 }

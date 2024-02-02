@@ -15,6 +15,7 @@ package io.trino.execution;
 
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
+import io.trino.Session;
 import io.trino.execution.StateMachine.StateChangeListener;
 import io.trino.server.BasicQueryInfo;
 import io.trino.spi.ErrorCode;
@@ -42,6 +43,8 @@ public interface ManagedQueryExecution
             }
         });
     }
+
+    Session getSession();
 
     int getQueryPriority();
 

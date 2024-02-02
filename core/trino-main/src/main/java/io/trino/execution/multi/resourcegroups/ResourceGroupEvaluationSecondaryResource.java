@@ -15,8 +15,10 @@ package io.trino.execution.multi.resourcegroups;
 
 import com.google.inject.Inject;
 import io.trino.dispatcher.DispatchManager;
+import io.trino.execution.QueryManager;
 import io.trino.execution.multi.resourcegroups.ResourceGroupEvaluationPrimaryResource.QueryResourceGroupState;
 import io.trino.execution.multi.resourcegroups.ResourceGroupEvaluationSecondaryClient.FailQueryRequest;
+import io.trino.execution.multi.resourcegroups.ResourceGroupEvaluationSecondaryClient.FailTaskRequest;
 import io.trino.execution.multi.resourcegroups.ResourceGroupEvaluationSecondaryClient.QueryStateResponse;
 import io.trino.server.security.ResourceSecurity;
 import io.trino.spi.QueryId;
@@ -35,11 +37,13 @@ import static java.util.Objects.requireNonNull;
 public class ResourceGroupEvaluationSecondaryResource
 {
     private final DispatchManager dispatchManager;
+    private final QueryManager queryManager;
 
     @Inject
-    public ResourceGroupEvaluationSecondaryResource(DispatchManager dispatchManager)
+    public ResourceGroupEvaluationSecondaryResource(DispatchManager dispatchManager, QueryManager queryManager)
     {
         this.dispatchManager = requireNonNull(dispatchManager, "dispatchManager is null");
+        this.queryManager = requireNonNull(queryManager, "queryManager is null");
     }
 
     @ResourceSecurity(INTERNAL_ONLY)
@@ -58,6 +62,15 @@ public class ResourceGroupEvaluationSecondaryResource
     public void fail(FailQueryRequest failQueryRequest)
     {
         dispatchManager.failQuery(failQueryRequest.queryId(), failQueryRequest.cause().toException());
+    }
+
+    @ResourceSecurity(INTERNAL_ONLY)
+    @POST
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("failTask")
+    public void fail(FailTaskRequest failTaskRequest)
+    {
+        queryManager.failTask(failTaskRequest.taskId(), failTaskRequest.cause().toException());
     }
 
     @ResourceSecurity(INTERNAL_ONLY)

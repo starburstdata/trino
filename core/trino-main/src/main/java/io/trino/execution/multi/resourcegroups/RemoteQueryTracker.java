@@ -52,6 +52,11 @@ public class RemoteQueryTracker
         return requireNonNull(queries.get(queryId), "query not found " + queryId);
     }
 
+    public Collection<RemoteManagedQueryExecution> getAllQueries()
+    {
+        return queries.values();
+    }
+
     private void refreshState()
     {
         Multimap<InternalNode, QueryId> runningQueriesByCoordinator = ArrayListMultimap.create();
