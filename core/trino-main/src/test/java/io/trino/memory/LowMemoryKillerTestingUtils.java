@@ -110,7 +110,7 @@ public final class LowMemoryKillerTestingUtils
         return toRunningQueryInfoList(queries, queriesWithTaskLevelRetries, ImmutableMap.of());
     }
 
-    static List<LowMemoryKiller.RunningQueryInfo> toRunningQueryInfoList(Map<String, Map<String, Long>> queries, Set<String> queriesWithTaskLevelRetries, Map<String, Map<Integer, TaskInfo>> taskInfos)
+    static List<LowMemoryKiller.RunningQueryInfo> toRunningQueryInfoList(Map<String, Map<String, Long>> queries, Set<String> queriesWithTaskLevelRetries, Map<String, Map<Integer, LowMemoryKiller.RunningTaskInfo>> taskInfos)
     {
         ImmutableList.Builder<LowMemoryKiller.RunningQueryInfo> result = ImmutableList.builder();
         for (Map.Entry<String, Map<String, Long>> entry : queries.entrySet()) {
@@ -119,7 +119,7 @@ public final class LowMemoryKillerTestingUtils
                     .mapToLong(x -> x)
                     .sum();
 
-            Map<TaskId, TaskInfo> queryTaskInfos = taskInfos.getOrDefault(queryId, ImmutableMap.of()).entrySet().stream()
+            Map<TaskId, LowMemoryKiller.RunningTaskInfo> queryTaskInfos = taskInfos.getOrDefault(queryId, ImmutableMap.of()).entrySet().stream()
                     .collect(toImmutableMap(
                             taskEntry -> taskId(queryId, taskEntry.getKey()),
                             Map.Entry::getValue));

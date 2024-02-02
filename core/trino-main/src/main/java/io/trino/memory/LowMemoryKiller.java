@@ -16,9 +16,11 @@ package io.trino.memory;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.BindingAnnotation;
+import io.airlift.units.Duration;
 import io.trino.execution.TaskId;
 import io.trino.execution.TaskInfo;
 import io.trino.operator.RetryPolicy;
+import io.trino.operator.TaskStats;
 import io.trino.spi.QueryId;
 
 import java.lang.annotation.Retention;
@@ -42,13 +44,13 @@ public interface LowMemoryKiller
     {
         private final QueryId queryId;
         private final long memoryReservation;
-        private final Map<TaskId, TaskInfo> taskInfos;
+        private final Map<TaskId, RunningTaskInfo> taskInfos;
         private final RetryPolicy retryPolicy;
 
         public RunningQueryInfo(
                 QueryId queryId,
                 long memoryReservation,
-                Map<TaskId, TaskInfo> taskInfos,
+                Map<TaskId, RunningTaskInfo> taskInfos,
                 RetryPolicy retryPolicy)
         {
             this.queryId = requireNonNull(queryId, "queryId is null");
@@ -68,7 +70,7 @@ public interface LowMemoryKiller
             return memoryReservation;
         }
 
-        public Map<TaskId, TaskInfo> getTaskInfos()
+        public Map<TaskId, RunningTaskInfo> getTaskInfos()
         {
             return taskInfos;
         }
@@ -87,6 +89,30 @@ public interface LowMemoryKiller
                     .add("taskStats", taskInfos)
                     .add("retryPolicy", retryPolicy)
                     .toString();
+        }
+    }
+
+    record RunningTaskInfo(Duration totalScheduledTime, Duration totalBlockedTime, boolean speculative)
+    {
+        public static RunningTaskInfo from(TaskInfo taskInfo)
+        {
+            TaskStats stats = taskInfo.getStats();
+            return new RunningTaskInfo(stats.getTotalScheduledTime(), stats.getTotalBlockedTime(), taskInfo.getTaskStatus().isSpeculative());
+        }
+
+        public Duration getTotalScheduledTime()
+        {
+            return totalScheduledTime;
+        }
+
+        public Duration getTotalBlockedTime()
+        {
+            return totalBlockedTime;
+        }
+
+        public boolean isSpeculative()
+        {
+            return speculative;
         }
     }
 

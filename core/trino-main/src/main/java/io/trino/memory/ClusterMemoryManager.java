@@ -37,6 +37,7 @@ import io.trino.execution.TaskInfo;
 import io.trino.memory.LowMemoryKiller.ForQueryLowMemoryKiller;
 import io.trino.memory.LowMemoryKiller.ForTaskLowMemoryKiller;
 import io.trino.memory.LowMemoryKiller.RunningQueryInfo;
+import io.trino.memory.LowMemoryKiller.RunningTaskInfo;
 import io.trino.metadata.InternalNode;
 import io.trino.metadata.InternalNodeManager;
 import io.trino.operator.RetryPolicy;
@@ -414,7 +415,7 @@ public class ClusterMemoryManager
     private RunningQueryInfo createQueryMemoryInfo(QueryExecution query)
     {
         QueryInfo queryInfo = query.getQueryInfo();
-        ImmutableMap.Builder<TaskId, TaskInfo> taskInfosBuilder = ImmutableMap.builder();
+        ImmutableMap.Builder<TaskId, RunningTaskInfo> taskInfosBuilder = ImmutableMap.builder();
         queryInfo.getOutputStage().ifPresent(stage -> getTaskInfos(stage, taskInfosBuilder));
         return new RunningQueryInfo(
                 query.getQueryId(),
@@ -423,10 +424,10 @@ public class ClusterMemoryManager
                 getRetryPolicy(query.getSession()));
     }
 
-    private void getTaskInfos(StageInfo stageInfo, ImmutableMap.Builder<TaskId, TaskInfo> taskInfosBuilder)
+    private void getTaskInfos(StageInfo stageInfo, ImmutableMap.Builder<TaskId, RunningTaskInfo> taskInfosBuilder)
     {
         for (TaskInfo taskInfo : stageInfo.getTasks()) {
-            taskInfosBuilder.put(taskInfo.getTaskStatus().getTaskId(), taskInfo);
+            taskInfosBuilder.put(taskInfo.getTaskStatus().getTaskId(), RunningTaskInfo.from(taskInfo));
         }
         for (StageInfo subStage : stageInfo.getSubStages()) {
             getTaskInfos(subStage, taskInfosBuilder);

@@ -27,6 +27,7 @@ import io.trino.execution.TaskStatus;
 import io.trino.execution.buffer.BufferState;
 import io.trino.execution.buffer.OutputBufferInfo;
 import io.trino.execution.buffer.OutputBufferStatus;
+import io.trino.memory.LowMemoryKiller.RunningTaskInfo;
 import io.trino.operator.TaskStats;
 import io.trino.plugin.base.metrics.TDigestHistogram;
 import org.joda.time.DateTime;
@@ -137,7 +138,7 @@ public class TestLeastWastedEffortTaskLowMemoryKiller
                         "n3", ImmutableMap.of(1, 11L))) // should not be picked as n3 does not have task retries enabled
                 .buildOrThrow();
 
-        Map<String, Map<Integer, TaskInfo>> taskInfos;
+        Map<String, Map<Integer, RunningTaskInfo>> taskInfos;
         if (scheduledTime.toMillis() == 0 && blockedTime.toMillis() == 0) {
             taskInfos = ImmutableMap.of();
         }
@@ -184,7 +185,7 @@ public class TestLeastWastedEffortTaskLowMemoryKiller
                         "n2", ImmutableMap.of(3, 2L)))
                 .buildOrThrow();
 
-        Map<String, Map<Integer, TaskInfo>> taskInfos = ImmutableMap.of(
+        Map<String, Map<Integer, RunningTaskInfo>> taskInfos = ImmutableMap.of(
                 "q_1", ImmutableMap.of(
                         1, buildTaskInfo(taskId("q_1", 1), TaskState.RUNNING, new Duration(30, SECONDS), new Duration(30, SECONDS), false),
                         2, buildTaskInfo(taskId("q_1", 2), TaskState.RUNNING, new Duration(400, SECONDS), new Duration(200, SECONDS), false)),
@@ -227,7 +228,7 @@ public class TestLeastWastedEffortTaskLowMemoryKiller
                         "n2", ImmutableMap.of(3, 2L)))
                 .buildOrThrow();
 
-        Map<String, Map<Integer, TaskInfo>> taskInfos = ImmutableMap.of(
+        Map<String, Map<Integer, RunningTaskInfo>> taskInfos = ImmutableMap.of(
                 "q_1", ImmutableMap.of(
                         1, buildTaskInfo(taskId("q_1", 1), TaskState.RUNNING, new Duration(30, SECONDS), new Duration(30, SECONDS), false),
                         2, buildTaskInfo(taskId("q_1", 2), TaskState.RUNNING, new Duration(400, SECONDS), new Duration(200, SECONDS), false)),
@@ -244,9 +245,9 @@ public class TestLeastWastedEffortTaskLowMemoryKiller
                         taskId("q_2", 3)))));
     }
 
-    private static TaskInfo buildTaskInfo(TaskId taskId, TaskState state, Duration scheduledTime, Duration blockedTime, boolean speculative)
+    private static RunningTaskInfo buildTaskInfo(TaskId taskId, TaskState state, Duration scheduledTime, Duration blockedTime, boolean speculative)
     {
-        return new TaskInfo(
+        return RunningTaskInfo.from(new TaskInfo(
                 new TaskStatus(
                         taskId,
                         "task-instance-id",
@@ -331,6 +332,6 @@ public class TestLeastWastedEffortTaskLowMemoryKiller
                         new Duration(0, MILLISECONDS),
                         ImmutableList.of()),
                 Optional.empty(),
-                false);
+                false));
     }
 }

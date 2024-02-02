@@ -27,6 +27,7 @@ import io.trino.execution.TaskStatus;
 import io.trino.execution.buffer.BufferState;
 import io.trino.execution.buffer.OutputBufferInfo;
 import io.trino.execution.buffer.OutputBufferStatus;
+import io.trino.memory.LowMemoryKiller.RunningTaskInfo;
 import io.trino.operator.TaskStats;
 import io.trino.plugin.base.metrics.TDigestHistogram;
 import org.joda.time.DateTime;
@@ -198,7 +199,7 @@ public class TestTotalReservationOnBlockedNodesTaskLowMemoryKiller
                         "n3", ImmutableMap.of(1, 11L))) // should not be picked as n3 does not have task retries enabled
                 .buildOrThrow();
 
-        Map<String, Map<Integer, TaskInfo>> taskInfos = ImmutableMap.of(
+        Map<String, Map<Integer, RunningTaskInfo>> taskInfos = ImmutableMap.of(
                 "q_1", ImmutableMap.of(
                         1, buildTaskInfo(taskId("q_1", 1), false)),
                 "q_2", ImmutableMap.of(
@@ -219,9 +220,9 @@ public class TestTotalReservationOnBlockedNodesTaskLowMemoryKiller
                         taskId("q_2", 6)))));
     }
 
-    private static TaskInfo buildTaskInfo(TaskId taskId, boolean speculative)
+    private static RunningTaskInfo buildTaskInfo(TaskId taskId, boolean speculative)
     {
-        return new TaskInfo(
+        return RunningTaskInfo.from(new TaskInfo(
                 new TaskStatus(
                         taskId,
                         "task-instance-id",
@@ -306,6 +307,6 @@ public class TestTotalReservationOnBlockedNodesTaskLowMemoryKiller
                         new Duration(0, MILLISECONDS),
                         ImmutableList.of()),
                 Optional.empty(),
-                false);
+                false));
     }
 }

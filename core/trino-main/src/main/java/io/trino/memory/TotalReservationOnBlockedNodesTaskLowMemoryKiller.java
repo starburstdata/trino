@@ -79,11 +79,11 @@ public class TotalReservationOnBlockedNodesTaskLowMemoryKiller
 
         if (onlySpeculative) {
             stream = stream.filter(entry -> {
-                TaskInfo taskInfo = runningQueries.get(entry.getKey().getQueryId()).getTaskInfos().get(entry.getKey());
+                RunningTaskInfo taskInfo = runningQueries.get(entry.getKey().getQueryId()).getTaskInfos().get(entry.getKey());
                 if (taskInfo == null) {
                     return false;
                 }
-                return taskInfo.getTaskStatus().isSpeculative();
+                return taskInfo.isSpeculative();
             });
         }
 

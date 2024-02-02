@@ -54,7 +54,7 @@ public class LeastWastedEffortTaskLowMemoryKiller
 
         ImmutableSet.Builder<TaskId> tasksToKillBuilder = ImmutableSet.builder();
 
-        Map<TaskId, TaskInfo> taskInfos = runningQueries.stream()
+        Map<TaskId, RunningTaskInfo> taskInfos = runningQueries.stream()
                 .filter(queryInfo -> queriesWithTaskRetryPolicy.contains(queryInfo.getQueryId()))
                 .flatMap(queryInfo -> queryInfo.getTaskInfos().entrySet().stream())
                 .collect(toImmutableMap(
@@ -81,7 +81,7 @@ public class LeastWastedEffortTaskLowMemoryKiller
         return Optional.of(KillTarget.selectedTasks(tasksToKill));
     }
 
-    private static Optional<TaskId> findBiggestTask(Set<QueryId> queriesWithTaskRetryPolicy, Map<TaskId, TaskInfo> taskInfos, MemoryPoolInfo memoryPool, boolean onlySpeculative)
+    private static Optional<TaskId> findBiggestTask(Set<QueryId> queriesWithTaskRetryPolicy, Map<TaskId, RunningTaskInfo> taskInfos, MemoryPoolInfo memoryPool, boolean onlySpeculative)
     {
         Stream<SimpleEntry<TaskId, Long>> stream = memoryPool.getTaskMemoryReservations().entrySet().stream()
                 .map(entry -> new SimpleEntry<>(TaskId.valueOf(entry.getKey()), entry.getValue()))
@@ -89,11 +89,11 @@ public class LeastWastedEffortTaskLowMemoryKiller
 
         if (onlySpeculative) {
             stream = stream.filter(entry -> {
-                TaskInfo taskInfo = taskInfos.get(entry.getKey());
+                RunningTaskInfo taskInfo = taskInfos.get(entry.getKey());
                 if (taskInfo == null) {
                     return false;
                 }
-                return taskInfo.getTaskStatus().isSpeculative();
+                return taskInfo.isSpeculative();
             });
         }
 
@@ -103,7 +103,7 @@ public class LeastWastedEffortTaskLowMemoryKiller
                     Long memoryUsed = entry.getValue();
                     long wallTime = 0;
                     if (taskInfos.containsKey(taskId)) {
-                        TaskStats stats = taskInfos.get(taskId).getStats();
+                        RunningTaskInfo stats = taskInfos.get(taskId);
                         wallTime = stats.getTotalScheduledTime().toMillis() + stats.getTotalBlockedTime().toMillis();
                     }
                     wallTime = Math.max(wallTime, MIN_WALL_TIME); // only look at memory consumption for fairly short-lived tasks
