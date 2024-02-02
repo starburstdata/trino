@@ -38,6 +38,6 @@ public final class DevelopmentServer
 
     public static void main(String[] args)
     {
-        new DevelopmentServer().start("dev");
+        new DevelopmentServer().start("testversion");
     }
 }
