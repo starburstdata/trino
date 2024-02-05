@@ -16,10 +16,11 @@ package io.trino.connector.system;
 import com.google.inject.Inject;
 import io.airlift.units.Duration;
 import io.trino.FullConnectorSession;
-import io.trino.execution.multi.CurrentQueryProvider;
+import io.trino.dispatcher.DispatchManager;
+import io.trino.execution.QueryInfo;
+import io.trino.execution.QueryStats;
 import io.trino.security.AccessControl;
 import io.trino.server.BasicQueryInfo;
-import io.trino.server.BasicQueryStats;
 import io.trino.spi.ErrorCode;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
@@ -77,13 +78,13 @@ public class QuerySystemTable
             .column("error_code", createUnboundedVarcharType())
             .build();
 
-    private final Optional<CurrentQueryProvider> currentQueryProvider;
+    private final Optional<DispatchManager> dispatchManager;
     private final AccessControl accessControl;
 
     @Inject
-    public QuerySystemTable(Optional<CurrentQueryProvider> currentQueryProvider, AccessControl accessControl)
+    public QuerySystemTable(Optional<DispatchManager> dispatchManager, AccessControl accessControl)
     {
-        this.currentQueryProvider = requireNonNull(currentQueryProvider, "currentQueryProvider is null");
+        this.dispatchManager = requireNonNull(dispatchManager, "dispatchManager is null");
         this.accessControl = requireNonNull(accessControl, "accessControl is null");
     }
 
@@ -102,15 +103,18 @@ public class QuerySystemTable
     @Override
     public RecordCursor cursor(ConnectorTransactionHandle transactionHandle, ConnectorSession session, TupleDomain<Integer> constraint)
     {
-        checkState(currentQueryProvider.isPresent(), "Query system table can return results only on coordinator");
+        checkState(dispatchManager.isPresent(), "Query system table can return results only on coordinator");
 
-        List<BasicQueryInfo> queries = currentQueryProvider.get().getQueries();
+        List<BasicQueryInfo> queries = dispatchManager.get().getQueries();
         queries = filterQueries(((FullConnectorSession) session).getSession().getIdentity(), queries, accessControl);
 
         Builder table = InMemoryRecordSet.builder(QUERY_TABLE);
         for (BasicQueryInfo queryInfo : queries) {
-
-            BasicQueryStats queryStats = queryInfo.getQueryStats();
+            Optional<QueryInfo> fullQueryInfo = dispatchManager.get().getFullQueryInfo(queryInfo.getQueryId());
+            if (fullQueryInfo.isEmpty()) {
+                continue;
+            }
+            QueryStats queryStats = fullQueryInfo.get().getQueryStats();
             table.addRow(
                     queryInfo.getQueryId().toString(),
                     queryInfo.getState().toString(),
