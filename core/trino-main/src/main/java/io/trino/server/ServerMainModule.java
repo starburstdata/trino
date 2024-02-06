@@ -53,8 +53,7 @@ import io.trino.execution.executor.TaskExecutor;
 import io.trino.execution.executor.dedicated.ThreadPerDriverTaskExecutor;
 import io.trino.execution.executor.timesharing.MultilevelSplitQueue;
 import io.trino.execution.executor.timesharing.TimeSharingTaskExecutor;
-import io.trino.execution.multi.CurrentQueryProvider;
-import io.trino.execution.multi.CurrentQueryProviderModule;
+import io.trino.execution.multi.ClusterQueryManager;
 import io.trino.execution.scheduler.NodeScheduler;
 import io.trino.execution.scheduler.NodeSchedulerConfig;
 import io.trino.execution.scheduler.TopologyAwareNodeSelectorModule;
@@ -498,7 +497,7 @@ public class ServerMainModule
         // dispatcher
         // TODO remove dispatcher fromm ServerMainModule, and bind dependent components only on coordinators
         newOptionalBinder(binder, DispatchManager.class);
-        newOptionalBinder(binder, CurrentQueryProvider.class);
+        newOptionalBinder(binder, ClusterQueryManager.class);
 
         // Added for RuleStatsSystemTable
         // TODO: remove this when system tables are bound separately for coordinator and worker

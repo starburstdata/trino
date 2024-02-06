@@ -14,6 +14,7 @@ import io.trino.execution.TaskId;
 import io.trino.execution.multi.resourcegroups.ResourceGroupEvaluationPrimaryResource.QueryResourceGroupState;
 import io.trino.execution.resourcegroups.QueryQueueFullException;
 import io.trino.metadata.InternalNode;
+import io.trino.spi.ErrorCode;
 import io.trino.spi.QueryId;
 import io.trino.spi.StandardErrorCode;
 import io.trino.spi.TrinoException;
@@ -146,17 +147,24 @@ public class ResourceGroupEvaluationSecondaryClient
 
     @JsonSubTypes({
             @JsonSubTypes.Type(value = GenericErrorCause.class),
-            @JsonSubTypes.Type(value = QueryQueueFull.class)
+            @JsonSubTypes.Type(value = QueryQueueFull.class),
+            @JsonSubTypes.Type(value = TrinoExceptionCause.class)
     })
     @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@class")
     public sealed interface FailureCause
-            permits GenericErrorCause, QueryQueueFull
+            permits GenericErrorCause, QueryQueueFull, TrinoExceptionCause
     {
         Exception toException();
 
         static FailureCause from(Throwable cause)
         {
-            return cause instanceof QueryQueueFullException queueFullException ? new QueryQueueFull(queueFullException.getResourceGroup()) : new GenericErrorCause(cause.getMessage());
+            if (cause instanceof QueryQueueFullException queueFullException) {
+                return new QueryQueueFull(queueFullException.getResourceGroup());
+            }
+            if (cause instanceof TrinoException trinoException) {
+                return new TrinoExceptionCause(trinoException.getErrorCode(), trinoException.getMessage());
+            }
+            return new GenericErrorCause(cause.getMessage());
         }
     }
 
@@ -189,6 +197,22 @@ public class ResourceGroupEvaluationSecondaryClient
         public Exception toException()
         {
             return new QueryQueueFullException(resourceGroup);
+        }
+    }
+
+    @JsonSerialize
+    public record TrinoExceptionCause(ErrorCode errorCode, String message)
+            implements FailureCause
+    {
+        public TrinoExceptionCause
+        {
+            requireNonNull(errorCode, "errorCode is null");
+        }
+
+        @Override
+        public Exception toException()
+        {
+            return new TrinoException(errorCode, message, null);
         }
     }
 

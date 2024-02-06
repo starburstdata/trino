@@ -22,6 +22,7 @@ import io.airlift.http.client.ResponseHandler;
 import io.trino.dispatcher.DispatchManager;
 import io.trino.execution.QueryInfo;
 import io.trino.execution.TaskId;
+import io.trino.execution.multi.ClusterQueryManager;
 import io.trino.metadata.InternalNode;
 import io.trino.metadata.InternalNodeManager;
 import io.trino.metadata.NodeState;
@@ -65,7 +66,7 @@ import static java.util.Objects.requireNonNull;
 @Path("/ui/api/worker")
 public class WorkerResource
 {
-    private final DispatchManager dispatchManager;
+    private final ClusterQueryManager clusterQueryManager;
     private final InternalNodeManager nodeManager;
     private final AccessControl accessControl;
     private final HttpClient httpClient;
@@ -73,13 +74,13 @@ public class WorkerResource
 
     @Inject
     public WorkerResource(
-            DispatchManager dispatchManager,
+            ClusterQueryManager clusterQueryManager,
             InternalNodeManager nodeManager,
             AccessControl accessControl,
             @ForWorkerInfo HttpClient httpClient,
             HttpRequestSessionContextFactory sessionContextFactory)
     {
-        this.dispatchManager = requireNonNull(dispatchManager, "dispatchManager is null");
+        this.clusterQueryManager = requireNonNull(clusterQueryManager, "clusterQueryManager is null");
         this.nodeManager = requireNonNull(nodeManager, "nodeManager is null");
         this.accessControl = requireNonNull(accessControl, "accessControl is null");
         this.httpClient = requireNonNull(httpClient, "httpClient is null");
@@ -112,7 +113,7 @@ public class WorkerResource
             @Context HttpHeaders httpHeaders)
     {
         QueryId queryId = task.getQueryId();
-        Optional<QueryInfo> queryInfo = dispatchManager.getFullQueryInfo(queryId);
+        Optional<QueryInfo> queryInfo = clusterQueryManager.getFullQueryInfo(queryId);
         if (queryInfo.isPresent()) {
             try {
                 checkCanViewQueryOwnedBy(sessionContextFactory.extractAuthorizedIdentity(servletRequest, httpHeaders), queryInfo.get().getSession().toIdentity(), accessControl);
