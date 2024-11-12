@@ -11,9 +11,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.operator;
+package io.trino.operator.hash;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.trino.operator.GroupByHash;
+import io.trino.operator.UpdateMemory;
+import io.trino.operator.Work;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.TrinoException;
@@ -24,6 +27,9 @@ import io.trino.spi.block.RunLengthEncodedBlock;
 import io.trino.spi.type.AbstractLongType;
 import io.trino.spi.type.BigintType;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -40,13 +46,15 @@ import static java.lang.Math.min;
 import static java.lang.Math.toIntExact;
 import static java.util.Objects.requireNonNull;
 
-public class BigintGroupByHash
+public class ByteArraySingleArrayBigintGroupByHash
         implements GroupByHash
 {
-    private static final int INSTANCE_SIZE = instanceSize(BigintGroupByHash.class);
+    private static final int INSTANCE_SIZE = instanceSize(ByteArraySingleArrayBigintGroupByHash.class);
     private static final int BATCH_SIZE = 1024;
 
     private static final float FILL_RATIO = 0.5f;
+    private static final VarHandle INT_HANDLE = MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.LITTLE_ENDIAN);
+    private static final VarHandle LONG_HANDLE = MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
 
     private final boolean outputRawHash;
 
@@ -54,9 +62,8 @@ public class BigintGroupByHash
     private int maxFill;
     private int mask;
 
-    // the hash table from values to groupIds
-    private long[] values;
-    private int[] groupIds;
+    // the hash table with values and groupIds
+    private byte[] hashTable;
 
     // groupId for the null value
     private int nullGroupId = -1;
@@ -72,7 +79,7 @@ public class BigintGroupByHash
     private long preallocatedMemoryInBytes;
     private long currentPageSizeInBytes;
 
-    public BigintGroupByHash(boolean outputRawHash, int expectedSize, UpdateMemory updateMemory)
+    public ByteArraySingleArrayBigintGroupByHash(boolean outputRawHash, int expectedSize, UpdateMemory updateMemory)
     {
         checkArgument(expectedSize > 0, "expectedSize must be greater than zero");
 
@@ -82,9 +89,8 @@ public class BigintGroupByHash
 
         maxFill = calculateMaxFill(hashCapacity);
         mask = hashCapacity - 1;
-        values = new long[hashCapacity];
-        groupIds = new int[hashCapacity];
-        Arrays.fill(groupIds, -1);
+        hashTable = new byte[hashCapacity * 12];
+        Arrays.fill(hashTable, (byte) -1);
 
         valuesByGroupId = new long[maxFill];
 
@@ -97,8 +103,7 @@ public class BigintGroupByHash
     public long getEstimatedSize()
     {
         return INSTANCE_SIZE +
-                sizeOf(groupIds) +
-                sizeOf(values) +
+                sizeOf(hashTable) +
                 sizeOf(valuesByGroupId) +
                 preallocatedMemoryInBytes;
     }
@@ -191,20 +196,29 @@ public class BigintGroupByHash
 
         // look for an empty slot or a slot containing this key
         while (true) {
-            int groupId = groupIds[hashPosition];
+            int groupId = (int) INT_HANDLE.get(hashTable, hashPosition);
             if (groupId == -1) {
                 break;
             }
 
-            if (value == values[hashPosition]) {
+            if (value == (long) LONG_HANDLE.get(hashTable, hashPosition + 4)) {
                 return groupId;
             }
 
             // increment position and mask to handle wrap around
-            hashPosition = (hashPosition + 1) & mask;
+            hashPosition = increment(hashPosition, hashTable.length);
         }
 
         return addNewGroup(hashPosition, value);
+    }
+
+    private static int increment(int hashPosition, int length)
+    {
+        hashPosition = hashPosition + 12;
+        if (hashPosition >= length) {
+            hashPosition = 0;
+        }
+        return hashPosition;
     }
 
     private int addNewGroup(int hashPosition, long value)
@@ -212,9 +226,9 @@ public class BigintGroupByHash
         // record group id in hash
         int groupId = nextGroupId++;
 
-        values[hashPosition] = value;
         valuesByGroupId[groupId] = value;
-        groupIds[hashPosition] = groupId;
+        INT_HANDLE.set(hashTable, hashPosition, groupId);
+        LONG_HANDLE.set(hashTable, hashPosition + 4, value);
 
         // increase capacity, if necessary
         if (needRehash()) {
@@ -240,33 +254,31 @@ public class BigintGroupByHash
         }
 
         int newMask = newCapacity - 1;
-        long[] newValues = new long[newCapacity];
-        int[] newGroupIds = new int[newCapacity];
-        Arrays.fill(newGroupIds, -1);
+        byte[] newHashTable = new byte[newCapacity * 12];
+        Arrays.fill(newHashTable, (byte) -1);
 
-        for (int i = 0; i < values.length; i++) {
-            int groupId = groupIds[i];
+        for (int i = 0; i < hashTable.length; i = i + 12) {
+            int groupId = (int) INT_HANDLE.get(hashTable, i);
 
             if (groupId != -1) {
-                long value = values[i];
+                long value = (long) LONG_HANDLE.get(hashTable, i + 4);
                 int hashPosition = getHashPosition(value, newMask);
 
                 // find an empty slot for the address
-                while (newGroupIds[hashPosition] != -1) {
-                    hashPosition = (hashPosition + 1) & newMask;
+                while (((int) INT_HANDLE.get(newHashTable, hashPosition)) != -1) {
+                    hashPosition = increment(hashPosition, newHashTable.length);
                 }
 
                 // record the mapping
-                newValues[hashPosition] = value;
-                newGroupIds[hashPosition] = groupId;
+                INT_HANDLE.set(newHashTable, hashPosition, groupId);
+                LONG_HANDLE.set(newHashTable, hashPosition + 4, value);
             }
         }
 
         mask = newMask;
         hashCapacity = newCapacity;
         maxFill = calculateMaxFill(hashCapacity);
-        values = newValues;
-        groupIds = newGroupIds;
+        hashTable = newHashTable;
 
         this.valuesByGroupId = Arrays.copyOf(valuesByGroupId, maxFill);
 
@@ -283,7 +295,7 @@ public class BigintGroupByHash
 
     private static int getHashPosition(long rawHash, int mask)
     {
-        return (int) (murmurHash3(rawHash) & mask);
+        return ((int) (murmurHash3(rawHash) & mask)) * 12;
     }
 
     private static int calculateMaxFill(int hashSize)

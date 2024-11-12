@@ -16,6 +16,10 @@ package io.trino.operator;
 import com.google.common.annotations.VisibleForTesting;
 import io.trino.Session;
 import io.trino.annotation.NotThreadSafe;
+import io.trino.operator.hash.ByteArraySingleArrayBigintGroupByHash;
+import io.trino.operator.hash.FastBigintGroupByHash;
+import io.trino.operator.hash.VectorizedByteArraySingleArrayBigintGroupByHash;
+import io.trino.operator.hash.VectorizedByteArraySingleArrayBigintGroupByHash_2;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.type.Type;
@@ -49,7 +53,9 @@ public interface GroupByHash
             UpdateMemory updateMemory)
     {
         if (types.size() == 1 && types.get(0).equals(BIGINT)) {
-            return new BigintGroupByHash(hasPrecomputedHash, expectedSize, updateMemory);
+//            return new FastBigintGroupByHash(hasPrecomputedHash, expectedSize, updateMemory, 64);
+//            return new ByteArraySingleArrayBigintGroupByHash(hasPrecomputedHash, expectedSize, updateMemory);
+            return new VectorizedByteArraySingleArrayBigintGroupByHash_2(hasPrecomputedHash, expectedSize, updateMemory, 64);
         }
         return new FlatGroupByHash(types, hasPrecomputedHash, expectedSize, dictionaryAggregationEnabled, hashStrategyCompiler, updateMemory);
     }

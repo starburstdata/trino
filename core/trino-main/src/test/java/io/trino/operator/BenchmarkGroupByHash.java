@@ -18,6 +18,10 @@ import com.google.common.collect.Iterables;
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
 import io.airlift.slice.XxHash64;
+import io.trino.operator.hash.ByteArraySingleArrayBigintGroupByHash;
+import io.trino.operator.hash.FastBigintGroupByHash;
+import io.trino.operator.hash.VectorizedByteArraySingleArrayBigintGroupByHash;
+import io.trino.operator.hash.VectorizedByteArraySingleArrayBigintGroupByHash_2;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.block.Block;
@@ -38,7 +42,8 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
-import org.openjdk.jmh.profile.GCProfiler;
+import org.openjdk.jmh.profile.AsyncProfiler;
+import org.openjdk.jmh.profile.LinuxPerfNormProfiler;
 import org.openjdk.jmh.runner.RunnerException;
 
 import java.nio.ByteBuffer;
@@ -60,12 +65,12 @@ import static io.trino.spi.type.VarcharType.VARCHAR;
 @State(Scope.Thread)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Fork(1)
-@Warmup(iterations = 5, time = 500, timeUnit = TimeUnit.MILLISECONDS)
-@Measurement(iterations = 5, time = 500, timeUnit = TimeUnit.MILLISECONDS)
+@Warmup(iterations = 10, time = 500, timeUnit = TimeUnit.MILLISECONDS)
+@Measurement(iterations = 10, time = 500, timeUnit = TimeUnit.MILLISECONDS)
 @BenchmarkMode(Mode.AverageTime)
 public class BenchmarkGroupByHash
 {
-    private static final int POSITIONS = 10_000_000;
+    private static final int POSITIONS = 50_000_000;
     private static final String GROUP_COUNT_STRING = "3000000";
     private static final int GROUP_COUNT = Integer.parseInt(GROUP_COUNT_STRING);
     private static final int EXPECTED_SIZE = 10_000;
@@ -76,6 +81,33 @@ public class BenchmarkGroupByHash
     public Object addPages(MultiChannelBenchmarkData data)
     {
         GroupByHash groupByHash = new FlatGroupByHash(data.getTypes(), data.isHashEnabled(), EXPECTED_SIZE, false, new FlatHashStrategyCompiler(TYPE_OPERATORS), NOOP);
+        addInputPagesToHash(groupByHash, data.getPages());
+        return groupByHash;
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(POSITIONS)
+    public Object addPagesBigInt(MultiChannelBenchmarkData data)
+    {
+        GroupByHash groupByHash = new BigintGroupByHash(false, EXPECTED_SIZE, NOOP);
+        addInputPagesToHash(groupByHash, data.getPages());
+        return groupByHash;
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(POSITIONS)
+    public Object addPagesFastBigint(MultiChannelBenchmarkData data)
+    {
+        GroupByHash groupByHash = new FastBigintGroupByHash(false, EXPECTED_SIZE, NOOP, data.stepSize);
+        addInputPagesToHash(groupByHash, data.getPages());
+        return groupByHash;
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(POSITIONS)
+    public Object addPagesByteArrayBigint(MultiChannelBenchmarkData data)
+    {
+        GroupByHash groupByHash = new ByteArraySingleArrayBigintGroupByHash(false, EXPECTED_SIZE, NOOP);
         addInputPagesToHash(groupByHash, data.getPages());
         return groupByHash;
     }
@@ -95,6 +127,24 @@ public class BenchmarkGroupByHash
             }
         }
         return pageBuilder.build();
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(POSITIONS)
+    public Object addPagesVectorizedByteArrayBigint(MultiChannelBenchmarkData data)
+    {
+        GroupByHash groupByHash = new VectorizedByteArraySingleArrayBigintGroupByHash(false, EXPECTED_SIZE, NOOP, data.stepSize);
+        addInputPagesToHash(groupByHash, data.getPages());
+        return groupByHash;
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(POSITIONS)
+    public Object addPagesVectorizedByteArrayBigint2(MultiChannelBenchmarkData data)
+    {
+        GroupByHash groupByHash = new VectorizedByteArraySingleArrayBigintGroupByHash_2(false, EXPECTED_SIZE, NOOP, data.stepSize);
+        addInputPagesToHash(groupByHash, data.getPages());
+        return groupByHash;
     }
 
     private static void addInputPagesToHash(GroupByHash groupByHash, List<Page> pages)
@@ -195,6 +245,9 @@ public class BenchmarkGroupByHash
     @State(Scope.Thread)
     public static class MultiChannelBenchmarkData
     {
+        @Param("64")
+        public int stepSize = 64;
+
         @Param({"1", "5", "10", "15", "20"})
         private int channelCount = 1;
 
@@ -306,9 +359,26 @@ public class BenchmarkGroupByHash
         new BenchmarkGroupByHash().writeData(writeData);
 
         benchmark(BenchmarkGroupByHash.class)
+//                .includeMethod("addPages")
+//                .includeMethod("addPagesBigInt")
+//                .includeMethod("addPagesFastBigint")
+//                .includeMethod("addPagesByteArrayBigint")
+                .includeMethod("addPagesVectorizedByteArrayBigint2")
                 .withOptions(optionsBuilder -> optionsBuilder
-                        .addProfiler(GCProfiler.class)
-                        .jvmArgs("-Xmx10g"))
+//                        .addProfiler(GCProfiler.class)
+//                        .addProfiler(LinuxPerfNormProfiler.class, "events=instructions,L1-dcache-loads,L1-dcache-load-misses,L2_RQSTS.REFERENCES,L2_RQSTS.MISS,L2_RQSTS.DEMAND_DATA_RD_MISS,cycle_activity.stalls_l3_miss,L1D_PEND_MISS.FB_FULL,L1D_PEND_MISS.FB_FULL_PERIODS,L1D_PEND_MISS.L2_STALLS,L1D_PEND_MISS.PENDING,L1D_PEND_MISS.PENDING_CYCLES,l2_request.miss,cycle_activity.stalls_l3_miss,cycle_activity.stalls_l1d_miss,cycle_activity.stalls_l2_miss,cycle_activity.stalls_total,topdown.backend_bound_slots,topdown.memory_bound_slots")
+//                        .addProfiler(LinuxPerfAsmProfiler.class, "tooBigThreshold=30000")
+//                        .addProfiler(AsyncProfiler.class, "libPath=/Users/lukasz.stec/apps/async-profiler/async-profiler-3.0-macos/lib/libasyncProfiler.dylib")
+                        .addProfiler(AsyncProfiler.class, "libPath=/home/ec2-user/async-profiler-3.0-36168a1-linux-x64/lib/libasyncProfiler.so;output=text,flamegraph;event=L1-dcache-load-misses")
+                        .param("channelCount", "1")
+                        .param("dataType", "BIGINT")
+                        .param("hashEnabled", "true")
+//                        .param("groupCount", "8000", "3000000", "10000000", "20000000")
+                        .param("groupCount", "1000", "3000000", "10000000")
+//                        .param("stepSize", "8", "16", "32", "64", "128", "256", "512", "1024")
+                        .param("stepSize", "256")
+                        .jvmArgs("-Xmx20g", "-XX:+UseTransparentHugePages"))
+//                        .jvmArgs("-Xmx20g"))
                 .run();
     }
 }
