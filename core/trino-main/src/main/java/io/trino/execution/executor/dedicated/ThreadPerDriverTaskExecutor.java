@@ -36,9 +36,8 @@ import jakarta.annotation.PreDestroy;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Queue;
 import java.util.Set;
@@ -68,7 +67,7 @@ public class ThreadPerDriverTaskExecutor
     private final ScheduledThreadPoolExecutor backgroundTasks = new ScheduledThreadPoolExecutor(2, daemonThreadsNamed("task-executor-scheduler-%s"));
 
     @GuardedBy("this")
-    private final Map<TaskId, TaskEntry> tasks = new HashMap<>();
+    private final Queue<TaskEntry> tasks = new ArrayDeque<>();
 
     @GuardedBy("this")
     private boolean closed;
@@ -114,7 +113,7 @@ public class ThreadPerDriverTaskExecutor
     public synchronized void stop()
     {
         closed = true;
-        tasks.values().forEach(TaskEntry::destroy);
+        tasks.forEach(TaskEntry::destroy);
         backgroundTasks.shutdownNow();
         scheduler.close();
     }
@@ -135,7 +134,7 @@ public class ThreadPerDriverTaskExecutor
                 tracer,
                 initialSplitConcurrency,
                 utilizationSupplier);
-        tasks.put(taskId, task);
+        tasks.add(task);
         return task;
     }
 
@@ -189,7 +188,7 @@ public class ThreadPerDriverTaskExecutor
     private synchronized void scheduleMoreLeafSplits()
     {
         // schedule minimum guaranteed leaf drivers for each task
-        for (TaskEntry task : tasks.values()) {
+        for (TaskEntry task : tasks) {
             int target = max(0, minDriversPerTask - task.runningLeafSplits());
             for (int i = 0; i < target; i++) {
                 if (!scheduleLeafSplit(task)) {
@@ -199,7 +198,7 @@ public class ThreadPerDriverTaskExecutor
         }
 
         // schedule additional drivers up to the target global leaf drivers
-        Queue<TaskEntry> queue = new ArrayDeque<>(tasks.values());
+        Queue<TaskEntry> queue = new ArrayDeque<>(tasks);
         int target = targetGlobalLeafDrivers - runningLeafDrivers;
         for (int i = 0; i < target && !queue.isEmpty(); i++) {
             TaskEntry task = queue.poll();
@@ -208,13 +207,16 @@ public class ThreadPerDriverTaskExecutor
                 if (task.hasPendingLeafSplits()) {
                     queue.add(task);
                 }
+                // move task to the tail
+                tasks.remove(task);
+                tasks.add(task);
             }
         }
     }
 
     private void adjustConcurrency()
     {
-        for (TaskEntry task : tasks.values()) {
+        for (TaskEntry task : tasks) {
             task.updateConcurrency();
         }
     }
@@ -227,7 +229,7 @@ public class ThreadPerDriverTaskExecutor
             builder.append(scheduler.diagnostics().indent(4));
 
             builder.append("Query tasks:\n");
-            for (TaskEntry task : tasks.values()) {
+            for (TaskEntry task : tasks) {
                 builder.append("%s: [total running = %s, leaf running = %s, leaf pending = %s, target concurrency = %s]\n".formatted(
                         task.taskId(),
                         task.totalRunningSplits(),
