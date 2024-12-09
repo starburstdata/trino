@@ -67,7 +67,7 @@ public class ThreadPerDriverTaskExecutor
     private final ScheduledThreadPoolExecutor backgroundTasks = new ScheduledThreadPoolExecutor(2, daemonThreadsNamed("task-executor-scheduler-%s"));
 
     @GuardedBy("this")
-    private final Queue<TaskEntry> tasks = new ArrayDeque<>();
+    private final Queue<TaskEntry> tasks = new LinkedList<>();
 
     @GuardedBy("this")
     private boolean closed;
