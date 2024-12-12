@@ -61,6 +61,7 @@ import static java.time.ZoneOffset.UTC;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.Executors.newFixedThreadPool;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static java.util.stream.Collectors.joining;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
 
@@ -832,6 +833,39 @@ public abstract class BaseIcebergConnectorSmokeTest
                     "SELECT nationkey, name, _change_type, _change_version_id, to_iso8601(_change_timestamp), _change_ordinal " +
                             "FROM TABLE(system.table_changes(CURRENT_SCHEMA, '%s', %s, %s))".formatted(table.getName(), snapshotAfterCreateOrReplace, snapshotAfterInsertIntoCreateOrReplace),
                     "SELECT nationkey, name, 'insert', %s, '%s', 0 FROM nation".formatted(snapshotAfterInsertIntoCreateOrReplace, snapshotAfterInsertTimeIntoCreateOrReplace));
+        }
+    }
+
+    @Test
+    public void testIcebergTablesFunction()
+    {
+        String schemaName = getSession().getSchema().orElseThrow();
+        String allSchemaTables = "VALUES " + getQueryRunner()
+                .execute("SELECT table_schema, table_name FROM iceberg.information_schema.tables WHERE table_schema='%s'".formatted(schemaName))
+                .getMaterializedRows().stream()
+                .map(row -> "('%s', '%s')".formatted(row.getField(0), row.getField(1)))
+                .collect(joining(", "));
+        assertQuery("SELECT * FROM TABLE(iceberg.system.iceberg_tables(SCHEMA_NAME => '%s'))".formatted(schemaName), allSchemaTables);
+
+        assertQuery("SELECT * FROM TABLE(iceberg.system.iceberg_tables(null)) WHERE table_schema = '%s'".formatted(schemaName), allSchemaTables);
+
+        String secondSchema = "second_schema_" + randomNameSuffix();
+        String secondSchemaLocation = schemaPath().replaceAll(schemaName, secondSchema);
+        assertQuerySucceeds("CREATE SCHEMA " + secondSchema + " WITH (location = '%s')".formatted(secondSchemaLocation));
+        try (TestTable secondSchemaTable = new TestTable(
+                getQueryRunner()::execute,
+                secondSchema + ".second_schema_table",
+                "(id int)")) {
+            String secondSchemaTableName = secondSchemaTable.getName().replaceAll(secondSchema + ".", "");
+            assertQuery(
+                    "SELECT * FROM TABLE(iceberg.system.iceberg_tables()) WHERE table_schema in ('%s', '%s')".formatted(schemaName, secondSchema),
+                    allSchemaTables + ", ('%s', '%s')".formatted(secondSchema, secondSchemaTableName));
+            assertQuery(
+                    "SELECT * FROM TABLE(iceberg.system.iceberg_tables(null)) WHERE table_schema in ('%s', '%s')".formatted(schemaName, secondSchema),
+                    allSchemaTables + ", ('%s', '%s')".formatted(secondSchema, secondSchemaTableName));
+        }
+        finally {
+            assertQuerySucceeds("DROP SCHEMA " + secondSchema);
         }
     }
 

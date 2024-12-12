@@ -142,9 +142,6 @@ public abstract class BaseSharedMetastoreTest
                 .skippingTypesCheck()
                 .containsAll("VALUES '" + tpchSchema + "'");
 
-        assertQuery("SELECT * FROM iceberg.system.iceberg_tables WHERE table_schema = '%s'".formatted(tpchSchema), "VALUES ('%s', 'nation')".formatted(tpchSchema));
-        assertQuery("SELECT * FROM iceberg_with_redirections.system.iceberg_tables WHERE table_schema = '%s'".formatted(tpchSchema), "VALUES ('%s', 'nation')".formatted(tpchSchema));
-
         String showCreateHiveSchema = (String) computeActual("SHOW CREATE SCHEMA hive." + tpchSchema).getOnlyValue();
         assertThat(showCreateHiveSchema).isEqualTo(getExpectedHiveCreateSchema("hive"));
         String showCreateIcebergSchema = (String) computeActual("SHOW CREATE SCHEMA iceberg." + tpchSchema).getOnlyValue();
@@ -153,6 +150,13 @@ public abstract class BaseSharedMetastoreTest
         assertThat(showCreateHiveWithRedirectionsSchema).isEqualTo(getExpectedHiveCreateSchema("hive_with_redirections"));
         String showCreateIcebergWithRedirectionsSchema = (String) computeActual("SHOW CREATE SCHEMA iceberg_with_redirections." + tpchSchema).getOnlyValue();
         assertThat(showCreateIcebergWithRedirectionsSchema).isEqualTo(getExpectedIcebergCreateSchema("iceberg_with_redirections"));
+    }
+
+    @Test
+    public void testIcebergTablesFunction()
+    {
+        assertQuery("SELECT * FROM TABLE(iceberg.system.iceberg_tables(SCHEMA_NAME => '%s'))".formatted(tpchSchema), "VALUES ('%s', 'nation')".formatted(tpchSchema));
+        assertQuery("SELECT * FROM TABLE(iceberg_with_redirections.system.iceberg_tables(SCHEMA_NAME => '%s'))".formatted(tpchSchema), "VALUES ('%s', 'nation')".formatted(tpchSchema));
     }
 
     @Test
