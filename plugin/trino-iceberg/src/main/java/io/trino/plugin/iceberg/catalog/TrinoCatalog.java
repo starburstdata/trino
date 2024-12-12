@@ -83,6 +83,13 @@ public interface TrinoCatalog
 
     List<TableInfo> listTables(ConnectorSession session, Optional<String> namespace);
 
+    default List<SchemaTableName> listIcebergTables(ConnectorSession session, Optional<String> namespace)
+    {
+        return listTables(session, namespace).stream()
+                .map(TableInfo::tableName)
+                .collect(toImmutableList());
+    }
+
     default List<SchemaTableName> listViews(ConnectorSession session, Optional<String> namespace)
     {
         return listTables(session, namespace).stream()

@@ -51,11 +51,13 @@ import io.trino.plugin.iceberg.procedure.RegisterTableProcedure;
 import io.trino.plugin.iceberg.procedure.RemoveOrphanFilesTableProcedure;
 import io.trino.plugin.iceberg.procedure.RollbackToSnapshotProcedure;
 import io.trino.plugin.iceberg.procedure.UnregisterTableProcedure;
+import io.trino.plugin.iceberg.system.IcebergTablesSystemTable;
 import io.trino.spi.catalog.CatalogName;
 import io.trino.spi.connector.ConnectorNodePartitioningProvider;
 import io.trino.spi.connector.ConnectorPageSinkProvider;
 import io.trino.spi.connector.ConnectorPageSourceProviderFactory;
 import io.trino.spi.connector.ConnectorSplitManager;
+import io.trino.spi.connector.SystemTable;
 import io.trino.spi.connector.TableProcedureMetadata;
 import io.trino.spi.function.FunctionProvider;
 import io.trino.spi.function.table.ConnectorTableFunction;
@@ -138,6 +140,9 @@ public class IcebergModule
         newSetBinder(binder, ConnectorTableFunction.class).addBinding().toProvider(TableChangesFunctionProvider.class).in(Scopes.SINGLETON);
         binder.bind(FunctionProvider.class).to(IcebergFunctionProvider.class).in(Scopes.SINGLETON);
         binder.bind(TableChangesFunctionProcessorProviderFactory.class).in(Scopes.SINGLETON);
+
+        Multibinder<SystemTable> systemTables = newSetBinder(binder, SystemTable.class);
+        systemTables.addBinding().to(IcebergTablesSystemTable.class).in(Scopes.SINGLETON);
 
         newOptionalBinder(binder, IcebergFileSystemFactory.class).setDefault().to(DefaultIcebergFileSystemFactory.class).in(Scopes.SINGLETON);
         newOptionalBinder(binder, CacheKeyProvider.class).setBinding().to(IcebergCacheKeyProvider.class).in(Scopes.SINGLETON);

@@ -21,6 +21,7 @@ import io.airlift.log.Level;
 import io.airlift.log.Logger;
 import io.airlift.log.Logging;
 import io.trino.plugin.exchange.filesystem.FileSystemExchangePlugin;
+import io.trino.plugin.hive.TestingHivePlugin;
 import io.trino.plugin.hive.containers.HiveHadoop;
 import io.trino.plugin.hive.containers.HiveMinioDataLake;
 import io.trino.plugin.iceberg.catalog.jdbc.TestingIcebergJdbcServer;
@@ -39,9 +40,11 @@ import org.assertj.core.util.Files;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -343,6 +346,25 @@ public final class IcebergQueryRunner
                                     .withSchemaProperties(Map.of("location", "'s3://" + bucketName + "/tpch'"))
                                     .build())
                     .build();
+
+            queryRunner.installPlugin(new TestingHivePlugin(Paths.get("/Users/lukasz.stec/data/hive/with_iceberg"), Optional.empty()));
+
+            Map<String, String> hiveProperties = new HashMap<>();
+            hiveProperties.put("hive.metastore", "thrift");
+            hiveProperties.put("hive.metastore.uri", hiveMinioDataLake.getHiveHadoop().getHiveMetastoreEndpoint().toString());
+            hiveProperties.put("fs.hadoop.enabled", "false");
+            hiveProperties.put("fs.native-s3.enabled", "true");
+            hiveProperties.put("s3.aws-access-key", MINIO_ACCESS_KEY);
+            hiveProperties.put("s3.aws-secret-key", MINIO_SECRET_KEY);
+            hiveProperties.put("s3.region", MINIO_REGION);
+            hiveProperties.put("s3.endpoint", hiveMinioDataLake.getMinio().getMinioAddress());
+            hiveProperties.put("s3.path-style-access", "true");
+            hiveProperties.put("s3.streaming.part-size", "5MB");
+            hiveProperties.put("hive.max-partitions-per-scan", "1000");
+            hiveProperties.put("hive.max-partitions-for-eager-load", "1000");
+            hiveProperties.put("hive.security", "allow-all");
+
+            queryRunner.createCatalog("hive", "hive", hiveProperties);
 
             Logger log = Logger.get(IcebergMinioHiveMetastoreQueryRunnerMain.class);
             log.info("======== SERVER STARTED ========");

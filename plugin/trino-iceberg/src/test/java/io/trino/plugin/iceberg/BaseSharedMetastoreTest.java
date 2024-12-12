@@ -142,6 +142,9 @@ public abstract class BaseSharedMetastoreTest
                 .skippingTypesCheck()
                 .containsAll("VALUES '" + tpchSchema + "'");
 
+        assertQuery("SELECT * FROM iceberg.system.iceberg_tables WHERE table_schema = '%s'".formatted(tpchSchema), "VALUES ('%s', 'nation')".formatted(tpchSchema));
+        assertQuery("SELECT * FROM iceberg_with_redirections.system.iceberg_tables WHERE table_schema = '%s'".formatted(tpchSchema), "VALUES ('%s', 'nation')".formatted(tpchSchema));
+
         String showCreateHiveSchema = (String) computeActual("SHOW CREATE SCHEMA hive." + tpchSchema).getOnlyValue();
         assertThat(showCreateHiveSchema).isEqualTo(getExpectedHiveCreateSchema("hive"));
         String showCreateIcebergSchema = (String) computeActual("SHOW CREATE SCHEMA iceberg." + tpchSchema).getOnlyValue();

@@ -165,6 +165,20 @@ public class TracingHiveMetastore
     }
 
     @Override
+    public List<String> getTablesWithParameter(String databaseName, String parameterKey, Set<String> parameterValues)
+    {
+        Span span = tracer.spanBuilder("HiveMetastore.getTablesWithParameter")
+                .setAttribute(SCHEMA, databaseName)
+                .setAttribute(TABLE, parameterKey)
+                .startSpan();
+        return withTracing(span, () -> {
+            List<String> tables = delegate.getTablesWithParameter(databaseName, parameterKey, parameterValues);
+            span.setAttribute(TABLE_RESPONSE_COUNT, tables.size());
+            return tables;
+        });
+    }
+
+    @Override
     public void createDatabase(Database database)
     {
         Span span = tracer.spanBuilder("HiveMetastore.createDatabase")

@@ -269,6 +269,30 @@ public final class ThriftHiveMetastore
     }
 
     @Override
+    public List<String> getTablesWithParameter(String databaseName, String parameterKey, Set<String> parameterValues)
+    {
+        try {
+            return retry()
+                    .stopOn(NoSuchObjectException.class)
+                    .stopOnIllegalExceptions()
+                    .run("getTablesWithParameter", () -> {
+                        try (ThriftMetastoreClient client = createMetastoreClient()) {
+                            return client.getTablesWithParameter(databaseName, parameterKey, parameterValues);
+                        }
+                    });
+        }
+        catch (NoSuchObjectException e) {
+            return ImmutableList.of();
+        }
+        catch (TException e) {
+            throw new TrinoException(HIVE_METASTORE_ERROR, e);
+        }
+        catch (Exception e) {
+            throw propagate(e);
+        }
+    }
+
+    @Override
     public Optional<Table> getTable(String databaseName, String tableName)
     {
         try {

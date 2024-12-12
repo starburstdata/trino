@@ -245,6 +245,12 @@ public class TestHiveMetadataListing
         }
 
         @Override
+        public List<String> getTablesWithParameter(String databaseName, String parameterKey, Set<String> parameterValues)
+        {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public Optional<Table> getTable(String databaseName, String tableName)
         {
             SchemaTableName schemaTableName = new SchemaTableName(databaseName, tableName);

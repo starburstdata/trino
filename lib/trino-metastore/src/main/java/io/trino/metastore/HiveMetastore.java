@@ -67,6 +67,8 @@ public interface HiveMetastore
 
     List<TableInfo> getTables(String databaseName);
 
+    List<String> getTablesWithParameter(String databaseName, String parameterKey, Set<String> parameterValues);
+
     void createDatabase(Database database);
 
     void dropDatabase(String databaseName, boolean deleteData);
