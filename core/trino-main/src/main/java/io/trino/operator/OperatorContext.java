@@ -29,6 +29,7 @@ import io.trino.memory.context.AggregatedMemoryContext;
 import io.trino.memory.context.LocalMemoryContext;
 import io.trino.memory.context.MemoryTrackingContext;
 import io.trino.operator.OperationTimer.OperationTiming;
+import io.trino.operator.ResourceUsageTimeSeriesRecorder.ResourceUsageTimeSeriesSnapshot;
 import io.trino.plugin.base.metrics.TDigestHistogram;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
@@ -76,11 +77,12 @@ public class OperatorContext
     private final CounterStat internalNetworkInputDataSize = new CounterStat();
     private final CounterStat internalNetworkPositions = new CounterStat();
 
-    private final OperationTiming addInputTiming = new OperationTiming();
+    private final ResourceUsageTimeSeriesRecorder cpuTimeSeriesRecorder = new ResourceUsageTimeSeriesRecorder();
+    private final OperationTiming addInputTiming = new OperationTiming(cpuTimeSeriesRecorder);
     private final CounterStat inputDataSize = new CounterStat();
     private final CounterStat inputPositions = new CounterStat();
 
-    private final OperationTiming getOutputTiming = new OperationTiming();
+    private final OperationTiming getOutputTiming = new OperationTiming(cpuTimeSeriesRecorder);
     private final CounterStat outputDataSize = new CounterStat();
     private final CounterStat outputPositions = new CounterStat();
 
@@ -97,7 +99,7 @@ public class OperatorContext
     private final AtomicReference<ListenableFuture<Void>> finishedFuture = new AtomicReference<>();
     private final AtomicLong blockedWallNanos = new AtomicLong();
 
-    private final OperationTiming finishTiming = new OperationTiming();
+    private final OperationTiming finishTiming = new OperationTiming(cpuTimeSeriesRecorder);
 
     private final OperatorSpillContext spillContext;
     private final AtomicReference<Supplier<? extends OperatorInfo>> infoSupplier = new AtomicReference<>();
@@ -560,7 +562,8 @@ public class OperatorContext
                         inputPositionsCount,
                         new Duration(addInputTiming.getCpuNanos() + getOutputTiming.getCpuNanos() + finishTiming.getCpuNanos(), NANOSECONDS).convertTo(SECONDS).getValue(),
                         new Duration(addInputTiming.getWallNanos() + getOutputTiming.getWallNanos() + finishTiming.getWallNanos(), NANOSECONDS).convertTo(SECONDS).getValue(),
-                        new Duration(blockedWallNanos.get(), NANOSECONDS).convertTo(SECONDS).getValue()),
+                        new Duration(blockedWallNanos.get(), NANOSECONDS).convertTo(SECONDS).getValue(),
+                        cpuTimeSeriesRecorder.snapshot()),
                 connectorMetrics.get(),
                 Metrics.EMPTY, // will be filled in when aggregating at pipeline level
 
@@ -585,13 +588,19 @@ public class OperatorContext
                 info);
     }
 
-    private Metrics getOperatorMetrics(long inputPositions, double cpuTimeSeconds, double wallTimeSeconds, double blockedWallSeconds)
+    private Metrics getOperatorMetrics(
+            long inputPositions,
+            double cpuTimeSeconds,
+            double wallTimeSeconds,
+            double blockedWallSeconds,
+            ResourceUsageTimeSeriesSnapshot resourceUsageTimeSeries)
     {
         return metrics.get().mergeWith(new Metrics(ImmutableMap.of(
                 "Input rows distribution", TDigestHistogram.fromValue(inputPositions),
                 "CPU time distribution (s)", TDigestHistogram.fromValue(cpuTimeSeconds),
                 "Scheduled time distribution (s)", TDigestHistogram.fromValue(wallTimeSeconds),
-                "Blocked time distribution (s)", TDigestHistogram.fromValue(blockedWallSeconds))));
+                "Blocked time distribution (s)", TDigestHistogram.fromValue(blockedWallSeconds),
+                "CPU and scheduled time usage over time", resourceUsageTimeSeries)));
     }
 
     private static long nanosBetween(long start, long end)
