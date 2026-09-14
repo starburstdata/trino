@@ -2963,7 +2963,29 @@ public class HiveMetadata
         if (isHiveSystemSchema(viewName.getSchemaName())) {
             return Optional.empty();
         }
-        return toConnectorViewDefinition(session, viewName, metastore.getTable(viewName.getSchemaName(), viewName.getTableName()));
+        Optional<Table> table = metastore.getTable(viewName.getSchemaName(), viewName.getTableName());
+        Optional<ConnectorViewDefinition> definition = toConnectorViewDefinition(session, viewName, table);
+        if (trinoViewsRunAsInvoker && table.filter(ViewReaderUtil::isTrinoView).isPresent()) {
+            return definition.map(HiveMetadata::withRunAsInvoker);
+        }
+        return definition;
+    }
+
+    private static ConnectorViewDefinition withRunAsInvoker(ConnectorViewDefinition definition)
+    {
+        if (definition.isRunAsInvoker()) {
+            return definition;
+        }
+        // Ignore the stored view owner and execute the Trino view with the permissions of the invoker
+        return new ConnectorViewDefinition(
+                definition.getOriginalSql(),
+                definition.getCatalog(),
+                definition.getSchema(),
+                definition.getColumns(),
+                definition.getComment(),
+                Optional.empty(),
+                true,
+                definition.getPath());
     }
 
     private Optional<ConnectorViewDefinition> toConnectorViewDefinition(ConnectorSession session, SchemaTableName viewName, Optional<Table> table)
@@ -2986,20 +3008,8 @@ public class HiveMetadata
 
                     ConnectorViewDefinition definition = createViewReader(metastore, session, view, typeManager, this::redirectTable, metadataProvider, hiveViewsRunAsInvoker, hiveViewsTimestampPrecision)
                             .decodeViewData(view.getViewOriginalText(), view, catalogName);
-                    if (trinoViewsRunAsInvoker && isTrinoView(view) && !definition.isRunAsInvoker()) {
-                        // Ignore the stored view owner and execute the Trino view with the permissions of the invoker
-                        definition = new ConnectorViewDefinition(
-                                definition.getOriginalSql(),
-                                definition.getCatalog(),
-                                definition.getSchema(),
-                                definition.getColumns(),
-                                definition.getComment(),
-                                Optional.empty(),
-                                true,
-                                definition.getPath());
-                    }
                     // use owner field from table metadata if it exists
-                    else if (view.getOwner().isPresent() && !definition.isRunAsInvoker()) {
+                    if (view.getOwner().isPresent() && !definition.isRunAsInvoker()) {
                         definition = new ConnectorViewDefinition(
                                 definition.getOriginalSql(),
                                 definition.getCatalog(),

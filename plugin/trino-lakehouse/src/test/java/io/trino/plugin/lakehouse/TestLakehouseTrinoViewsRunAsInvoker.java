@@ -77,6 +77,7 @@ public class TestLakehouseTrinoViewsRunAsInvoker
                 .build();
         queryRunner.execute(ownerSession, "CREATE VIEW definer_view AS SELECT * FROM base_table");
         queryRunner.execute(ownerSession, "CREATE VIEW invoker_view SECURITY INVOKER AS SELECT * FROM base_table");
+        queryRunner.execute(ownerSession, "CREATE VIEW commented_view AS SELECT * FROM base_table");
 
         return queryRunner;
     }
@@ -118,5 +119,16 @@ public class TestLakehouseTrinoViewsRunAsInvoker
                     "Cannot select from columns \\[x] in table or view .*base_table.*",
                     privilege(getSession().getUser(), "base_table", SELECT_COLUMN));
         }
+    }
+
+    @Test
+    void testViewCommentDoesNotPersistRunAsInvoker()
+    {
+        assertUpdate("COMMENT ON VIEW %s.%s.commented_view IS 'a comment'".formatted(INVOKER_CATALOG, SCHEMA));
+
+        // the forced invoker execution must not be written back to the metastore
+        assertThat((String) computeScalar("SHOW CREATE VIEW %s.%s.commented_view".formatted(DEFINER_CATALOG, SCHEMA)))
+                .contains("COMMENT 'a comment'")
+                .contains("SECURITY DEFINER");
     }
 }
